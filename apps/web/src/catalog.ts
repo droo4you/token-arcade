@@ -7,7 +7,7 @@ export type ArcadeGame = {
   genre: string;
   description: string;
   community: string;
-  palette: "coral" | "pool" | "plum" | "marigold" | "ink";
+  palette: "pink" | "cyan" | "violet" | "lime" | "ink";
   glyph: string;
   number: string;
   record?: GameRecord;
@@ -22,7 +22,7 @@ const editorial: Omit<ArcadeGame, "record" | "playable">[] = [
     genre: "Physics launch",
     description: "Build momentum, steer the slide, and make a magnificent mess.",
     community: "Skrumpeys",
-    palette: "coral",
+    palette: "pink",
     glyph: "✳",
     number: "01",
   },
@@ -32,7 +32,7 @@ const editorial: Omit<ArcadeGame, "record" | "playable">[] = [
     genre: "Puzzle platformer",
     description: "A precise little puzzle about being in the right place.",
     community: "Original game",
-    palette: "pool",
+    palette: "cyan",
     glyph: "◩",
     number: "02",
   },
@@ -42,7 +42,7 @@ const editorial: Omit<ArcadeGame, "record" | "playable">[] = [
     genre: "Endless jumper",
     description: "Keep climbing. Keep bouncing. See how far you can get.",
     community: "Original game",
-    palette: "marigold",
+    palette: "lime",
     glyph: "↟",
     number: "03",
   },
@@ -52,7 +52,7 @@ const editorial: Omit<ArcadeGame, "record" | "playable">[] = [
     genre: "Daily deduction",
     description: "One good guess leads to another in this daily brain teaser.",
     community: "Arcade original",
-    palette: "plum",
+    palette: "violet",
     glyph: "⌗",
     number: "04",
   },
@@ -90,7 +90,7 @@ export function getCatalog(records: GameRecord[]): ArcadeGame[] {
     genre: "Arcade game",
     description: record.manifest.description,
     community: record.community?.name ?? "Arcade original",
-    palette: (["pool", "marigold", "plum", "coral"] as const)[index % 4],
+    palette: (["cyan", "lime", "violet", "pink"] as const)[index % 4],
     glyph: "✦",
     number: String(index + editorial.length + 1).padStart(2, "0"),
     record,

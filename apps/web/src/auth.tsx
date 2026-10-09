@@ -50,7 +50,7 @@ function PrivyAuthShell({ children }: { children: ReactNode }) {
 export function ArcadeAuthProvider({ children }: { children: ReactNode }) {
   if (!appId) return <AuthShell>{children}</AuthShell>;
   return (
-    <PrivyProvider appId={appId} config={{ appearance: { theme: "light", accentColor: "#685494" }, embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" } } }}>
+    <PrivyProvider appId={appId} config={{ appearance: { theme: "light", accentColor: "#4A1D55" }, embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" } } }}>
       <PrivyAuthShell>{children}</PrivyAuthShell>
     </PrivyProvider>
   );

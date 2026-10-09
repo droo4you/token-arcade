@@ -37,7 +37,7 @@ function Link({ href, children, className = "", ariaLabel }: { href: string; chi
   return <a href={href} className={className} onClick={onClick} aria-label={ariaLabel}>{children}</a>;
 }
 
-function ActionLink({ href, children, tone = "yellow" }: { href: string; children: ReactNode; tone?: "yellow" | "ink" | "light" }) {
+function ActionLink({ href, children, tone = "lime" }: { href: string; children: ReactNode; tone?: "lime" | "ink" | "light" }) {
   return <Link href={href} className={`action action-${tone}`}>{children}<ArrowUpRight size={18} strokeWidth={2.7} /></Link>;
 }
 
@@ -87,7 +87,7 @@ function shortAddress(value?: string) {
   return value ? `${value.slice(0, 6)}…${value.slice(-4)}` : "Not linked";
 }
 
-function StatusBadge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "good" | "wait" | "coral" }) {
+function StatusBadge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "good" | "wait" | "pink" }) {
   return <span className={`status-badge status-${tone}`}>{children}</span>;
 }
 
@@ -177,7 +177,7 @@ function Home({ records, raids, loading, health }: { records: GameRecord[]; raid
 
       <section className="lower-grid page-width">
         <div className="warmup-panel"><div className="panel-top"><span className="panel-icon"><Gamepad2 size={24} /></span><StatusBadge tone={featured ? "good" : "wait"}>{featured ? "Playable now" : "Opening soon"}</StatusBadge></div><div className="warmup-panel-art"><span>●</span><span>◆</span><span>▲</span><span>✳</span></div><h2>{fixture ? <>A quick game while<br />you wait.</> : featured ? <>A new game to<br />jump into.</> : <>Good games<br />are on their way.</>}</h2><p>{fixture ? "Try the arcade’s internal test cabinet. Guest Free Play works right away. With a player account, you can test verified Ranked Runs and raids." : featured ? `${featured.name} is ready for Free Play. Open its cabinet and start playing.` : "The launch games are being built in their own workshops. Explore the shelf to see what is coming."}</p>{featured ? <ActionLink href={gameHref(featured.id)} tone="ink">Open {featured.name}</ActionLink> : <Link href="#games" className="action action-ink">Explore games <ArrowUpRight size={17} /></Link>}{fixture && <small>Clearly labeled test fixture, not a launch title.</small>}</div>
-        <div className="raid-panel"><div className="panel-top"><span className="panel-icon panel-icon-coral"><Trophy size={23} /></span><span className="raid-scribble">PLAY TOGETHER ✳</span></div><h2>Community<br />raids live here.</h2>{openRaid ? <><p>{openRaid.name} is open now. See the rules, standings, and attempts in the lobby.</p><div className="raid-feature"><span>OPEN RAID</span><strong>{openRaid.name}</strong><span>Closes {formatDate(openRaid.endsAt)}</span></div><ActionLink href={`/raids/${openRaid.id}`} tone="light">Enter the lobby</ActionLink></> : <><p>Limited-time challenges turn a game into a shared event, with clear rules and a real leaderboard.</p><div className="raid-empty"><span>✦</span><strong>No open raids right now</strong><span>{loading ? "Checking the arcade…" : "Check back for the next event."}</span></div><ActionLink href="/raids" tone="light">See raids</ActionLink></>}</div>
+        <div className="raid-panel"><div className="panel-top"><span className="panel-icon panel-icon-pink"><Trophy size={23} /></span><span className="raid-scribble">PLAY TOGETHER ✳</span></div><h2>Community<br />raids live here.</h2>{openRaid ? <><p>{openRaid.name} is open now. See the rules, standings, and attempts in the lobby.</p><div className="raid-feature"><span>OPEN RAID</span><strong>{openRaid.name}</strong><span>Closes {formatDate(openRaid.endsAt)}</span></div><ActionLink href={`/raids/${openRaid.id}`} tone="light">Enter the lobby</ActionLink></> : <><p>Limited-time challenges turn a game into a shared event, with clear rules and a real leaderboard.</p><div className="raid-empty"><span>✦</span><strong>No open raids right now</strong><span>{loading ? "Checking the arcade…" : "Check back for the next event."}</span></div><ActionLink href="/raids" tone="light">See raids</ActionLink></>}</div>
       </section>
       <section className="closing-band"><div className="page-width closing-inner"><span>{featured ? "PLAY FIRST. EVERYTHING ELSE CAN WAIT." : "THE NEXT CABINET IS ALMOST HERE."}</span><strong>{brandLine}</strong><Link href={featured ? playHref(featured.id) : "#games"} className="closing-play">{featured ? "Start playing" : "Browse games"} <ArrowUpRight size={21} /></Link></div></section>
     </main>
@@ -294,7 +294,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
       <span>{result.result === "failed" ? "TIME EXPIRED" : mode === "free" ? "LOCAL RESULT" : loading ? "VERIFYING RESULT" : verified ? "VERIFIED RESULT" : "RESULT NOT VERIFIED"}</span>
        <h2>{result.primaryMetric.toLocaleString()}</h2><span className="result-metric">{result.objective.replaceAll("_", " ")}</span>
       <p>{result.result === "failed" ? "The clock ran out. This attempt did not enter the standings." : mode === "free" ? "This score stays in this browser session. Sign in for a verified run on the board." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
-    </div><button className="action action-yellow" onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
+    </div><button className="action action-lime" onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
     <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. Local scores are for fun." : "Competitive results use a server-issued seed and are checked before they reach the leaderboard."}</p></div>
   </main>;
 }
@@ -363,7 +363,7 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
 
 function AccountPrompt({ health }: { health: Health | null }) {
   const auth = useArcadeAuth();
-  return <div className="account-prompt"><div className="prompt-art"><span>✦</span></div><div><h2>Your arcade identity starts here.</h2><p>A Player Passport keeps verified scores and raid history together. You can browse the arcade without one.</p><div className="prompt-actions">{auth.configured ? <button className="action action-yellow" onClick={auth.login}>Create player account <ArrowUpRight size={18} /></button> : <div className="setup-note"><Settings2 size={19} /><span>Privy sign-in is not configured. Add <code>VITE_PRIVY_APP_ID</code> and server credentials to enable player accounts.</span></div>}<ActionLink href="/" tone="light">Browse as Guest</ActionLink></div>{health?.auth.localDemo && <div className="demo-controls"><strong>Local developer demo</strong><span>These identities only work with LOCAL_DEMO_MODE on loopback.</span><div><button onClick={() => auth.setDemoRole("player")}>Enter as test player</button><button onClick={() => auth.setDemoRole("admin")}>Enter as test admin</button></div></div>}</div></div>;
+  return <div className="account-prompt"><div className="prompt-art"><span>✦</span></div><div><h2>Your arcade identity starts here.</h2><p>A Player Passport keeps verified scores and raid history together. You can browse the arcade without one.</p><div className="prompt-actions">{auth.configured ? <button className="action action-lime" onClick={auth.login}>Create player account <ArrowUpRight size={18} /></button> : <div className="setup-note"><Settings2 size={19} /><span>Privy sign-in is not configured. Add <code>VITE_PRIVY_APP_ID</code> and server credentials to enable player accounts.</span></div>}<ActionLink href="/" tone="light">Browse as Guest</ActionLink></div>{health?.auth.localDemo && <div className="demo-controls"><strong>Local developer demo</strong><span>These identities only work with LOCAL_DEMO_MODE on loopback.</span><div><button onClick={() => auth.setDemoRole("player")}>Enter as test player</button><button onClick={() => auth.setDemoRole("admin")}>Enter as test admin</button></div></div>}</div></div>;
 }
 
 function PassportPage({ health, records }: { health: Health | null; records: GameRecord[] }) {
@@ -647,7 +647,7 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
              <label>Objective<select value={raidDraft.objective} onChange={(event) => setRaidDraft({ ...raidDraft, objective: event.target.value })} required>{selectedRaidGame?.manifest.supportedObjectives.map((objective) => <option key={objective} value={objective}>{objective.replaceAll("_", " ")}</option>)}</select></label>
             <div className="form-row"><label>Opens at<input type="datetime-local" value={raidDraft.startsAt} onChange={(e) => setRaidDraft({ ...raidDraft, startsAt: e.target.value })} required /></label><label>Closes at<input type="datetime-local" value={raidDraft.endsAt} onChange={(e) => setRaidDraft({ ...raidDraft, endsAt: e.target.value })} required /></label></div>
             <label>Attempts per player<input type="number" min="1" max="20" value={raidDraft.maxAttempts} onChange={(e) => setRaidDraft({ ...raidDraft, maxAttempts: Number(e.target.value) })} required /></label>
-             <button className="action action-yellow" disabled={loading || !selectedRaidGame} type="submit">Create raid <ArrowUpRight size={17} /></button>
+             <button className="action action-lime" disabled={loading || !selectedRaidGame} type="submit">Create raid <ArrowUpRight size={17} /></button>
           </form>
         </section>
         <section className="console-panel console-setup-panel">
