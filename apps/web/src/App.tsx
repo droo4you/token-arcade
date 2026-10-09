@@ -6,6 +6,7 @@ import { api, ApiError, messageFor, type CompleteResponse, type GameResponse, ty
 import { useArcadeAuth } from "./auth";
 import { createClientCartridge, hasClientCartridge } from "./cartridges";
 import { gameHref, getCatalog, getGame, playHref, type ArcadeGame } from "./catalog";
+import { getGuideTopic, guideTopics, type GuideTopic, type GuideTopicId } from "./guideContent";
 
 const brandLine = "The Internet Is Fun.";
 
@@ -39,6 +40,10 @@ function Link({ href, children, className = "", ariaLabel }: { href: string; chi
 
 function ActionLink({ href, children, tone = "lime" }: { href: string; children: ReactNode; tone?: "lime" | "ink" | "light" }) {
   return <Link href={href} className={`action action-${tone}`}>{children}<ArrowUpRight size={18} strokeWidth={2.7} /></Link>;
+}
+
+function GuideLink({ topic, children }: { topic: GuideTopicId; children: ReactNode }) {
+  return <Link href={`/guide/${topic}`} className="guide-context-link"><CircleHelp size={17} />{children}<ArrowUpRight size={15} /></Link>;
 }
 
 function formatDate(value?: string) {
@@ -106,6 +111,7 @@ function Header({ health }: { health: Health | null }) {
         <Link href="/" className="nav-link">Arcade</Link>
         <Link href="/raids" className="nav-link">Community raids</Link>
         <Link href="/passport" className="nav-link">Passport</Link>
+        <Link href="/guide" className="nav-link">Take a tour</Link>
         <Link href="/launch" className="nav-link nav-launch">Launch Console</Link>
       </nav>
       <div className="header-actions">
@@ -118,7 +124,7 @@ function Header({ health }: { health: Health | null }) {
 }
 
 function Footer() {
-  return <footer className="site-footer"><div className="footer-inner"><div className="footer-stamp">T<span>✦</span></div><p>Token Arcade <span>v0 / Metropolis</span><br /><strong>{brandLine}</strong></p><div className="footer-links"><Link href="/">Games</Link><Link href="/raids">Raids</Link><Link href="/passport">Passport</Link></div><span className="footer-small">Built for play. Made for Monad.</span></div></footer>;
+  return <footer className="site-footer"><div className="footer-inner"><div className="footer-stamp">T<span>✦</span></div><p>Token Arcade <span>v0 / Metropolis</span><br /><strong>{brandLine}</strong></p><div className="footer-links"><Link href="/">Games</Link><Link href="/raids">Raids</Link><Link href="/passport">Passport</Link><Link href="/guide">Tour</Link></div><span className="footer-small">Built for play. Made for Monad.</span></div></footer>;
 }
 
 function GameArt({ game, size = "card" }: { game: ArcadeGame; size?: "card" | "hero" | "detail" }) {
@@ -158,7 +164,7 @@ function Home({ records, raids, loading, health }: { records: GameRecord[]; raid
           <h1>The Internet<br />Is <span>Fun.</span></h1>
           <p>A little corner of the internet made for playing. Walk in, pick a cabinet, and stay as long as you like.</p>
           <div className="hero-actions">{featured && <ActionLink href={playHref(featured.id)}>Play {featured.fixture ? "the warmup" : featured.name}</ActionLink>}<Link href="#games" className="text-link" ariaLabel="Browse games" >Browse games <ArrowRight size={18} /></Link></div>
-          <div className="hero-note"><Ticket size={19} /><span>{featured ? "No account needed for Free Play." : "New games are on their way."}</span></div>
+          <div className="hero-note"><Ticket size={19} /><span>{featured ? "No account needed for Free Play." : "New games are on their way."}</span><Link href="/guide/arcade" className="hero-tour-link">New here? Take the tour <ArrowUpRight size={15} /></Link></div>
         </div>
         <div className="ticket-right"><div className="ticket-stage">
           <div className="stage-top"><span>{featured ? "NOW PLAYING" : "OPENING SOON"}</span><span className="stage-stars">✦ ✦ ✦</span></div>
@@ -210,7 +216,7 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
       <div className="detail-art-frame"><GameArt game={game} size="detail" /><span className="detail-art-caption">TOKEN ARCADE / CABINET {game.number}</span></div>
       <div className="detail-copy">
         <div className="detail-flags"><StatusBadge tone={game.playable ? "good" : "wait"}>{game.fixture ? "Internal test fixture" : game.playable ? "Playable now" : "Adapter pending"}</StatusBadge><span>{game.genre}</span></div>
-        <h1>{game.name}</h1><p className="detail-lead">{game.description}</p>
+        <h1>{game.name}</h1><p className="detail-lead">{game.description}</p><GuideLink topic="cabinets">How cabinets work</GuideLink>
         <div className="detail-mode-list">
           <div><span className="mode-icon mode-free"><Play size={20} fill="currentColor" /></span><div><strong>Free Play</strong><small>No account. No limit. Just play.</small></div>{game.playable ? <Link href={playHref(game.id)} className="mini-action">Play Free <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Awaiting adapter</span>}</div>
           <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>Ranked Run</strong><small>Verified score and a place on the board.</small></div>{competitive ? <Link href={playHref(game.id, "ranked")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
@@ -301,7 +307,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
 
 function RaidIndex({ raids }: { raids: Raid[] }) {
   const now = useNow();
-  return <main className="page-width list-page"><div className="page-intro"><div className="intro-icon"><Trophy size={30} /></div><span className="section-kicker">PLAY TOGETHER</span><h1>Community raids</h1><p>Limited-time challenges with a shared set of rules, attempts, and standings.</p></div>{raids.length ? <div className="raid-list">{raids.map((raid) => {
+  return <main className="page-width list-page"><div className="page-intro"><div className="intro-icon"><Trophy size={30} /></div><span className="section-kicker">PLAY TOGETHER</span><h1>Community raids</h1><p>Limited-time challenges with a shared set of rules, attempts, and standings.</p><GuideLink topic="raids">How raids work</GuideLink></div>{raids.length ? <div className="raid-list">{raids.map((raid) => {
     const label = raidDisplayStatus(raid, now);
     return <Link href={`/raids/${encodeURIComponent(raid.id)}`} className="raid-list-item" key={raid.id}><span className="raid-list-mark">✳</span><span><StatusBadge tone={label === "open" ? "good" : "wait"}>{label}</StatusBadge><strong>{raid.name}</strong><small>{raid.maxAttempts} attempts · Ends {formatDate(raid.endsAt)}</small></span><ArrowUpRight size={24} /></Link>;
   })}</div> : <div className="empty-page"><span className="big-doodle">✳</span><h2>No raids on the board yet.</h2><p>When a community opens a challenge, its rules and leaderboard will appear here.</p><ActionLink href="/">Explore games</ActionLink></div>}</main>;
@@ -335,6 +341,7 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
   else if (attemptsLeft === 0) unavailable = "You have used all your attempts.";
   return <main className="page-width raid-page">
     <Link href="/raids" className="back-link"><ArrowLeft size={17} /> All raids</Link>
+    <GuideLink topic="raids">How raids work</GuideLink>
     <div className="raid-hero">
       <div><StatusBadge tone={isRaidOpen(raid, now) ? "good" : "wait"}>Raid {raidDisplayStatus(raid, now)}</StatusBadge><h1>{raid.name}</h1><p>Same course. Same rules. Put your best run on the board.</p>
         <div className="raid-quickfacts"><div><Clock3 size={19} /><span>{countdown}</span></div><div><Ticket size={19} /><span>{entryLabel}</span></div><div><Trophy size={19} /><span>{prizeLabel}</span></div></div>
@@ -419,7 +426,7 @@ function PassportPage({ health, records }: { health: Health | null; records: Gam
     finally { setWalletBusy(false); }
   };
   return <main className="page-width passport-page">
-    <div className="page-intro"><div className="intro-icon"><UserRound size={30} /></div><span className="section-kicker">PLAYER PASSPORT</span><h1>Keep the good runs.</h1><p>Your little record of time spent in the arcade.</p></div>
+    <div className="page-intro"><div className="intro-icon"><UserRound size={30} /></div><span className="section-kicker">PLAYER PASSPORT</span><h1>Keep the good runs.</h1><p>Your little record of time spent in the arcade.</p><GuideLink topic="passport">How Passport works</GuideLink></div>
     {!auth.authenticated ? <AccountPrompt health={health} /> : <>
       {error && <ErrorNote error={error} />}{walletNotice && <div className="success-note" role="status"><BadgeCheck size={18} />{walletNotice}</div>}
       {!passport ? <div className="loading-slab">Opening your Passport…</div> : <div className="passport-layout">
@@ -613,7 +620,7 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
   };
   const selectedGame = games.find((game) => game.manifest.id === selectedGameId);
   return <main className="page-width launch-page">
-    <div className="page-intro"><div className="intro-icon"><Settings2 size={30} /></div><span className="section-kicker">CURATOR ACCESS</span><h1>Launch Console</h1><p>Review a cartridge, configure its game, and publish only when the adapter and verifier pass arcade checks.</p></div>
+    <div className="page-intro"><div className="intro-icon"><Settings2 size={30} /></div><span className="section-kicker">CURATOR ACCESS</span><h1>Launch Console</h1><p>Review a cartridge, configure its game, and publish only when the adapter and verifier pass arcade checks.</p><GuideLink topic="console">How to prepare a launch</GuideLink></div>
     {!auth.authenticated ? <AccountPrompt health={health} /> : !authorized ? <ErrorNote error={error || "Checking your admin access…"} /> : <>
       {notice && <div className="success-note" role="status"><BadgeCheck size={19} />{notice}</div>}
       {error && <ErrorNote error={error} details={details} />}
@@ -665,6 +672,68 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
 
 function NotFound() { return <main className="page-width centered-state"><span className="big-doodle">?</span><h1>That cabinet isn’t here.</h1><p>Head back to the game shelf and pick another one.</p><ActionLink href="/">Back to arcade</ActionLink></main>; }
 
+function GuideHub() {
+  return <main className="page-width guide-page">
+    <div className="guide-heading">
+      <div><span className="section-kicker">THE ARCADE FIELD GUIDE</span><h1>Find your way around.</h1><p>Five short walkthroughs. Pick the part you need and come back anytime.</p></div>
+      <span className="guide-heading-stamp" aria-hidden="true">?</span>
+    </div>
+    <div className="guide-intro-band">
+      <div><span className="section-kicker">FIRST VISIT?</span><strong>Start with a quick lap of the arcade.</strong><p>See the shelf, try guest play, and learn what opens later.</p></div>
+      <ActionLink href="/guide/arcade" tone="ink">Start the arcade tour</ActionLink>
+    </div>
+    <div className="guide-card-grid">
+      {guideTopics.map((topic, index) => <Link key={topic.id} href={`/guide/${topic.id}`} className={`guide-card guide-card-${topic.theme}`} ariaLabel={`Open ${topic.title} walkthrough`}>
+        <span className="guide-card-meta">{String(index + 1).padStart(2, "0")} / {String(guideTopics.length).padStart(2, "0")} <span>{topic.durationLabel}</span></span>
+        <span className="section-kicker">{topic.eyebrow}</span>
+        <h2>{topic.title}</h2><p>{topic.summary}</p>
+        <span className="guide-card-cta">Open walkthrough <ArrowUpRight size={18} /></span>
+      </Link>)}
+    </div>
+    <p className="guide-footnote"><CircleHelp size={18} /> The Warmup Cabinet is an internal test game. The four launch games are still coming from their own workspaces.</p>
+  </main>;
+}
+
+function GuideChapter({ topic }: { topic: GuideTopic }) {
+  const [stepIndex, setStepIndex] = useState(0);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const step = topic.steps[stepIndex];
+  const selectStep = (index: number) => {
+    setStepIndex(index);
+    window.requestAnimationFrame(() => heading.current?.focus());
+  };
+  return <main className="page-width guide-page guide-chapter">
+    <Link href="/guide" className="back-link"><ArrowLeft size={17} /> All walkthroughs</Link>
+    <div className={`guide-chapter-head guide-card-${topic.theme}`}>
+      <span className="section-kicker">THE ARCADE FIELD GUIDE / {topic.eyebrow}</span>
+      <h1>{topic.title}</h1><p>{topic.summary}</p>
+      <div className="guide-chapter-progress" role="progressbar" aria-label={`${topic.title} progress`} aria-valuemin={1} aria-valuemax={topic.steps.length} aria-valuenow={stepIndex + 1} aria-valuetext={`Step ${stepIndex + 1} of ${topic.steps.length}`}>
+        {topic.steps.map((item, index) => <span key={item.title} className={`guide-progress-dot ${index === stepIndex ? "is-current" : ""} ${index < stepIndex ? "is-complete" : ""}`} />)}
+      </div>
+    </div>
+    <div className="guide-chapter-body">
+      <nav className="guide-step-list" aria-label={`${topic.title} steps`}>
+        {topic.steps.map((item, index) => <button key={item.title} className={`guide-step-tab ${index === stepIndex ? "is-current" : ""}`} type="button" onClick={() => selectStep(index)} aria-current={index === stepIndex ? "step" : undefined}>
+          <span>{String(index + 1).padStart(2, "0")}</span><span>{item.title}</span>
+        </button>)}
+      </nav>
+      <section className="guide-step-panel" aria-labelledby="guide-step-heading">
+        <span className="guide-step-kicker">STEP {String(stepIndex + 1).padStart(2, "0")} / {String(topic.steps.length).padStart(2, "0")}</span>
+        <h2 id="guide-step-heading" ref={heading} tabIndex={-1}>{step.title}</h2>
+        <p>{step.body}</p>
+        {step.tip && <div className="guide-tip"><Sparkles size={19} /><span>{step.tip}</span></div>}
+        <div className="guide-step-actions">
+          {stepIndex > 0 && <button className="action action-light" type="button" onClick={() => selectStep(stepIndex - 1)}><ArrowLeft size={18} /> Previous</button>}
+          {stepIndex < topic.steps.length - 1 ? <button className="action action-ink" type="button" onClick={() => selectStep(stepIndex + 1)}>Next step <ArrowRight size={18} /></button> : <ActionLink href="/guide" tone="ink">Choose another tour</ActionLink>}
+          {step.href && <Link href={step.href} className="guide-context-link">{step.actionLabel ?? "Open this area"}<ArrowUpRight size={16} /></Link>}
+        </div>
+      </section>
+    </div>
+  </main>;
+}
+
+function GuideNotFound() { return <main className="page-width centered-state"><CircleHelp size={42} /><h1>That walkthrough isn’t here.</h1><p>Pick a topic from the arcade field guide.</p><ActionLink href="/guide">See all walkthroughs</ActionLink></main>; }
+
 export function App() {
   const auth = useArcadeAuth();
   const route = useRoute();
@@ -690,6 +759,11 @@ export function App() {
   useEffect(() => { refresh(); }, [refresh]);
   let page: ReactNode;
   if (path === "/") page = <Home records={records} raids={raids} loading={loading} health={health} />;
+  else if (path === "/guide") page = <GuideHub />;
+  else if (path.startsWith("/guide/")) {
+    const topic = getGuideTopic(path.slice(7));
+    page = topic ? <GuideChapter key={topic.id} topic={topic} /> : <GuideNotFound />;
+  }
   else if (path.startsWith("/games/")) page = <GameDetail key={path} game={getGame(decodeURIComponent(path.slice(7)), records)} raids={raids} />;
   else if (path.startsWith("/play/")) page = <Player key={route} game={getGame(decodeURIComponent(path.slice(6)), records)} />;
   else if (path === "/raids") page = <RaidIndex raids={raids} />;

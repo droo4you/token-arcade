@@ -28,11 +28,12 @@ Open `http://127.0.0.1:8787`. The API uses ignored `apps/api/data/arcade.sqlite`
 
 ## What you can review now
 
-1. Browse the arcade as Guest and play **Warmup Cabinet**, clearly labeled as an internal test cartridge.
-2. With local demo mode, enter as a test player from Passport, play a Ranked Run, and see the verified result on the leaderboard and Passport.
-3. Enter the free Warmup Test Raid to exercise fixed seed, attempt cap, standings, and Passport history.
-4. Enter as test admin to register/configure a draft game and inspect publishing readiness. The four incoming launch titles cannot publish until their real adapters and verifiers pass review.
-5. Inspect the contract tests for Minicoin deployment, explicit entry fee routing, and pre-funded NFT prize custody. These are local EVM tests, not live Monad transactions.
+1. Open **Take a tour** in the header for five separate, replayable walkthroughs: Arcade, Cabinets, Raids, Passport, and Launch Console.
+2. Browse the arcade as Guest and play **Warmup Cabinet**, clearly labeled as an internal test cartridge.
+3. With local demo mode, enter as a test player from Passport, play a Ranked Run, and see the verified result on the leaderboard and Passport.
+4. Enter the free Warmup Test Raid to exercise fixed seed, attempt cap, standings, and Passport history.
+5. Enter as test admin to register/configure a draft game and inspect publishing readiness. The four incoming launch titles cannot publish until their real adapters and verifiers pass review.
+6. Inspect the contract tests for Minicoin deployment, explicit entry fee routing, and pre-funded NFT prize custody. These are local EVM tests, not live Monad transactions.
 
 The Minicoin admin API can be exercised against an in-process Hardhat chain, with no Monad RPC, using:
 
