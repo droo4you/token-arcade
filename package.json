@@ -10,9 +10,12 @@
     "dev": "node scripts/dev.mjs",
     "dev:web": "vite --host 127.0.0.1",
     "dev:api": "node --env-file-if-exists=.env --experimental-sqlite --experimental-strip-types apps/api/src/server.ts",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run build:cartridges && tsc --noEmit && vite build",
+    "setup:cartridges": "npm ci --prefix cartridges/coindle",
+    "build:cartridges": "vite build --config cartridges/coindle/arcade.vite.config.ts",
+    "dev:cartridges": "node --env-file-if-exists=.env scripts/cartridges.mjs",
     "test": "node --experimental-sqlite --experimental-strip-types scripts/run-tests.mjs",
-    "start": "node --env-file-if-exists=.env --experimental-sqlite --experimental-strip-types apps/api/src/server.ts"
+    "start": "node scripts/start.mjs"
   },
   "dependencies": {
     "@privy-io/node": "^0.35.0",

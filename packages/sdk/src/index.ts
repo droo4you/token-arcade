@@ -23,6 +23,12 @@ export interface GameManifest {
   supportedObjectives: GameObjective[];
   communityOptional: boolean;
   minicoinOptional: boolean;
+  /** Reusable gameplay identity; scores are always scoped to manifest.id. */
+  skeletonId?: string;
+  entry?: { kind: "iframe"; url: string; origin: string };
+  presentation?: { genre: string; palette: "pink" | "cyan" | "violet" | "lime" | "ink"; glyph: string };
+  controls?: { touch: boolean; orientation: "any" | "landscape" | "portrait" };
+  verifier?: { kind: "session_checks" | "server_authoritative" | "replay"; description: string };
 }
 
 export type CommunityAsset =
@@ -40,7 +46,22 @@ export interface MinicoinAssociation {
 
 export interface GameRecord {
   manifest: GameManifest;
-  status: "draft" | "published" | "paused";
+  status: "draft" | "submitted" | "approved" | "rejected" | "published" | "paused";
+  creatorId?: string;
+  submittedAt?: string;
+  /** Internal migration marker for the curated initial import only. */
+  legacyImportRevision?: number;
+  review?: {
+    validation?: { builds: boolean; mounts: boolean; destroys: boolean; resultSchema: boolean; mobile: boolean; sourceReviewed: boolean; reviewedAt: string; reviewedBy: string; notes?: string };
+    approvedAt?: string;
+    approvedBy?: string;
+    rejectedAt?: string;
+    rejectedBy?: string;
+    note?: string;
+  };
+  /** Descriptive association only. Never used for ownership or economic execution. */
+  communityConcept?: { name: string; type: "erc20" | "erc721" | "concept"; address?: string; chainId?: number; verification: "unverified" | "verified"; description?: string };
+  economy?: { status: "coming_soon" | "pending" | "enabled"; reason: string };
   community?: CommunityAsset;
   communityStrategy?: string;
   minicoin?: MinicoinAssociation;

@@ -16,3 +16,8 @@ function files(directory) {
 for (const file of [...files("packages"), ...files("apps")]) {
   await import(pathToFileURL(resolve(file)).href);
 }
+// Native-game bridge tests use each source's module format and load the real
+// game scripts in a VM; no browser subprocess is needed for this CI gate.
+for (const file of ["cartridges/emonad-cabinet/tools/arcade-bridge.test.js", "cartridges/two-places/tests/arcade-bridge.mjs"]) {
+  await import(pathToFileURL(resolve(file)).href);
+}

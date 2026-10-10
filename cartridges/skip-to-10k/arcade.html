@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#22163a">
+<title>Skip to 10K</title>
+<meta name="description" content="Skip an Ether Rock across eleven years of crypto history and try to break 10K. A Droober and RC game by droober.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><ellipse cx='8' cy='9' rx='7' ry='5' fill='%239a96a6' stroke='%232a2236'/></svg>">
+<style>
+  html, body { margin: 0; height: 100%; background: #22163a; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; touch-action: none;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; outline: none; touch-action: none; }
+  /* phones held upright: ask for landscape */
+  #rotate { display: none; position: fixed; inset: 0; z-index: 10; background: #22163a; color: #ffe066;
+    flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+    font: 900 18px/1.4 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 1px; text-align: center; }
+  #rotate small { color: #b8a8e8; font-size: 12px; font-weight: 700; }
+  #rotate .phone { width: 46px; height: 80px; border: 5px solid #ffe066; border-radius: 9px; animation: tilt 1.8s ease-in-out infinite; }
+  @keyframes tilt { 0%, 25% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+  body.portrait #rotate { display: flex; }
+  body.portrait canvas { visibility: hidden; }
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="0"></canvas>
+<div id="rotate"><div class="phone"></div>TURN YOUR PHONE SIDEWAYS<small>LIKE THE CHART</small></div>
+<script src="/sdk/hosts.js"></script><script src="/sdk/bridge.js"></script><script src="src/font.js"></script>
+<script src="src/sprites.js"></script>
+<script src="src/sim.js"></script>
+<script src="src/meta.js"></script>
+<script src="src/art.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
+

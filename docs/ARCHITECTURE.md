@@ -1,71 +1,78 @@
-# Token Arcade v0 — Metropolis architecture
+# Token Arcade v0 — architecture
 
-This is the integration workspace for the curated Token Arcade host. The four launch games are being built in other workspaces. Their source stays independent; each enters the arcade through a reviewed cartridge adapter and manifest. The sibling `Projects/Token-Arcade/Skrumpey-Slide` folder is a standalone prototype, not this platform repository.
+**Label: Implementation Note.** Read the [Documentation Index](token-arcade-package/Token_Arcade_Documentation_Index.pdf) first. The Product Handoff owns product behavior; Economy v0.2.2 owns money, liquidity, fees, prizes and protocol authority. Cartridge Kit v0.3 and this repository's notes are subordinate to both.
 
-## Product boundary
+## Ownership boundaries
 
-The browser renders the arcade, hosts a cartridge, and collects player input. The API owns player identity, registry state, ranked sessions, raid attempts, leaderboards, and result acceptance. Contracts own funds and NFT custody when deployed. A cartridge has no knowledge of Privy, wallets, Monad, payments, or raids beyond the run configuration it receives.
-
+```mermaid
+flowchart LR
+  Registry[Published Registry] --> Web[React arcade]
+  Web --> Host[Existing CartridgeHost lifecycle]
+  Host <-->|origin + source + channel checked| Game[Separate-origin Cartridge iframe]
+  Web --> API[Identity / sessions / verification API]
+  API --> DB[(SQLite)]
+  API --> Verifier[Game-specific Score Verifier]
+  API -. separately gated .-> Protocol[Deployment / custody / settlement]
 ```
-React arcade ── cartridge host ── reviewed game adapter
-      │
-      └── API ── SQLite (local demo) ── settlement adapter ── Monad contracts
-              └── Privy token verification
+
+A **Skeleton** is reusable gameplay code. A **Cabinet** is one deployment: `manifest.id` / `gameId`, published version/artifact, community metadata, economy, leaderboard, scores and raids. Reusing a Skeleton/adapter never merges these records. Passport aggregates a player's cabinet history; public boards remain cabinet-specific.
+
+- `apps/web`: arcade, cabinet/player, Passport, raids, Creator Portal and Admin Review Console. The shelf renders published records from `GET /api/games`.
+- `apps/api`: verified identity, publication state, server-issued competition sessions, attempts, result acceptance and projections. SQLite provides durable local storage.
+- `packages/sdk`: existing `TokenArcadeGame`, `GameRunConfig`, `GameRunResult`, manifest and verifier interfaces. `IframeCartridge` transports that same lifecycle across origins; the classic browser bridge is its transport peer.
+- `cartridges`: vendored, pinned source adaptations. Games own simulation, input, rendering, sound and local progression. They receive no Privy token, wallet, private key or economic execution capability.
+- `scripts/cartridges.mjs`: local separate-origin artifact server and narrow public Coindle data proxy. Production must serve immutable reviewed artifacts on an approved HTTPS origin.
+- `contracts`: earlier onchain prototype/tooling, not a completed Economy v0.2.2 implementation.
+
+## Lifecycle and isolation
+
+The host mounts, subscribes to normalized results, starts, pauses/resumes and destroys each game. Pending mounts are destroyed immediately on navigation. Each frame receives a unique handshake channel. Both ends check the exact sender window and origin. The iframe uses a separate origin and restricted sandbox; a query parameter alone cannot authorize embedding because the game origin also serves an explicit host allowlist.
+
+Blur/hidden-tab pauses require explicit resume. Leaving removes the iframe and host listeners and invokes adapter cleanup. Free Play keeps native post-run screens/local progression; native restarts receive a fresh local run ID. Competitive sessions cannot restart into a second score using the same issued session.
+
+## Roles and publication
+
+```text
+creator submits → submitted → admin validates → approved
+     ↑                           |                 |
+     └── rejection/revision ─────┘                 v
+                                             creator deploys
+                                                   |
+                                                published
+                                                   |
+                                              admin pauses
 ```
 
-The local SQLite store makes the demo durable across server restarts. Production hosting must provide durable storage and HTTPS. No browser-supplied score is accepted as a verified result without a game-specific verifier. This is deliberately a hard boundary: an unintegrated game can appear in the registry, but cannot enable Ranked Run or Community Raid until its verifier is registered.
+Guest play needs no account. Player/creator identity comes from Privy; admin access is an API-checked allowlist. Local demo identities work only when explicitly configured on loopback. Creator revisions invalidate approval. Only the owning creator can deploy an approved submission. Admin approval and the former direct-publish endpoint cannot bypass that action.
 
-## Modules
+The four reviewed legacy imports have one explicit bootstrap path, marked `platform:legacy-import`. Later submissions use the real lifecycle. New Free Play artifacts need no hardcoded frontend adapter. Admission checks version path, approved separate origin, manifest, controls and manual technical validation. Admins must build/play/review the source and artifact before attesting checks; a checkbox records review, rather than performing it automatically.
 
-- `apps/web`: responsive arcade, game detail/player, raid lobby, Passport, and allowlisted Launch Console.
-- `apps/api`: same-origin JSON API, Privy authentication, registry, run sessions, verification, raids, and Passport projection.
-- `packages/sdk`: cartridge lifecycle, manifest, objective, result and verification contracts shared with game adapters.
-- `contracts`: small onchain Minicoin and prize/entry contracts with deployment configuration kept outside game code.
+## Verification and board identity
 
-## Identity and modes
+Ranked/Raid requires an account, published mode, installed verifier, and server-issued `runId`, version, seed, rules and expiry. The API binds results to identity and cabinet, validates shape, replaces untrusted rules with issued rules, verifies gameplay, and atomically consumes the session. Raid attempts count issuance, including abandoned runs. Expired, reused, altered-version and paused-cabinet submissions are rejected.
 
-- Guest: browse and Free Play without login; local results have no claim of verification.
-- Player: Privy access token identifies the account; the API creates/loads a Player Passport. Privy embedded wallet is the arcade wallet. Ownership wallets are linked separately by signed association and never transfer assets for eligibility.
-- Admin: allowlisted Privy user ID, checked on every mutation by the API. The console cannot grant its own role.
-- Free Play: a cartridge can run without a server session.
-- Ranked Run and Community Raid: require account, server-issued run ID/seed/rules, a compatible verifier, and one-time result acceptance. The reviewed adapter can set a competitive run timeout from 30 seconds to 24 hours; the default is two minutes. A raid also enforces start/end and attempt cap server-side.
+`GameVerifier` accepts session checks, server-authoritative judging or replay. Replay is used where the game supports it well; it is not mandatory for future games. Free Play results never become verified leaderboard entries. Boards partition by cabinet, mode, version, objective and issued rules; raids add their own ID.
 
-## Cartridge contract
-
-The host passes immutable `GameRunConfig` (`runId`, `mode`, `objective`, optional `raidId`/`seed`, rules). Rule values are a bounded set of server-issued strings, safe integers, or booleans; the game verifier must check their game-specific meaning. A cartridge supports `mount`, `start`, `pause`, `resume`, `restart`, `destroy`, and `onRunComplete`. It emits a `GameRunResult` with metrics, timestamps, and game version. The adapter can additionally produce a replay/input proof. The API's `GameVerifier` validates game-specific proof against the issued session; the browser's metric is only a claim.
-
-Manifest validation checks unique ID, version, modes/objectives, artwork, and an approved adapter key. Publishing requires an installed adapter and Free Play smoke test. Competitive modes additionally require a registered verifier. This permits the curator to prepare an incoming game without pretending it is playable before its source arrives.
-
-## API contract
-
-All mutations use JSON. Player requests send `Authorization: Bearer <Privy access token>`. Local demo identity is an explicit development-only mode.
+## API additions
 
 | Route | Purpose |
 | --- | --- |
-| `GET /api/health` | API and configuration readiness |
-| `GET /api/games`, `GET /api/games/:id` | Published registry and detail |
-| `GET /api/raids`, `GET /api/raids/:id` | Public raid state and standings |
-| `GET /api/leaderboards/:gameId` | Accepted ranked results for the current version, primary objective, and rule set |
-| `GET /api/me`, `PATCH /api/me` | Passport |
-| `POST /api/runs` | Issue ranked/raid session and seed |
-| `POST /api/runs/:id/complete` | Verify and consume session, update standings/Passport |
-| `POST /api/admin/games` | Register draft manifest/config |
-| `PATCH /api/admin/games/:id` | Configure draft or pause a game |
-| `POST /api/admin/games/:id/publish` | Validate then publish |
-| `POST /api/admin/games/:id/minicoin` | Admin-only, explicitly enabled factory deployment and verified association |
-| `POST /api/admin/games/:id/minicoin/reconcile` | Verify a prior confirmed transaction and recover its registry association without sending a transaction |
-| `POST /api/admin/raids` | Create a raid and explicit fee/reward definition |
+| `GET /api/games` | Published public cabinets |
+| `GET/POST /api/creator/games` | Own submissions / submit |
+| `PATCH /api/creator/games/:id` | Revise own unpublished submission, resetting review |
+| `POST /api/admin/games/:id/validate` | Record build, mount, cleanup, result, mobile and source review evidence |
+| `POST /api/admin/games/:id/approve` | Approve reviewed artifact; does not publish |
+| `POST /api/admin/games/:id/reject` | Return feedback |
+| `POST /api/creator/games/:id/deploy` | Owner publishes approved cabinet |
+| `POST /api/admin/games/:id/publish` | Retired: rejects direct publication |
+| `POST /api/runs`, `POST /api/runs/:id/complete` | Issue/verify competition session |
+| `GET /api/leaderboards/:gameId` | Cabinet standings |
+| `GET /api/coindle/prices`, `/live`, `/history` | Bounded data; key stays server-side |
 
-## Onchain boundary
+Existing Passport, linked-wallet proof, admin configuration and raid routes remain. Publication actions do not deploy contracts or spend funds.
 
-`SettlementAdapter` is the platform-facing interface for entry collection, Minicoin deployment/association, prize deposit, and settlement. The Minicoin path uses the tested `MinicoinFactory`: it requires an explicit write flag, expected chain ID, owner key, factory, treasury, and supply recipient; confirms the factory event and mapping before saving the association. Community Asset and Strategy are required before deployment when applicable, and are frozen afterward because the token records them immutably. Its read-only reconcile route verifies an already confirmed transaction if the API stopped after submitting it but before saving the game. Paid entry, prize custody, and settlement API paths remain blocked pending chain integration and funded assets. The UI must never report a simulated operation as an onchain deployment, payment, escrow, or reward.
+## Economy boundary
 
-For v0, Community Asset and Community Strategy are separate records. A Skrumpeys ERC-721 collection can be attached to Skrumpey Slide; its Minicoin remains optional. Fee splits are per raid in basis points and must total 10,000. Token Arcade Treasury is a configured address, not a token. There is no `$TA`.
+`communityConcept` describes an association separately from an executable `community` asset. `economy` records coming-soon/pending/enabled status without changing cabinet identity. An eMONAD reference address, Skrumpeys association or ETH/WETH concept is not permission to execute a strategy or deploy a coin.
 
-## External integration checklist
-
-For each incoming game: obtain source and license/art notes; wrap or implement cartridge lifecycle; map its native metrics to the shared result schema; prove clean mount/destroy and mobile controls; add deterministic seed/replay support for competitive modes; register a server verifier; run a Free Play smoke test; then publish. A game lacking verification can still offer Free Play. This avoids rebuilding games inside the platform.
-
-## Current demo limits
-
-The codebase can exercise the host using an internal test cartridge. It is labeled as a test fixture and is not one of the four launch games. Actual launch game play, live Privy sign-in, Monad transactions, and NFT custody require their respective sources/configuration before the Metropolis acceptance script can pass.
+Economy v0.2.2 §11 requires a complete controlled economy deployment (including pool/hook/LP policy), not just minting a token. The earlier factory route does not satisfy that requirement. This integration leaves that gap explicit and prevents pending launch economies from using the legacy token-only action. Coindle can later attach an approved economy to its current ID without losing history. Paid entry is outside v0; free/no-prize raids exercise score infrastructure. Custody, payouts and economy funding remain blocked pending protocol implementation and verified assets.

@@ -1,0 +1,267 @@
+--- PAGE 1 ---
+TOKEN ARCADE - DOCUMENTATION IN-
+DEX
+Status: Active documentation map
+Release: Metropolis v0
+Revision: 8 Oct 2026 alignment pass
+Purpose: Tell every human/Codex agent what is authoritative, what is imple-
+mentation guidance, and what is research evidence.
+1. THE THREE LABELS
+Token Arcade uses exactly three document labels.
+SOURCE OF TRUTH
+Authoritative product/protocol decisions.
+Only two documents currently carry this label:
+A. Product / Application Source of T ruth
+Token_Arcade_v0_Metropolis_Handoff.pdf
+Owns:
+• Token Arcade v0 product definition
+• Guest / Player / Creator / Admin logic
+• Privy + Player Passport UX
+• linked ownership-wallet model
+• Game Cartridge host boundary
+• Gameplay Skeleton vs Cabinet/Deployment terminology
+• per-Cabinet leaderboard identity
+• Free Play / Ranked Run / Community Raid product behavior
+• Game Registry
+• Submit -> Admin Approve -> Developer Deploy lifecycle
+• Creator / Arcade Portal and Admin Review Console
+• UI/UX principles
+• current Cabinet mapping
+• Metropolis demo sequence
+• branch/workstream plan
+• scope cuts
+• post-v0 product roadmap
+If the question is “What should the user/product do?” , this document
+wins.
+1
+
+--- PAGE 2 ---
+B. Protocol / Economy Source of T ruth
+minicoin-economy-v0.2.2-codex-ready.pdf
+Owns:
+• MiniCoin definition
+• Community Asset definition
+• MiniCoinFactory
+• Uniswap v4 pool configuration
+• MiniCoinHook
+• WMON hook-fee behavior
+• FeeAccumulator
+• EconomyManager / Economy Router
+• Strategy architecture
+• PrizeVault
+• RaidManager
+• VaultThreshold trigger
+• Funded vs Economy Raids
+• score-verification/settlement trust boundary
+• LP lock and migration constraints
+• treasury routing
+• v0 economic invariants
+• contract threat model / guardrails
+• Monad / Uniswap deployment references
+• protocol-specific open questions
+If the question is “How should contracts, money , liquidity , fees, rewards,
+or raid funding behave?” , this document wins.
+No chat message, old prompt, gap report, game repo, or agent-generated plan
+may silently override either Source of Truth.
+IMPLEMENTATION NOTE
+Working guidance for a specific task, branch, game, adapter, or integration.
+Current examples:
+• cartridge-kit-v0.3.zip
+• CODEX_GAME_INTEGRATION_ATTACK.md
+• game-specific gap reports
+• technical spikes
+• UI component notes
+• score-verifier implementation notes
+Implementation Notes explain how to build a Source-of-Truth decision.
+They may be revised or discarded without redefining Token Arcade.
+2
+
+--- PAGE 3 ---
+If an Implementation Note conflicts with a Source of Truth, the Source of Truth
+wins.
+RESEARCH NOTE
+Evidence, references, experiments, comparisons, protocol docs, and observa-
+tions.
+Examples:
+• Monad docs
+• Uniswap v4 docs
+• Privy docs
+• Delegate docs
+• Skrumpeys research
+• Remix.gg research
+• third-party protocol comparisons
+• security postmortems
+• live-game audits
+Research Notes do not become product decisions merely because they are true
+or interesting.
+If research proves a Source-of-Truth assumption impossible or incorrect, flag the
+conflict for founder resolution. Do not silently rewrite the architecture.
+2. CONFLICT RULE
+The two Sources of Truth govern different layers.
+If implementation reveals a contradiction:
+1. Stop the conflicting work.
+2. Quote the exact conflicting requirements.
+3. Identify which layer owns each requirement.
+4. Do not invent a bridge or new product decision.
+5. Ask for founder resolution.
+6. Update the owning Source of Truth before continuing.
+Examples:
+• Can a game exist without a MiniCoin? Product Handoff owns the
+UX; Economy Spec owns the economic implications. Both say yes.
+• Does reusing a Skeleton reuse the leaderboard? Product Handoff:
+no. Leaderboards belong to Cabinet deployments.
+• How does a MiniCoin fee reach a Prize V ault? Economy Spec.
+3
+
+--- PAGE 4 ---
+• Who sees Deploy after a game is approved? Product Handoff: the
+developer/creator.
+• Who holds unrestricted F actory authority in v0? Economy Spec;
+the product Deploy action must respect that protocol boundary.
+• Must every Raid-ready game support deterministic replay?
+No. Product/Economy sources use a game-specific Score Verifier
+boundary; replay is one verifier type.
+3. CURRENT PRODUCT IDENTITY RULES
+These are already reflected in the Product Source of Truth and are repeated
+here only as navigation aids:
+• Gameplay Skeleton = reusable mechanics/rules.
+• Cabinet / Deployment = the public game instance in Token Arcade.
+• Separate Cabinets made from the same Skeleton get separate gameIds,
+leaderboards, Raid histories, community associations, and optional
+economies.
+• The Player Passport may aggregate a player’s history across Cabinets.
+• A reskin may create a new public Cabinet identity while preserving the
+scored gameplay path.
+• If scored mechanics change, it is a new gameplay/Cartridge version, not
+merely a skin.
+4. CURRENT METROPOLIS CABINET MAP
+Initial seeded/deployed Cabinets
+• eMONAD-branded Cabinet - built from the Buy Bounce
+source/Skeleton; eMONAD community association; public title can
+be finalized independently of the source repo name.
+• T wo Places at Once - associated with Skrumpeys; preserve the existing
+game; no broad reskin required.
+• Coindle - COIN/R W A concept; game remains live with economy unavail-
+able/Coming Soon.
+• Skip to 10K - ETH/WETH concept; no reskin; do not invent an unveri-
+fied bridged WETH path.
+Hero new submission
+• Skrumpey Slide - intentionally withheld from the initial legacy import so
+it can prove the real Submit -> Admin Approve -> Developer Deploy
+4
+
+--- PAGE 5 ---
+-> Published pipeline.
+5. DECISION HIERARCHY
+TOKEN ARCADE
+|
+|-- SOURCE OF TRUTH
+| |-- Product: Token_Arcade_v0_Metropolis_Handoff.pdf
+| `-- Protocol: minicoin-economy-v0.2.2-codex-ready.pdf
+|
+|-- IMPLEMENTATION NOTE
+| |-- cartridge-kit-v0.3.zip
+| |-- CODEX_GAME_INTEGRATION_ATTACK.md
+| `-- branch/game-specific implementation notes
+|
+|-- RESEARCH NOTE
+| `-- external docs, audits, comparisons, experiments
+|
+`-- CODE
+`-- implementation of the decisions above
+Code is not permission to redefine the product.
+If code and documentation disagree, first determine whether:
+• the code is stale,
+• an Implementation Note is stale,
+• a Source of Truth needs an explicit founder-approved revision,
+• or a real unresolved conflict exists.
+Then act accordingly.
+6. V0 BUILD PRIORITY
+For Metropolis, optimize for the smallest credible end-to-end product.
+Application/cartridge path:
+Registry
+-> initial published Cabinets
+-> Guest plays
+-> Player Account / Passport
+-> Ranked result through game-specific Score Verifier
+-> Creator submits Skrumpey Slide
+5
+
+--- PAGE 6 ---
+-> Admin approves
+-> Developer deploys
+-> Skrumpey Slide appears automatically
+Economic path:
+MiniCoin
+-> Pool
+-> Hook fee
+-> FeeAccumulator
+-> EconomyManager
+-> PrizeVault
+-> VaultThreshold
+-> RaidOpened
+-> verified competition result
+-> settlement / claim
+Do not build roadmap systems at the expense of those paths.
+7. METROPOLIS SCOPE RULE
+Before adding anything, ask:
+Does this materially improve the end-to-end Metropolis demo, fix a
+security/correctness issue, or prevent an architectural dead end?
+If no, defer it.
+In particular, do not opportunistically add:
+• permissionless creator launches
+• AI game generation
+• multiplayer platform infrastructure
+• advanced DynamicFeeStrategy
+• automated NFT floor buying
+• broad multichain deployment
+• $TA
+• betting / wagering
+• marketplace systems
+• full cosmetics marketplace
+• clan / sprint systems
+• shared Skeleton-wide leaderboards
+unless the founder explicitly changes scope.
+6
+
+--- PAGE 7 ---
+8. CODEX WORKING RULE
+Before starting a task, identify:
+Label: Source of Truth / Implementation Note / Research Note
+Layer: Product / Protocol / Implementation / Research
+Owning source: exact document
+Acceptance test: observable behavior proving completion
+Out of scope: what must not be redesigned
+For application/game work:
+The game supplies gameplay.
+Token Arcade supplies the arcade.
+For protocol work:
+Hook captures/accounting.
+Economy Router allocates.
+Strategies act.
+Vault holds.
+Trigger decides when it is game time.
+RaidManager settles the tournament economy.
+9. CHANGE CONTROL
+When a major product or economic decision changes:
+1. Update the owning Source of Truth first.
+2. Increment its revision/version if appropriate.
+3. Add a short changelog entry.
+4. Update affected Implementation Notes.
+5. Then update code.
+Do not let architecture drift through isolated chat messages or agent-generated
+files.
+10. NORTH STAR
+The Internet Is F un.
+Games first.
+Wallets when useful.
+Identity persists.
+Competition is obvious.
+Communities feel represented.
+7
+
+--- PAGE 8 ---
+Economics remain modular.
+Strategies remain auditable.
+Metropolis ships before the roadmap eats it.
+8

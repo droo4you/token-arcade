@@ -52,6 +52,7 @@ test("cartridge host cleans up a mount that finishes after the screen is closed"
   const config: GameRunConfig = { runId: "1", gameId: "test", gameVersion: "1", mode: "free", objective: "score", startedAt: new Date().toISOString() };
   const pending = host.mount(cartridge, {} as HTMLElement, config, () => {});
   host.destroy();
+  assert.equal(destroyed, 1, "navigation must destroy a pending cartridge before its handshake completes");
   resolveMount();
   await pending;
   host.start();

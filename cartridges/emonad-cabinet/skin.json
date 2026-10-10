@@ -1,0 +1,22 @@
+{
+  "skinId": "emonad-cabinet.abstract-v1",
+  "version": "1.0.0",
+  "skeletonId": "buy-bounce",
+  "slots": ["palette", "button", "pickups", "strings", "communityDisplay"],
+  "palette": {
+    "bg": "#100b20", "bg2": "#17102b", "grid": "#281d42",
+    "accent": "#ae8cff", "accent2": "#6747a8", "muted": "#a59abd",
+    "panel": "#1b1430", "line": "#403159"
+  },
+  "strings": {
+    "button": "GO", "collectible": "ORB", "pickup.rbid": "LIFT",
+    "pickup.lev": "2X", "pickup.bid": "SURGE", "pickup.dump": "DROP",
+    "pickup.hold": "GUARD", "pickup.tick": "ORB",
+    "event.bounce": "BOUNCE", "event.rbid": "LIFT",
+    "event.lev": "POWER 2X", "event.bid": "SURGE", "event.dump": "DROP",
+    "event.tick": "ORB"
+  },
+  "communityDisplay": { "name": "eMONAD cabinet", "official": false },
+  "assets": [],
+  "rights": []
+}

@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { getAddress } from "viem";
 import type { GameRecord, GameRunConfig, GameRunResult, Passport, Raid } from "../../../packages/sdk/src/index.ts";
 import { WARMUP_GAME_ID } from "../../../packages/sdk/src/warmup.ts";
+import { launchCabinets } from "../../../packages/sdk/src/launch.ts";
 
 type JsonRow = { json: string };
 type CountRow = { count: number };
@@ -29,15 +30,6 @@ export interface WalletChallenge {
   expiresAt: string;
   usedAt?: string;
 }
-
-const pending = (id: string, name: string, description: string, objectives: GameRecord["manifest"]["supportedObjectives"], communityOptional: boolean): GameRecord => ({
-  manifest: {
-    id, name, description, version: "0.0.0-unintegrated", developer: "External game team",
-    adapterId: `pending/${id}`, supportedModes: ["free", "ranked", "raid"],
-    supportedObjectives: objectives, communityOptional, minicoinOptional: true,
-  },
-  status: "draft", createdAt: new Date().toISOString(),
-});
 
 export class ArcadeStore {
   readonly db: DatabaseSync;
@@ -78,6 +70,13 @@ export class ArcadeStore {
 
   private seed(): void {
     const now = new Date().toISOString();
+    // Retire only untouched placeholders from the previous frontend scaffold.
+    for (const id of ["buy-bounce", "two-places", "coindle", "skrumpey-slide"]) {
+      const old = this.getGame(id);
+      if (old?.status === "draft" && old.manifest.version === "0.0.0-unintegrated" && old.manifest.adapterId === `pending/${id}` && !old.minicoin && !old.creatorId) {
+        this.db.prepare("DELETE FROM games WHERE id = ?").run(id);
+      }
+    }
     const warmup: GameRecord = {
       manifest: {
         id: WARMUP_GAME_ID, name: "Arcade Warmup", description: "Internal test cartridge for checking the arcade host and verified runs. Not a launch game.",
@@ -88,11 +87,18 @@ export class ArcadeStore {
     };
     for (const game of [
       ...(this.includeWarmup ? [warmup] : []),
-      pending("buy-bounce", "Buy Bounce", "Endless vertical platformer. External cartridge integration pending.", ["score", "distance"], true),
-      pending("two-places", "Two Places", "Puzzle platformer. External cartridge integration pending.", ["completion_time", "stars"], true),
-      pending("coindle", "Coindle", "Daily deduction game. External cartridge integration pending.", ["guesses", "completion_time"], true),
-      pending("skrumpey-slide", "Skrumpey Slide", "Physics launch arcade game. External cartridge integration pending.", ["total_score", "distance", "destruction"], false),
-    ]) this.db.prepare("INSERT OR IGNORE INTO games (id,json) VALUES (?,?)").run(game.manifest.id, JSON.stringify(game));
+      ...launchCabinets(process.env.CARTRIDGE_ORIGIN),
+    ]) {
+      const prior = this.getGame(game.manifest.id);
+      // One narrow correction for v1 imports created during integration. Admin
+      // edits clear this review marker; future starts never overwrite them.
+      if (prior && game.legacyImportRevision === 2 && prior.legacyImportRevision === undefined &&
+          prior.review?.approvedBy === "platform:legacy-import" && prior.manifest.version === "1.0.0" &&
+          prior.manifest.adapterId === game.manifest.adapterId && prior.manifest.entry?.kind === "iframe" &&
+          new URL(prior.manifest.entry.url).pathname === `/${game.manifest.id}/v/1.0.0/`) {
+        this.saveGame({ ...prior, manifest: { ...game.manifest, entry: prior.manifest.entry }, legacyImportRevision: 2 });
+      } else this.db.prepare("INSERT OR IGNORE INTO games (id,json) VALUES (?,?)").run(game.manifest.id, JSON.stringify(game));
+    }
 
     const demoRaid: Raid = {
       id: "warmup-test-raid", name: "Warmup Test Raid", gameId: WARMUP_GAME_ID,

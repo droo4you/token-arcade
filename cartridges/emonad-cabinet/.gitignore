@@ -1,0 +1,15 @@
+
+# local env, never commit
+*.log
+.DS_Store
+.env
+.env*
+.env.local
+.vercel
+node_modules/
+
+.vercel
+
+# season paperwork that is not part of the shipped product
+buybouncefiles/03-buy-bounce-handoff.md
+buybouncefiles/netnet-reference/

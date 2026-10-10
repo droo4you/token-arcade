@@ -9,3 +9,7 @@ contracts/cache/
 .npm-cache/
 coverage/
 *.log
+_source_audits_*/
+cartridges/coindle/arcade-dist/
+cartridges/coindle/.next/
+tmp/

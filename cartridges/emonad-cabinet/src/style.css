@@ -1,0 +1,143 @@
+:root{
+  --bg:#070707;
+  --bg2:#0e0f0d;
+  --grid:#1a1d16;
+  --accent:#CCFF00;
+  --accent2:#8fbf00;
+  --ink:#f2f2ef;
+  --muted:#6f7466;
+  --danger:#ff3b30;
+  --good:#00c805;
+  --panel:#111310;
+  --line:#23261e;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--sans);overscroll-behavior:none;touch-action:none}
+#wrap{position:fixed;inset:0;display:flex;flex-direction:column}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+
+/* HUD */
+#hud{position:absolute;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 10px) 12px 0;pointer-events:none;z-index:5}
+.row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.stat{font-family:var(--mono);line-height:1.1}
+.stat .k{font-size:9px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase}
+.stat .v{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.stat.r{text-align:right}
+.ath .v{color:var(--accent)}
+#pills{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.pill{font-family:var(--mono);font-size:10px;letter-spacing:.1em;padding:4px 8px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}
+.pill.on{color:#000;background:var(--accent);border-color:var(--accent);font-weight:700}
+.pill.warn{color:#000;background:var(--danger);border-color:var(--danger);font-weight:700}
+.pill.shield{color:#000;background:#7fe6ff;border-color:#7fe6ff;font-weight:700}
+.pill.ticket{color:#ffc93c;border-color:#3a3220}
+.pill.ticket.on{color:#000;background:#ffc93c;border-color:#ffc93c;font-weight:700}
+
+/* overlays */
+/* The end screen is the tallest of these and grew as it gained a rank line and
+   navigation. html and body are overflow:hidden, so anything past the fold would be
+   unreachable rather than scrollable. safe centering keeps short content centred while
+   preventing tall content from being clipped at the top, which plain centring does. */
+.veil{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;justify-content:safe center;overflow-y:auto;overscroll-behavior:contain;padding:24px;text-align:center;background:radial-gradient(120% 90% at 50% 30%, rgba(10,12,8,.86), rgba(4,4,4,.97))}
+.veil.hide{display:none}
+.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;margin-bottom:14px}
+h1{font-size:clamp(40px,15vw,72px);line-height:.86;margin:0;font-weight:800;letter-spacing:-.045em;text-transform:uppercase}
+h1 span{display:block;color:var(--accent)}
+.sub{margin:16px 0 0;max-width:330px;font-size:14px;line-height:1.5;color:#b9bdb1}
+.sub b{color:var(--ink);font-weight:600}
+.big{font-family:var(--mono);font-size:clamp(34px,12vw,56px);font-weight:800;color:var(--accent);letter-spacing:-.03em;margin:6px 0 0}
+.cta{margin-top:26px;pointer-events:auto;border:0;border-radius:14px;background:var(--accent);color:#000;font-family:var(--sans);font-weight:800;font-size:17px;letter-spacing:.06em;padding:16px 40px;text-transform:uppercase;cursor:pointer;box-shadow:0 6px 0 var(--accent2)}
+.cta:active{transform:translateY(4px);box-shadow:0 2px 0 var(--accent2)}
+/* secondary action: same capsule silhouette, no acid fill, so the daily stays the
+   obvious primary and free play reads as the way out rather than an equal choice */
+/* The window is the event, so it takes the ticket gold and sits above the daily. */
+.cta.window{background:#ffc93c;box-shadow:0 6px 0 #b58a1a}
+.cta.window:active{box-shadow:0 2px 0 #b58a1a}
+.cta.window[disabled]{box-shadow:0 6px 0 #b58a1a}
+.modeline.window{color:#ffc93c}
+.cta.window + .modeline + .cta{margin-top:18px}
+.tab.window.on{background:#ffc93c;border-color:#ffc93c}
+.btk{color:#ffc93c;font-weight:700;min-width:64px}
+.cta.ghost{margin-top:10px;background:transparent;color:var(--ink);box-shadow:0 0 0 1px var(--line) inset;font-size:14px;padding:12px 30px}
+.cta.ghost:active{transform:translateY(2px);box-shadow:0 0 0 1px var(--line) inset}
+.cta[disabled]{opacity:.4;cursor:not-allowed;box-shadow:0 6px 0 var(--accent2)}
+.cta.ghost[disabled]{box-shadow:0 0 0 1px var(--line) inset}
+.modeline{margin-top:10px;pointer-events:auto;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+/* Navigation reads as a real control, outlined rather than plain text. As muted text
+   it was mistaken for a caption, so a player whose daily runs were spent saw one
+   enabled capsule and concluded free play was the only option left. */
+.navrow{margin-top:16px;pointer-events:auto;display:flex;align-items:center;gap:8px}
+.navlink{background:none;border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer;color:var(--ink);font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase}
+.navlink:hover{border-color:var(--accent);color:var(--accent)}
+.navlink:active{transform:translateY(1px)}
+.navlink.wallet.on{border-color:var(--good);color:var(--good)}
+.navlink.wallet.on:hover{border-color:var(--danger);color:var(--danger)}
+.navlink[disabled]{opacity:.5;cursor:wait}
+.navsep{display:none}
+
+/* Tickets are the draw currency, so they sit under the score rather than in the
+   stat grid with buys and streak. Gold matches the pickup and the in-run pill. */
+.ticketline{margin-top:10px;display:inline-block;padding:5px 12px;border:1px solid #3a3220;border-radius:999px;
+  font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:#ffc93c}
+.ticketline.on{background:#ffc93c;border-color:#ffc93c;color:#000;font-weight:700}
+.ticketline.max{background:var(--good);border-color:var(--good);color:#000;font-weight:700}
+.rankline{margin-top:8px;min-height:18px;font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--muted)}
+.rankline b{color:var(--accent);font-weight:700}
+.rankline.pb b{color:var(--good)}
+
+/* leaderboard */
+.tabs{display:flex;gap:6px;margin-bottom:16px;pointer-events:auto}
+.tab{background:none;border:1px solid var(--line);border-radius:999px;padding:7px 16px;cursor:pointer;color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.tab.on{color:#000;background:var(--accent);border-color:var(--accent);font-weight:700}
+.bwrap{width:100%;max-width:400px;pointer-events:auto}
+/* the list scrolls, the page never does: html/body are overflow:hidden */
+.blist{list-style:none;margin:0;padding:0;max-height:46vh;overflow-y:auto;text-align:left}
+.blist li{display:flex;align-items:baseline;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:6px;font-family:var(--mono);font-size:13px}
+.blist li.me{border-color:var(--accent)}
+.brank{color:var(--muted);font-size:11px;min-width:26px}
+.bath{color:var(--accent);font-weight:700}
+.bmeta{margin-left:auto;color:var(--muted);font-size:11px}
+.bempty{justify-content:center;color:var(--muted);font-size:12px}
+.foot{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 14px);font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:#3d4136;text-transform:uppercase}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px;width:100%;max-width:330px}
+.card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:left;background:var(--panel)}
+.card .k{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.card .v{font-family:var(--mono);font-size:17px;font-weight:700;margin-top:3px}
+.legend{margin-top:22px;display:flex;flex-direction:column;gap:7px;max-width:330px;width:100%}
+.lg{display:flex;align-items:center;gap:9px;font-size:12px;color:#a9ad9f;text-align:left}
+.chip{width:34px;flex:0 0 34px;height:19px;border-radius:5px;display:grid;place-items:center;font-family:var(--mono);font-size:8px;font-weight:800;color:#000;letter-spacing:.03em}
+
+/* config */
+#gear{position:absolute;left:12px;bottom:calc(env(safe-area-inset-bottom) + 10px);z-index:20;width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:rgba(12,14,10,.6);color:#4a4f42;font-size:13px;cursor:pointer;pointer-events:auto}
+#cfg{position:absolute;z-index:21;inset:auto 10px calc(env(safe-area-inset-bottom) + 10px) 10px;max-height:72vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:none}
+#cfg.open{display:block}
+#cfg h3{margin:0 0 10px;font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase}
+.cfghead{position:sticky;top:-14px;z-index:2;display:flex;justify-content:space-between;align-items:center;background:var(--panel);padding:14px 0 12px;margin:-14px 0 4px;border-bottom:1px solid var(--line)}
+.cfghead h3{margin:0}
+#cfgClose{border:0;border-radius:8px;background:var(--accent);color:#000;font-family:var(--sans);font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:8px 18px;cursor:pointer}
+.sw{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.sw button{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);cursor:pointer}
+#cfg h3 b{color:var(--accent);font-weight:700;margin-left:6px}
+.hw button{width:40px;height:40px;background:var(--grid) center/78% no-repeat;display:grid;place-items:center}
+.hw button.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.hw .dot{width:8px;height:8px;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.mw{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.mw button{border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:9px 12px;cursor:pointer}
+.mw button:hover{border-color:var(--accent);color:var(--accent)}
+.mw button.on{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.sl{margin-bottom:11px}
+.sl label{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:5px}
+.sl label b{color:var(--accent);font-weight:700}
+.sl input[type=range]{width:100%;accent-color:var(--accent)}
+.cfgrow{display:flex;gap:8px;margin-bottom:8px}
+.cfgbtn{flex:1;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:10px 8px;cursor:pointer}
+.cfgbtn:hover{border-color:var(--accent);color:var(--accent)}
+.cfgbtn.primary{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700}
+.cfgbtn.primary:hover{color:#000}
+.cfgnote{font-family:var(--mono);font-size:9px;line-height:1.5;letter-spacing:.06em;color:var(--muted)}
+.cfgnote.ok{color:var(--accent)}
+.pick{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+.pick div{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.pick input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-radius:6px;background:none;padding:0}

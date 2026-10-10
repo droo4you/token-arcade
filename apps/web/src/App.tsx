@@ -6,6 +6,7 @@ import { api, ApiError, messageFor, type CompleteResponse, type GameResponse, ty
 import { useArcadeAuth } from "./auth";
 import { createClientCartridge, hasClientCartridge } from "./cartridges";
 import { gameHref, getCatalog, getGame, playHref, type ArcadeGame } from "./catalog";
+import { CreatorPortal } from "./CreatorPortal";
 import { getGuideTopic, guideTopics, type GuideTopic, type GuideTopicId } from "./guideContent";
 
 const brandLine = "The Internet Is Fun.";
@@ -177,7 +178,7 @@ function Home({ records, raids, loading, health }: { records: GameRecord[]; raid
 
     <main>
       <section id="games" className="shelf-section page-width">
-        <div className="section-heading"><div><span className="section-kicker">THE GAME SHELF</span><h2>Pick your next obsession.</h2><p>{liveExternalCount ? `${liveExternalCount} game${liveExternalCount === 1 ? " is" : "s are"} ready to play, with more cabinets on the way.` : "Four launch titles are on their way from their own workshops. Their adapters will bring them into the arcade."}</p></div><span className="handdrawn-arrow" aria-hidden="true">↘</span></div>
+        <div className="section-heading"><div><span className="section-kicker">THE GAME SHELF</span><h2>Pick your next obsession.</h2><p>{liveExternalCount ? `${liveExternalCount} game${liveExternalCount === 1 ? " is" : "s are"} ready to play, with more cabinets on the way.` : "Published cabinets will appear here as they open."}</p></div><span className="handdrawn-arrow" aria-hidden="true">↘</span></div>
         <div className="game-shelf">{externals.map((game, index) => <GameTile key={game.id} game={game} variant={index % 3 === 0 ? "wide" : "normal"} />)}</div>
       </section>
 
@@ -191,9 +192,11 @@ function Home({ records, raids, loading, health }: { records: GameRecord[]; raid
   </>;
 }
 
+function metricText(value: number, objective: string) { return objective === "completion_time" ? `${(value / 1000).toFixed(2)} s` : value.toLocaleString(); }
+
 function Leaderboard({ entries, objective = "score" }: { entries: LeaderboardEntry[]; objective?: string }) {
   if (!entries.length) return <div className="empty-list"><Trophy size={28} /><strong>No verified runs yet</strong><span>The first accepted result will appear here.</span></div>;
-  return <div className="leaderboard"><div className="leaderboard-head"><span>Place</span><span>Player</span><span>{objective.replaceAll("_", " ")}</span></div>{entries.map((entry, index) => <div className="leaderboard-row" key={entry.runId}><span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span><span>{entry.displayName}</span><strong>{entry.primaryMetric.toLocaleString()}</strong></div>)}</div>;
+  return <div className="leaderboard"><div className="leaderboard-head"><span>Place</span><span>Player</span><span>{objective.replaceAll("_", " ")}</span></div>{entries.map((entry, index) => <div className="leaderboard-row" key={entry.runId}><span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span><span>{entry.displayName}</span><strong>{entry.secondaryMetrics?.apples !== undefined && <small>{entry.secondaryMetrics.apples} apples · </small>}{metricText(entry.primaryMetric, objective)}</strong></div>)}</div>;
 }
 
 function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid[] }) {
@@ -217,6 +220,7 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
       <div className="detail-copy">
         <div className="detail-flags"><StatusBadge tone={game.playable ? "good" : "wait"}>{game.fixture ? "Internal test fixture" : game.playable ? "Playable now" : "Adapter pending"}</StatusBadge><span>{game.genre}</span></div>
         <h1>{game.name}</h1><p className="detail-lead">{game.description}</p><GuideLink topic="cabinets">How cabinets work</GuideLink>
+        {game.record?.economy && !game.record.minicoin && <div className="cabinet-economy"><StatusBadge tone="wait">MiniCoin Economy — Coming Soon</StatusBadge><p>{game.record.economy.reason}</p></div>}
         <div className="detail-mode-list">
           <div><span className="mode-icon mode-free"><Play size={20} fill="currentColor" /></span><div><strong>Free Play</strong><small>No account. No limit. Just play.</small></div>{game.playable ? <Link href={playHref(game.id)} className="mini-action">Play Free <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Awaiting adapter</span>}</div>
           <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>Ranked Run</strong><small>Verified score and a place on the board.</small></div>{competitive ? <Link href={playHref(game.id, "ranked")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
@@ -226,13 +230,13 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
       </div>
     </div>
     <div className="detail-below">
-      <section className="detail-info"><h2>About this cabinet</h2><p>{game.fixture ? "Warmup Cabinet checks the cartridge host, Free Play, server-issued runs, and score verification. It is a test fixture for this arcade, not one of the four launch games." : game.playable ? "This cartridge is installed and ready for browser play. Competitive modes appear when its verifier and rules are published." : "The arcade is reserving this cabinet for its incoming game. Game play and competitive modes will open after the actual game is imported and verified."}</p><div className="info-pairs"><div><span>Made by</span><strong>{game.record?.manifest.developer ?? (game.fixture ? "Token Arcade" : "External game team")}</strong></div><div><span>Community</span><strong>{game.community}</strong></div><div><span>Version</span><strong>{game.record?.manifest.version ?? "Awaiting import"}</strong></div></div>{game.record?.community && <details className="financial-details"><summary>Community asset <ChevronDown size={16} /></summary><p>{game.record.community.name} ({game.record.community.type.toUpperCase()})</p><code>{game.record.community.address}</code></details>}</section>
-      <section className="detail-board"><div className="board-heading"><div><h2>Ranked board</h2><p>Only server-verified results appear here.</p></div><Trophy size={26} /></div>{error ? <ErrorNote error={error} /> : <Leaderboard entries={entries} objective={game.record?.manifest.supportedObjectives[0] ?? "score"} />}</section>
+      <section className="detail-info"><h2>About this cabinet</h2><p>{game.fixture ? "Warmup Cabinet checks the cartridge host, Free Play, server-issued runs, and score verification. It is a test fixture for this arcade, not one of the four launch games." : game.playable ? "This cartridge is installed and ready for browser play. Competitive modes appear when its verifier and rules are published." : "The arcade is reserving this cabinet for its incoming game. Game play and competitive modes will open after the actual game is imported and verified."}</p><div className="info-pairs"><div><span>Made by</span><strong>{game.record?.manifest.developer ?? (game.fixture ? "Token Arcade" : "External game team")}</strong></div><div><span>Community</span><strong>{game.community}</strong></div><div><span>Version</span><strong>{game.record?.manifest.version ?? "Awaiting import"}</strong></div></div>{game.record?.community && <details className="financial-details"><summary>Community asset <ChevronDown size={16} /></summary><p>{game.record.community.name} ({game.record.community.type.toUpperCase()})</p><code>{game.record.community.address}</code></details>}{game.record?.communityConcept && <details className="financial-details"><summary>Community association <ChevronDown size={16} /></summary><p>{game.record.communityConcept.name} · {game.record.communityConcept.type.toUpperCase()}</p><p>{game.record.communityConcept.description}</p>{game.record.communityConcept.address && <code>{game.record.communityConcept.address}</code>}<p>Association does not imply an official partnership.</p></details>}{game.record?.manifest.verifier && <p className="verification-note">{game.record.manifest.verifier.description}</p>}</section>
+      <section className="detail-board"><div className="board-heading"><div><h2>Ranked board</h2><p>Verified runs belong to this cabinet.</p></div><Trophy size={26} /></div>{error ? <ErrorNote error={error} /> : <Leaderboard entries={entries} objective={game.record?.manifest.supportedObjectives[0] ?? "score"} />}</section>
     </div>
   </main>;
 }
 
-function CartridgeView({ config, adapterId, onComplete }: { config: GameRunConfig; adapterId: string; onComplete: (result: GameRunResult) => void }) {
+function CartridgeView({ config, manifest, onComplete }: { config: GameRunConfig; manifest: GameManifest; onComplete: (result: GameRunResult) => void }) {
   const container = useRef<HTMLDivElement>(null);
   const host = useRef<CartridgeHost | null>(null);
   const callback = useRef(onComplete);
@@ -243,13 +247,13 @@ function CartridgeView({ config, adapterId, onComplete }: { config: GameRunConfi
     const cartridgeHost = new CartridgeHost();
     host.current = cartridgeHost;
     if (container.current) {
-      const cartridge = createClientCartridge(config.gameId, adapterId);
+      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => setPaused(state === "paused"), setError);
       if (!cartridge) setError("The reviewed browser cartridge is not installed for this game.");
       else cartridgeHost.mount(cartridge, container.current, config, (result) => callback.current(result)).then(() => cartridgeHost.start()).catch((reason) => setError(messageFor(reason)));
     }
     return () => { cartridgeHost.destroy(); host.current = null; };
-  }, [config.runId, adapterId]);
-  return <><div className="cartridge-mount" ref={container} />{error && <ErrorNote error={error} />}{config.mode === "free" && <button className="under-game-button" onClick={() => { if (paused) host.current?.resume(); else host.current?.pause(); setPaused(!paused); }}>{paused ? "Resume game" : "Pause game"}</button>}</>;
+  }, [config.runId, manifest.adapterId]);
+  return <><div className="cartridge-mount" ref={container} />{error && <ErrorNote error={error} />}{<button className="under-game-button" onClick={() => { if (paused) host.current?.resume(); else host.current?.pause(); setPaused(!paused); }}>{paused ? "Resume game" : "Pause game"}</button>}</>;
 }
 
 function Player({ game }: { game: ArcadeGame | undefined }) {
@@ -261,11 +265,13 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   const [config, setConfig] = useState<GameRunConfig | null>(null);
   const [result, setResult] = useState<GameRunResult | null>(null);
   const [verified, setVerified] = useState(false);
+  const completionGeneration = useRef(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const token = useRef(auth.getToken);
   token.current = auth.getToken;
   useEffect(() => {
+    completionGeneration.current += 1;
     if (!game?.playable || (mode !== "free" && !auth.authenticated)) return;
     let active = true;
     setConfig(null); setResult(null); setVerified(false); setError("");
@@ -276,32 +282,35 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
       setLoading(true);
       api<RunResponse>("/api/runs", token.current, { method: "POST", body: { gameId: game.id, mode, raidId } }).then((response) => { if (active) setConfig(response.run); }).catch((reason) => { if (active) setError(messageFor(reason)); }).finally(() => { if (active) setLoading(false); });
     }
-    return () => { active = false; };
+    return () => { active = false; completionGeneration.current += 1; };
   }, [game?.id, attempt, mode, raidId, auth.authenticated]);
   if (!game) return <NotFound />;
   if (!game.playable) return <main className="page-width centered-state"><LockKeyhole size={42} /><h1>{game.name} is on its way.</h1><p>The browser cartridge has not arrived in this workspace. We’ll open its cabinet after import and review.</p><ActionLink href={gameHref(game.id)}>Back to game details</ActionLink></main>;
   if (mode !== "free" && (game.record?.status !== "published" || !game.record.manifest.supportedModes.includes(mode))) return <main className="page-width centered-state"><LockKeyhole size={42} /><h1>This mode is not available yet.</h1><p>Free Play is ready while this game’s competitive rules are reviewed.</p><ActionLink href={playHref(game.id)}>Play Free</ActionLink></main>;
   if (mode !== "free" && !auth.authenticated) return <main className="page-width centered-state"><UserRound size={42} /><h1>A player account keeps your score.</h1><p>Sign in before a {mode === "raid" ? "Community Raid" : "Ranked Run"}. Free Play is open right now.</p><div className="state-actions"><ActionLink href={playHref(game.id)}>Play Free</ActionLink><ActionLink href="/passport" tone="light">Set up account</ActionLink></div></main>;
   const complete = async (runResult: GameRunResult) => {
-    setResult(runResult);
-    if (mode === "free" || runResult.result === "failed") return;
+    const generation = completionGeneration.current;
+    setResult(runResult); setVerified(false); setError("");
+    if (mode === "free") return;
     setLoading(true);
     try {
       const response = await api<CompleteResponse>(`/api/runs/${encodeURIComponent(runResult.runId)}/complete`, token.current, { method: "POST", body: runResult });
-      setVerified(response.verified);
-    } catch (reason) { setError(messageFor(reason)); }
-    finally { setLoading(false); }
+      if (completionGeneration.current === generation) setVerified(response.verified);
+    } catch (reason) { if (completionGeneration.current === generation) setError(messageFor(reason)); }
+    finally { if (completionGeneration.current === generation) setLoading(false); }
   };
   return <main className="page-width player-page"><div className="player-top"><Link href={gameHref(game.id)} className="back-link"><ArrowLeft size={17} /> Leave cabinet</Link><div className="player-mode"><span className="live-dot" />{mode === "free" ? "Free Play" : mode === "ranked" ? "Ranked Run" : "Community Raid"}</div></div><div className="player-heading"><div><span className="section-kicker">{game.fixture ? "INTERNAL TEST CARTRIDGE" : "ARCADE CARTRIDGE"}</span><h1>{game.name}</h1><p>{game.fixture ? "Match the big symbol using the four pads. Twelve rounds. Twenty seconds." : game.description}</p></div>{game.fixture && <div className="player-rule"><Clock3 size={21} /><span>12 rounds<br /><strong>20 seconds</strong></span></div>}</div>
     {loading && !result && <div className="loading-slab">Issuing your {mode === "raid" ? "raid attempt" : "run"}…</div>}
     {error && <ErrorNote error={error} />}
-    {config && !result && <CartridgeView key={config.runId} config={config} adapterId={game.record?.manifest.adapterId ?? game.id} onComplete={complete} />}
+    {config && (!result || mode === "free") && <CartridgeView key={config.runId} config={config} manifest={game.record!.manifest} onComplete={complete} />}
     {result && <div className="result-panel"><div className="result-medal"><Trophy size={31} /></div><div>
-      <span>{result.result === "failed" ? "TIME EXPIRED" : mode === "free" ? "LOCAL RESULT" : loading ? "VERIFYING RESULT" : verified ? "VERIFIED RESULT" : "RESULT NOT VERIFIED"}</span>
-       <h2>{result.primaryMetric.toLocaleString()}</h2><span className="result-metric">{result.objective.replaceAll("_", " ")}</span>
-      <p>{result.result === "failed" ? "The clock ran out. This attempt did not enter the standings." : mode === "free" ? "This score stays in this browser session. Sign in for a verified run on the board." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
-    </div><button className="action action-lime" onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
-    <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. Local scores are for fun." : "Competitive results use a server-issued seed and are checked before they reach the leaderboard."}</p></div>
+      <span>{result.result === "failed" ? "RUN FINISHED" : mode === "free" ? "LOCAL RESULT" : loading ? "VERIFYING RESULT" : verified ? "VERIFIED RESULT" : "RESULT NOT VERIFIED"}</span>
+       <h2>{metricText(result.primaryMetric, result.objective)}</h2><span className="result-metric">{result.objective.replaceAll("_", " ")}</span>
+      <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "This result stays local. Competitive scores are available only in a cabinet’s enabled Ranked or Raid mode." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
+      {result.secondaryMetrics && <dl className="result-details">{Object.entries(result.secondaryMetrics).filter(([key]) => !["ticks", "elapsedMs"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1")}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl>}
+    </div><button className="action action-lime" disabled={loading} onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
+    {game.record?.manifest.controls?.orientation === "landscape" && <p className="orientation-note">On a phone, turn sideways for the full playfield.</p>}
+    <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. Local scores are for fun." : "Competitive results follow the cabinet’s issued rules and verifier before they reach its leaderboard."}</p></div>
   </main>;
 }
 
@@ -456,7 +465,7 @@ const objectiveOptions: GameManifest["supportedObjectives"] = ["score", "total_s
 
 function GameConfigEditor({ game, health, onSaved, onClose }: { game: AdminGame; health: Health | null; onSaved: () => Promise<void>; onClose: () => void }) {
   const auth = useArcadeAuth();
-  const browserAdapterReady = hasClientCartridge(game.manifest.id, game.manifest.adapterId);
+  const browserAdapterReady = hasClientCartridge(game.manifest.id, game.manifest.adapterId, game.manifest);
   const publicationBlockers = [...(game.readiness?.blockers ?? []), ...(!browserAdapterReady ? ["Reviewed browser cartridge is not installed"] : [])];
   const [manifest, setManifest] = useState<GameManifest>(game.manifest);
   const [strategy, setStrategy] = useState(game.communityStrategy ?? "");
@@ -542,7 +551,7 @@ function GameConfigEditor({ game, health, onSaved, onClose }: { game: AdminGame;
     </form>}
     <div className="minicoin-config">
       <h3>Experimental Minicoin</h3>
-      {game.minicoin ? <p className="minicoin-association">Associated on chain {game.minicoin.chainId}: <strong>{game.minicoin.symbol}</strong> at <code>{game.minicoin.address}</code>. Transaction <code>{game.minicoin.deploymentTx}</code>.</p> : game.manifest.id === "arcade-warmup" ? <p>The internal test cartridge cannot deploy a Minicoin.</p> : <>
+      {game.minicoin ? <p className="minicoin-association">Associated on chain {game.minicoin.chainId}: <strong>{game.minicoin.symbol}</strong> at <code>{game.minicoin.address}</code>. Transaction <code>{game.minicoin.deploymentTx}</code>.</p> : game.manifest.id === "arcade-warmup" ? <p>The internal test cartridge cannot deploy a Minicoin.</p> : (game.economy && game.economy.status !== "enabled") || game.communityConcept?.verification === "unverified" ? <p>{game.economy?.reason ?? "Economy awaits protocol and asset verification."}</p> : <>
         <p>Deploy a game-specific token and associate it with this game through the verified factory. This action sends an irreversible onchain transaction.</p>
         {!health?.settlement.minicoin?.ready && <div className="setup-note"><ShieldCheck size={18} /><span>{health?.settlement.minicoin?.reason ?? "Minicoin deployment is disabled until the onchain configuration and explicit write flag are ready."}</span></div>}
         <form className="console-form" onSubmit={deployMinicoin}>
@@ -575,14 +584,13 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [authorized, setAuthorized] = useState(false);
-  const [draft, setDraft] = useState({ id: "", name: "", description: "", developer: "", adapterId: "", artwork: "" });
-  const [raidDraft, setRaidDraft] = useState({ name: "", gameId: "", communityId: "", objective: "score", maxAttempts: 3, startsAt: localDateTime(-60_000), endsAt: localDateTime(86_400_000) });
+  const [raidDraft, setRaidDraft] = useState({ name: "", gameId: "", communityId: "", objective: "score", maxAttempts: 3, rules: "{}", startsAt: localDateTime(-60_000), endsAt: localDateTime(86_400_000) });
   const raidGames = games.filter((game) => game.status === "published" && game.manifest.supportedModes.includes("raid"));
   const selectedRaidGame = raidGames.find((game) => game.manifest.id === raidDraft.gameId);
   useEffect(() => {
     if (selectedRaidGame || !raidGames.length) return;
     const first = raidGames[0];
-    setRaidDraft((prior) => ({ ...prior, gameId: first.manifest.id, objective: first.manifest.supportedObjectives[0] ?? "score", communityId: first.community?.id ?? (first.manifest.id === "arcade-warmup" ? "internal-test" : "") }));
+    setRaidDraft((prior) => ({ ...prior, gameId: first.manifest.id, objective: first.manifest.supportedObjectives[0] ?? "score", communityId: first.community?.id ?? first.communityConcept?.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") ?? "" }));
   }, [games]);
   const load = useCallback(async () => {
     if (!auth.authenticated) return;
@@ -593,66 +601,49 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
   useEffect(() => {
     if (selectedGameId) document.getElementById("game-config-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [selectedGameId]);
-  const createGame = async (event: FormEvent) => {
-    event.preventDefault(); setLoading(true); setError(""); setDetails([]); setNotice("");
-    const manifest: GameManifest = { id: draft.id.trim(), name: draft.name.trim(), description: draft.description.trim(), developer: draft.developer.trim(), adapterId: draft.adapterId.trim(), artwork: draft.artwork.trim() || undefined, version: "0.1.0", supportedModes: ["free"], supportedObjectives: ["score"], communityOptional: true, minicoinOptional: true };
-    try { const response = await api<GameResponse>("/api/admin/games", auth.getToken, { method: "POST", body: { manifest } }); setNotice(`${response.game.manifest.name} registered as a draft.`); setDraft({ id: "", name: "", description: "", developer: "", adapterId: "", artwork: "" }); await load(); refresh(); }
-    catch (reason) { setError(messageFor(reason)); if (reason instanceof ApiError) setDetails(reason.details); }
-    finally { setLoading(false); }
-  };
-  const publish = async (id: string) => {
-    setLoading(true); setError(""); setDetails([]); setNotice("");
-    try { const response = await api<GameResponse>(`/api/admin/games/${encodeURIComponent(id)}/publish`, auth.getToken, { method: "POST" }); setNotice(`${response.game.manifest.name} published to the arcade.`); await load(); refresh(); }
-    catch (reason) { setError(messageFor(reason)); if (reason instanceof ApiError) setDetails(reason.details); }
-    finally { setLoading(false); }
-  };
   const pauseGame = async (id: string) => {
     setLoading(true); setError(""); setDetails([]); setNotice("");
     try { const response = await api<GameResponse>(`/api/admin/games/${encodeURIComponent(id)}`, auth.getToken, { method: "PATCH", body: { status: "paused" } }); setNotice(`${response.game.manifest.name} paused.`); await load(); refresh(); }
     catch (reason) { setError(messageFor(reason)); if (reason instanceof ApiError) setDetails(reason.details); }
     finally { setLoading(false); }
   };
+  const resumeGame = async (id: string) => {
+    setLoading(true); setError(""); setDetails([]); setNotice("");
+    try { const response = await api<GameResponse>(`/api/admin/games/${encodeURIComponent(id)}/resume`, auth.getToken, { method: "POST" }); setNotice(`${response.game.manifest.name} resumed.`); await load(); refresh(); }
+    catch (reason) { setError(messageFor(reason)); if (reason instanceof ApiError) setDetails(reason.details); }
+    finally { setLoading(false); }
+  };
   const createRaid = async (event: FormEvent) => {
     event.preventDefault(); setLoading(true); setError(""); setDetails([]); setNotice("");
-    try { const response = await api<{ raid: Raid }>("/api/admin/raids", auth.getToken, { method: "POST", body: { name: raidDraft.name.trim(), gameId: raidDraft.gameId, communityId: raidDraft.communityId.trim(), objective: raidDraft.objective, maxAttempts: Number(raidDraft.maxAttempts), startsAt: new Date(raidDraft.startsAt).toISOString(), endsAt: new Date(raidDraft.endsAt).toISOString(), reward: { type: "none" }, feeSplitBps: { prize: 0, community: 0, treasury: 10000 } } }); setNotice(`${response.raid.name} created. Status: ${response.raid.status}.`); refresh(); }
+    try { const response = await api<{ raid: Raid }>("/api/admin/raids", auth.getToken, { method: "POST", body: { name: raidDraft.name.trim(), gameId: raidDraft.gameId, communityId: raidDraft.communityId.trim(), objective: raidDraft.objective, rules: JSON.parse(raidDraft.rules), maxAttempts: Number(raidDraft.maxAttempts), startsAt: new Date(raidDraft.startsAt).toISOString(), endsAt: new Date(raidDraft.endsAt).toISOString(), reward: { type: "none" }, feeSplitBps: { prize: 0, community: 0, treasury: 10000 } } }); setNotice(`${response.raid.name} created. Status: ${response.raid.status}.`); refresh(); }
     catch (reason) { setError(messageFor(reason)); if (reason instanceof ApiError) setDetails(reason.details); }
     finally { setLoading(false); }
   };
   const selectedGame = games.find((game) => game.manifest.id === selectedGameId);
   return <main className="page-width launch-page">
-    <div className="page-intro"><div className="intro-icon"><Settings2 size={30} /></div><span className="section-kicker">CURATOR ACCESS</span><h1>Launch Console</h1><p>Review a cartridge, configure its game, and publish only when the adapter and verifier pass arcade checks.</p><GuideLink topic="console">How to prepare a launch</GuideLink></div>
+    <div className="page-intro"><div className="intro-icon"><Settings2 size={30} /></div><span className="section-kicker">CURATOR ACCESS</span><h1>Arcade operations</h1><p>Manage published cabinets, community configuration and free raids.</p><Link href="/launch" className="action action-light">Creator submissions and review</Link></div>
     {!auth.authenticated ? <AccountPrompt health={health} /> : !authorized ? <ErrorNote error={error || "Checking your admin access…"} /> : <>
       {notice && <div className="success-note" role="status"><BadgeCheck size={19} />{notice}</div>}
       {error && <ErrorNote error={error} details={details} />}
       <div className="console-grid">
         <section className="console-panel">
-          <div className="console-panel-heading"><div><span className="section-kicker">REGISTRY</span><h2>Game drafts</h2></div><span>{games.length} records</span></div>
-          <p className="console-hint">A manifest does not make a game playable. Publishing checks the installed adapter and Free Play smoke test. Competitive modes need a verifier.</p>
+          <div className="console-panel-heading"><div><span className="section-kicker">REGISTRY</span><h2>Registry records</h2></div><span>{games.length} records</span></div>
+          <p className="console-hint">Publishing is handled through creator submission, admin approval and developer deployment. Pausing a cabinet removes it from public play.</p>
           <div className="admin-game-list">{games.map((game) => <div className="admin-game" key={game.manifest.id}>
             <div><StatusBadge tone={game.status === "published" ? "good" : "wait"}>{game.status}</StatusBadge><strong>{game.manifest.name}</strong><small>{game.manifest.id} · adapter: {game.manifest.adapterId}</small></div>
-             <div className="admin-game-actions"><button disabled={loading} onClick={() => setSelectedGameId(game.manifest.id)}>Configure <Settings2 size={14} /></button>{game.status !== "published" ? <button disabled={loading || game.readiness?.ready === false || !hasClientCartridge(game.manifest.id, game.manifest.adapterId)} title={game.readiness?.ready === false || !hasClientCartridge(game.manifest.id, game.manifest.adapterId) ? "Review the publication blockers in Configure" : undefined} onClick={() => void publish(game.manifest.id)}>{game.readiness?.ready === false || !hasClientCartridge(game.manifest.id, game.manifest.adapterId) ? "Blocked" : "Check & publish"} <ArrowUpRight size={14} /></button> : <button disabled={loading} onClick={() => void pauseGame(game.manifest.id)}>Pause <LockKeyhole size={14} /></button>}</div>
+             <div className="admin-game-actions"><button disabled={loading} onClick={() => setSelectedGameId(game.manifest.id)}>Configure <Settings2 size={14} /></button>{game.status === "published" && <button disabled={loading} onClick={() => void pauseGame(game.manifest.id)}>Pause <LockKeyhole size={14} /></button>}{game.status === "paused" && game.review?.approvedBy && <button disabled={loading} onClick={() => void resumeGame(game.manifest.id)}>Resume <ArrowUpRight size={14} /></button>}</div>
           </div>)}</div>
-        </section>
-        <section className="console-panel">
-          <div className="console-panel-heading"><div><span className="section-kicker">NEW CARTRIDGE</span><h2>Register a draft</h2></div><Plus size={24} /></div>
-          <form className="console-form" onSubmit={createGame}>
-            <label>Game ID<input value={draft.id} onChange={(e) => setDraft({ ...draft, id: e.target.value })} placeholder="your-game-id" pattern="[a-z0-9-]+" required /></label>
-            <label>Game name<input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Your game" required /></label>
-            <label>Description<textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="What players will do" required /></label>
-            <div className="form-row"><label>Developer<input value={draft.developer} onChange={(e) => setDraft({ ...draft, developer: e.target.value })} placeholder="Studio or creator" required /></label><label>Adapter ID<input value={draft.adapterId} onChange={(e) => setDraft({ ...draft, adapterId: e.target.value })} placeholder="Reviewed adapter key" required /></label></div>
-            <label>Artwork URL <span>optional</span><input type="url" value={draft.artwork} onChange={(e) => setDraft({ ...draft, artwork: e.target.value })} placeholder="https://…" /></label>
-            <button className="action action-ink" disabled={loading} type="submit">Register draft <ArrowUpRight size={17} /></button>
-          </form>
         </section>
          {selectedGame && <GameConfigEditor key={selectedGame.manifest.id} game={selectedGame} health={health} onSaved={async () => { await load(); refresh(); }} onClose={() => setSelectedGameId(null)} />}
         <section className="console-panel console-raid-panel">
            <div className="console-panel-heading"><div><span className="section-kicker">COMMUNITY EVENT</span><h2>Create a raid</h2></div><Trophy size={24} /></div>
-           <p className="console-hint">A free, no-prize raid exercises verified gameplay. NFT prizes, entry payments, and fee settlement need configured contracts and custody first.</p>
+           <p className="console-hint">Create a free raid for a cabinet with a reviewed verifier. Prize custody and any economy require the separate protocol pass.</p>
           <form className="console-form" onSubmit={createRaid}>
             <label>Raid name<input value={raidDraft.name} onChange={(e) => setRaidDraft({ ...raidDraft, name: e.target.value })} placeholder="Weekend warmup" required /></label>
-             <div className="form-row"><label>Game<select value={raidDraft.gameId} onChange={(event) => { const next = raidGames.find((game) => game.manifest.id === event.target.value); setRaidDraft({ ...raidDraft, gameId: event.target.value, objective: next?.manifest.supportedObjectives[0] ?? "score", communityId: next?.community?.id ?? (event.target.value === "arcade-warmup" ? "internal-test" : "") }); }} required><option value="" disabled>Select a published game</option>{raidGames.map((game) => <option value={game.manifest.id} key={game.manifest.id}>{game.manifest.name}</option>)}</select></label><label>Community ID<input value={raidDraft.communityId} onChange={(e) => setRaidDraft({ ...raidDraft, communityId: e.target.value })} required /></label></div>
+             <div className="form-row"><label>Game<select value={raidDraft.gameId} onChange={(event) => { const next = raidGames.find((game) => game.manifest.id === event.target.value); setRaidDraft({ ...raidDraft, gameId: event.target.value, objective: next?.manifest.supportedObjectives[0] ?? "score", communityId: next?.community?.id ?? next?.communityConcept?.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") ?? "" }); }} required><option value="" disabled>Select a published game</option>{raidGames.map((game) => <option value={game.manifest.id} key={game.manifest.id}>{game.manifest.name}</option>)}</select></label><label>Community ID<input value={raidDraft.communityId} onChange={(e) => setRaidDraft({ ...raidDraft, communityId: e.target.value })} required /></label></div>
              <label>Objective<select value={raidDraft.objective} onChange={(event) => setRaidDraft({ ...raidDraft, objective: event.target.value })} required>{selectedRaidGame?.manifest.supportedObjectives.map((objective) => <option key={objective} value={objective}>{objective.replaceAll("_", " ")}</option>)}</select></label>
             <div className="form-row"><label>Opens at<input type="datetime-local" value={raidDraft.startsAt} onChange={(e) => setRaidDraft({ ...raidDraft, startsAt: e.target.value })} required /></label><label>Closes at<input type="datetime-local" value={raidDraft.endsAt} onChange={(e) => setRaidDraft({ ...raidDraft, endsAt: e.target.value })} required /></label></div>
+            <label>Game rules (JSON)<textarea value={raidDraft.rules} onChange={(e) => setRaidDraft({ ...raidDraft, rules: e.target.value })} /><small>Server defaults apply when omitted. Two Places raids require three distinct level indices, for example {'{"levelSet":"0,1,2"}'}.</small></label>
             <label>Attempts per player<input type="number" min="1" max="20" value={raidDraft.maxAttempts} onChange={(e) => setRaidDraft({ ...raidDraft, maxAttempts: Number(e.target.value) })} required /></label>
              <button className="action action-lime" disabled={loading || !selectedRaidGame} type="submit">Create raid <ArrowUpRight size={17} /></button>
           </form>
@@ -663,7 +654,7 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
           <p>{health?.settlement.reason ?? "Monad contracts, treasury address, and funding must be configured for live entry, Minicoin, custody, or settlement."}</p>
           <div className="setup-state"><span className={`setup-indicator ${health?.auth.privy ? "is-ready" : ""}`} /><strong>{health?.auth.privy ? "Privy configured" : "Privy setup required for live accounts"}</strong></div>
            <div className="setup-state"><span className={`setup-indicator ${health?.settlement.minicoin?.ready ? "is-ready" : ""}`} /><strong>{health?.settlement.minicoin?.ready ? "Minicoin deployment configured" : "Minicoin deployment blocked"}</strong></div><p>{health?.settlement.minicoin?.reason ?? "Select a game draft to deploy and associate a Minicoin through the verified factory."}</p>
-          <div className="setup-state"><span className="setup-indicator" /><strong>NFT prize custody blocked</strong></div><p>An NFT raid prize needs a configured vault and confirmed deposit before a paid or rewarded raid can open.</p>
+          <div className="setup-state"><span className="setup-indicator" /><strong>NFT prize custody blocked</strong></div><p>An NFT raid prize needs a configured vault and confirmed deposit before a rewarded raid can open.</p>
         </section>
       </div>
     </>}
@@ -690,7 +681,7 @@ function GuideHub() {
         <span className="guide-card-cta">Open walkthrough <ArrowUpRight size={18} /></span>
       </Link>)}
     </div>
-    <p className="guide-footnote"><CircleHelp size={18} /> The Warmup Cabinet is an internal test game. The four launch games are still coming from their own workspaces.</p>
+    <p className="guide-footnote"><CircleHelp size={18} /> Each published cabinet has its own scores, community, and optional economy.</p>
   </main>;
 }
 
@@ -742,6 +733,7 @@ export function App() {
   const [raids, setRaids] = useState<Raid[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [loading, setLoading] = useState(true);
+  const [registryError, setRegistryError] = useState("");
   const token = useRef(auth.getToken);
   token.current = auth.getToken;
   const refresh = useCallback(() => {
@@ -751,7 +743,8 @@ export function App() {
       api<RaidsResponse>("/api/raids", token.current),
     ]).then(([healthResult, gamesResult, raidsResult]) => {
       if (healthResult.status === "fulfilled") setHealth(healthResult.value);
-      if (gamesResult.status === "fulfilled") setRecords(gamesResult.value.games);
+      if (gamesResult.status === "fulfilled") { setRecords(gamesResult.value.games); setRegistryError(""); }
+      else setRegistryError(messageFor(gamesResult.reason));
       if (raidsResult.status === "fulfilled") setRaids(raidsResult.value.raids);
       setLoading(false);
     });
@@ -764,12 +757,15 @@ export function App() {
     const topic = getGuideTopic(path.slice(7));
     page = topic ? <GuideChapter key={topic.id} topic={topic} /> : <GuideNotFound />;
   }
+  else if ((path.startsWith("/games/") || path.startsWith("/play/")) && loading) page = <main className="page-width centered-state"><div className="loading-slab">Loading the cabinet…</div></main>;
+  else if ((path.startsWith("/games/") || path.startsWith("/play/")) && registryError) page = <main className="page-width centered-state"><ErrorNote error={registryError} /><button className="action action-light" onClick={refresh}>Retry</button></main>;
   else if (path.startsWith("/games/")) page = <GameDetail key={path} game={getGame(decodeURIComponent(path.slice(7)), records)} raids={raids} />;
   else if (path.startsWith("/play/")) page = <Player key={route} game={getGame(decodeURIComponent(path.slice(6)), records)} />;
   else if (path === "/raids") page = <RaidIndex raids={raids} />;
   else if (path.startsWith("/raids/")) page = <RaidDetail key={path} id={decodeURIComponent(path.slice(7))} records={records} />;
   else if (path === "/passport") page = <PassportPage health={health} records={records} />;
-  else if (path === "/launch") page = <LaunchConsole health={health} refresh={refresh} />;
+  else if (path === "/launch") page = <CreatorPortal health={health} refresh={refresh} />;
+  else if (path === "/admin-tools") page = <LaunchConsole health={health} refresh={refresh} />;
   else page = <NotFound />;
   return <><Header health={health} />{page}<Footer /></>;
 }

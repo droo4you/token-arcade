@@ -1,0 +1,717 @@
+--- PAGE 1 ---
+Token Arcade: The MiniCoin Economy
+Pre-Whitepaper v0.2.2 - Codex-ready frozen economic spec
+F ounder, Metropolis judges/collaborators, and contracts build - 8 Oct
+2026
+This document describes an experimental protocol architecture. It
+is not an offer or solicitation to purchase any token.
+Source-of-T ruth label: Protocol / Economy.
+v0 means it ships for Metropolis. later means it is specified but not
+built now. Numbers marked (proposal) are default configuration
+values, not hard-coded product promises. (unverified) marks a fact
+that must be checked before production use.
+If this document conflicts with older protocol/economy notes, this
+document wins. Product/application behavior is owned by the To-
+ken Arcade v0 Metropolis Handoff; protocol/economic behavior is
+owned here.
+1. Frozen mental model
+Term Meaning
+Cabinet A public game deployment in Token
+Arcade. It has its own gameId,
+leaderboard namespace, Raid history,
+community association, and optional
+economy.
+Gameplay Skeleton Reusable mechanics/simulation that
+may underpin multiple Cabinets.
+Skeleton reuse does not merge
+Cabinet leaderboards.
+MiniCoin Optional game economy: a
+game-specific ERC-20 plus its
+pool/configuration.
+Community Asset An existing community or asset a
+Cabinet supports: ERC-20, NFT
+collection, major asset, R W A concept,
+or other approved primitive.
+Hook MiniCoinHook. Captures
+programmable pool economics:
+charges the configured hook fee and
+records/attributes accrual. Nothing
+else.
+1
+
+--- PAGE 2 ---
+Term Meaning
+Economy Router EconomyManager. Allocates captured
+value across Strategies/destinations.
+Strategy Tells an allocation what to do: fund
+raids, support a community, go to
+treasury, later accumulate assets, etc.
+Prize V ault Holds free/locked Raid funding and
+manually deposited approved rewards
+for one MiniCoin.
+T rigger Decides when an Economy Raid can
+open. v0 uses VaultThreshold only.
+RaidManager Manages tournament economics:
+Raid records, escrow, settlement
+authorization, claims, expiry/cancel.
+Score V erifier Game-specific verification adapter.
+Deterministic replay where practical;
+authenticated session/telemetry or
+server-authoritative verification
+otherwise.
+Passport Player identity: Privy account plus
+embedded arcade wallet. Offchain in
+v0.
+Cabinet identity invariant. A community may redeploy the same Game-
+play Skeleton as a new Cabinet. That new deployment has a new gameId,
+leaderboard, Raid history, Community Asset association, and optional Mini-
+Coin. Shared mechanics do not imply shared competitive history.
+2. What Token Arcade is
+Token Arcade is a browser arcade for onchain communities, with Metropolis v0
+launching on Monad.
+A Cabinet can exist without a MiniCoin. A MiniCoin can be a standalone game
+economy, or it can be connected to an existing Community Asset through one
+or more configurable Strategies.
+The MiniCoin itself is not the Strategy.
+End-to-end value logic:
+Hook captures configured pool fee
+->
+Economy Router allocates captured value
+2
+
+--- PAGE 3 ---
+->
+Strategies decide what allocations do
+->
+Raid/Reward configuration determines what players ultimately win
+Principles:
+• No inflationary gameplay emissions. MiniCoins are never minted as
+rewards. Rewards come only from assets already collected, acquired, or
+deposited.
+• No player-funded wagering in v0. Metropolis Raids are free-entry
+and rewards are pre-funded. Paid Ranked entry remains later/legal-review
+scope.
+• No floor sweeping in the swap path. v0 does not buy Community
+Assets during a swap.
+• No implied fund ownership. MiniCoin holders do not automatically
+own or redeem Strategy/Vault/Treasury assets.
+• Game first, economy optional. A Cabinet can launch now and add
+an approved MiniCoin later without changing its gameId or resetting its
+leaderboard history.
+3. Cabinets, modes, and what a MiniCoin adds
+Mode Needs MiniCoin? Account
+Money in
+(v0)
+Rewards
+(v0)
+F ree Play No None/local None None
+Ranked
+Run
+No Passport None Persistent
+leaderboard,
+cosmet-
+ics/status
+where imple-
+mented
+F unded
+Raid
+No Passport Free entry Sponsor/operator/community-
+deposited
+ERC-20
+and/or
+ERC-721
+reward
+3
+
+--- PAGE 4 ---
+Mode Needs MiniCoin? Account
+Money in
+(v0)
+Rewards
+(v0)
+Economy
+Raid
+Yes Passport Free entry Prize
+escrowed
+from
+MiniCoin
+Prize Vault
+when trigger
+fires
+A Community Raid always has: Cabinet/game, community, objective,
+start/end, entry/eligibility rules, attempts, leaderboard, reward definition, and
+settlement.
+MiniCoin adds the autonomous economy layer: pool activity -> captured
+value -> configurable allocations -> Vault/Strategies -> economy-triggered
+events.
+A Community Asset association can exist before a MiniCoin exists.
+4. The flywheel
+Community / culture
+-> players + attention
+Cabinet / game
+-> reason to participate / trade
+MiniCoin / WMON pool
+-> hook fee
+FeeAccumulator
+-> EconomyManager
+-> PrizeVault
+-> CommunityStrategy
+-> TA Treasury
+PrizeVault threshold
+-> WOOP: Economy Raid opens
+Raid
+-> prizes + status + community attention
+-> more play / activity
+Non-ETF invariant. Assets held or accumulated by a Community Strategy
+are protocol/community-controlled treasury assets. MiniCoin ownership does
+not create a pro-rata ownership interest, redemption right, or claim on those
+assets. No contract may expose a function that redeems MiniCoins for Strategy,
+Vault, or Treasury assets.
+4
+
+--- PAGE 5 ---
+5. The MiniCoin token
+• Plain ERC-20.
+• Fixed supply, minted once at launch to the Factory/launch flow.
+• No mint function after deployment.
+• No transfer tax.
+• No blacklist.
+• No owner-only pause.
+• The token itself does not implement game rewards or Community Asset
+logic.
+Why no transfer tax: v4 pool settlement expects exact token movement; fee-on-
+transfer behavior complicates/desynchronizes pool accounting. The economic
+fee belongs at the hook/pool layer, not inside the ERC-20.
+Supply (proposal): 1,000,000,000 tokens, 18 decimals.
+Allocation (proposal): founder-deployed v0 default is 0% creator allocation
+and the remaining launch supply used for initial liquidity. Future creator allo-
+cation may be capped at 5% and vested, but exact creator economics are not
+frozen for Metropolis.
+Token Arcade does not require a $TA allocation. Protocol funding comes from
+the configured Treasury share.
+6. Pool and pair asset
+v0 pair asset: WMON only .
+WMON = 0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A
+Direct MiniCoin/Community Asset pairs are an architectural possibility for
+later. They are not required for Metropolis.
+PoolKey v0 (proposal):
+• currencies: MiniCoin + WMON, sorted by address
+• LP fee: 3000 = 0.30% static
+• tick spacing: 60
+• hook: current approved MiniCoinHook version
+• dynamic-fee flag: not used in v0
+The v4 LP fee and Token Arcade’s custom hook fee are separate mechanisms.
+A pool’s hook is part of its PoolKey and cannot be replaced. A bad hook requires
+a new approved hook version, new pool, and controlled liquidity migration.
+5
+
+--- PAGE 6 ---
+7. MiniCoinHook v1 - tiny, swap-critical
+The hook should remain deliberately small.
+Frozen economic responsibilities
+1. Gate/validate approved pool initialization as required by the chosen Fac-
+tory/deployment path.
+2. Charge the configured custom hook fee on the WMON leg of a swap.
+3. Attribute the captured WMON fee to the correct PoolId so it can later
+be distributed by EconomyManager.
+v0 hook fee (proposal): 100 bps = 1.00% of the WMON leg.
+Hard ceiling: 500 bps = 5.00% .
+Per-pool hook fee is immutable for that pool in v0.
+Swap-path rules
+• only the PoolManager may invoke callbacks
+• no Raid logic on the swap path
+• no Community Asset purchase on the swap path
+• no reads of Raid/Vault/Strategy state to decide whether swaps succeed
+• no mutable admin function that changes an existing pool’s hook behavior
+• external failure in a downstream Strategy/Raid component must not brick
+the pool
+Implementation hypothesis warning
+The exact Uniswap v4 custom-accounting / PoolManager settlement calls used
+to capture/attribute WMON are an implementation hypothesis, not a
+frozen Solidity API .
+Codex must validate the current installed Uniswap v4 interfaces and Monad
+deployment before implementing. Preserve the economic invariant - WMON
+hook fee is attributable by PoolId and later distributable - but refactor cus-
+tody/accounting details if required to keep failure out of the swap-critical path.
+Versioning
+Each approved MiniCoinHook version may serve many pools. The Fac-
+tory/Registry points new launches to the current approved version. Existing
+pools do not mutate to a new hook.
+6
+
+--- PAGE 7 ---
+8. FeeAccumulator, Economy Router, and
+Strategies
+FeeAccumulator
+Holds or accounts for captured WMON per pool with minimal logic. Only the
+approved EconomyManager path may distribute a pool’s accrual.
+EconomyManager / Economy Router
+distribute(poolId) is intended to be permissionless where practical.
+It allocates available WMON using that pool’s configured basis-point split.
+Splits sum to 10,000.
+v0 default allocation (proposal):
+Allocation Strategy / destination Share
+Raid funding PrizeVault / RaidFundingStrategy 65%
+Community simple CommunityStrategy 20%
+Token Arcade Treasury TreasuryStrategy / multisig 15%
+Creator slot reserved; unused for founder v0 0%
+Allocation changes, if supported, are delayed and evented. Proposal: 48-hour
+delay.
+CommunityStrategy - simple v0
+• Holds its Community allocation in WMON.
+• Does not buy the Community Asset during a swap.
+• In v0, may fund approved community/holder-specific Raids through the
+RaidManager path.
+• Asset acquisition is a later AssetAccumulationStrategy with explicit
+slippage/min-out/per-call caps.
+Strategy menu
+Strategy What it does Status
+RaidFundingStrategy Allocation funds
+PrizeVault
+v0
+TreasuryStrategy Allocation to TA
+Treasury
+v0
+7
+
+--- PAGE 8 ---
+Strategy What it does Status
+CommunityStrategy Holds WMON / funds
+approved community
+Raid use
+v0 simple
+VaultThreshold Trigger Opens Economy Raid
+when free Vault balance
+reaches threshold
+v0
+HolderRewardStrategy Rewards verified
+Community Asset
+holders
+later
+AssetAccumulationStrategy Swaps allocated
+WMON into approved
+Community Asset
+asynchronously
+later
+DynamicFeeStrategy Different/new hook
+version with dynamic
+fee logic
+later
+LPStrategy Deepens/manages
+liquidity from an
+allocation
+later
+Time / Volume / Holder
+/ Composite triggers
+Other event conditions later
+The creator-facing launch UI may eventually expose these as safe audited toggles.
+v0 implements only the minimal modules needed to prove the loop.
+9. PrizeVault
+• One PrizeVault per MiniCoin, preferably minimal clone/proxy pattern if
+appropriate after security review.
+• Holds WMON from RaidFundingStrategy.
+• Can also hold manually deposited approved ERC-20 and ERC-721 re-
+wards.
+• Tracks free vs Raid-locked balances.
+• Pays only what it holds; never mints.
+• No arbitrary admin withdraw(address).
+• Funds leave through approved Raid escrow/claim/cancel/migration paths
+only.
+When an Economy Raid opens, PrizeVault reserves the Raid’s prize from free
+balance.
+8
+
+--- PAGE 9 ---
+Per-Raid prize cap (proposal): at most 25% of free WMON balance, addi-
+tionally capped by a per-Cabinet maxPrize.
+Unclaimed rewards return according to Raid source after the configured claim
+window.
+10. Triggers, Raids, verification, settlement,
+claims
+v0 trigger: VaultThreshold only
+openEconomyRaid(gameId) can succeed when:
+• the MiniCoin PrizeVault free balance >= configured threshold
+• no conflicting Economy Raid is active for that Cabinet
+• configured cooldown has passed
+• the Cabinet/Verifier/economy configuration is still valid
+When it opens:
+• WMON prize is reserved from the Vault
+• optional pre-approved/manual NFT hero reward may also be queued
+• Raid start/end/rules are recorded
+• RaidOpened(...) is emitted
+Why VaultThreshold only in v0:
+• objective and onchain
+• cheap to evaluate
+• forcing the trigger by trading also pays the fees funding the Raid
+• volume triggers invite wash-trading design problems
+• market-cap triggers need oracle/TW AP design
+• holder count/concurrent-player triggers need offchain/indexed inputs
+Funded Raids
+A Cabinet does not need a MiniCoin to run a Funded Raid. An opera-
+tor/community/sponsor may deposit approved rewards and create a Raid
+through the same settlement layer.
+Score Verifier
+The browser is never the final authority.
+Each Cabinet declares one verifier approach:
+• session/telemetry validation - authenticated run token plus game-
+specific checks/plausibility/telemetry
+9
+
+--- PAGE 10 ---
+• server-authoritative verification - trusted server/judge owns hid-
+den/authoritative state
+• deterministic replay - replay exact version/seed/input log and recom-
+pute result
+Deterministic replay is preferred where practical, but not mandatory for ev-
+ery Raid-ready game .
+Every verified run must be bound to at least:
+• gameId
+• game/simulation version
+• mode/Raid id
+• rules/rulesHash or equivalent
+• run/session id
+• player identity/account
+• accepted metrics/result
+Replay protection and tamper rejection are mandatory.
+v0 settlement authorization
+The v0 settlement signer is centralized and bounded to the escrow of the specific
+Raid being settled.
+For a Raid with WMON plus an optional hero NFT, use explicit reward seman-
+tics rather than overloading one generic amount field.
+A practical v0 settlement shape may be conceptually:
+settle(
+raidId,
+erc20MerkleRoot,
+totalErc20Payout,
+nftWinner?
+)
+The Raid record already knows the escrowed ERC-20 asset/amount and optional
+NFT contract/tokenId.
+Players claim ERC-20 distributions with proofs to their Passport embedded wal-
+let. The optional hero NFT is transferred only to the recorded winner through
+the Raid settlement/claim path.
+No settlement may distribute more than the Raid’s escrow.
+Unawarded/unclaimed assets return to the appropriate source after configured
+windows. If settlement never arrives, a timeout/cancel path returns escrow to
+source.
+Proposal: claim window 14 days; settlement timeout 7 days.
+10
+
+--- PAGE 11 ---
+Trust path forward
+• publish useful verification artifacts/logs where practical
+• add challenge windows
+• stronger server attestation / TEE where useful
+• zk verification for games where cost/complexity is justified
+Privy Passport reduces casual multi-wallet duplication; it is not Sybil-proof.
+11. Launch structure - MiniCoinFactory
+The product presents a single user-facing launch flow; atomic where
+practical. Do not assume every step fits safely in one transaction until de-
+ploy/approval/liquidity mechanics are tested.
+Conceptual steps:
+1. Deploy fixed-supply MiniCoin.
+2. Initialize approved v4 MiniCoin/WMON pool with the current approved
+Hook version.
+3. Seed liquidity through PositionManager using an explicitly validated
+launch config.
+4. Lock/custody the LP position according to the approved migration policy.
+5. Create/wire PrizeVault, CommunityStrategy, EconomyManager/Raid
+config.
+6. Register gameId -> {MiniCoin, poolId, hookVersion, vault,
+communityStrategy, communityAsset} .
+7. Existing Cabinet flips from game-only to MiniCoin-enabled without chang-
+ing gameId or leaderboard history.
+Creator/Admin product lifecycle vs protocol authority
+Product v0 uses:
+SUBMIT -> ADMIN APPROVE -> DEVELOPER DEPLOY -> PUBLISHED
+The developer initiates Deploy after approval .
+This does not require giving every creator unrestricted Factory authority
+in Metropolis v0. The approved Deploy action may invoke a platform-
+controlled/allowlisted Factory path, Registry approval, signed launch autho-
+rization, or equivalent constrained mechanism.
+For the demo, the founder may act as both creator and admin.
+Future v1 expands approved creator launch authorization after audit.
+Future permissionless deployment must remain constrained to audited
+templates/Strategies/guardrails.
+11
+
+--- PAGE 12 ---
+Liquidity mechanics are not frozen
+The following remain explicit Open Questions and must be parameter-
+ized/tested:
+• single-sided vs two-sided seed liquidity
+• start price
+• range
+• LP lock duration/permanence
+• exact migration mechanism
+The current single-sided/full-supply concept is a candidate, not economic truth.
+Do not deploy irreversible mainnet contracts or seed real mainnet
+liquidity without explicit founder approval after these parameters are
+resolved.
+12. Contract picture - v0
+MiniCoinFactory
+|-- MiniCoin
+|-- v4 Pool -- MiniCoinHook v1 -- FeeAccumulator -- EconomyManager
+| |-- PrizeVault
+| |-- CommunityStrategy
+| `-- TA Treasury
+|-- Registry
+`-- LP Lock
+PrizeVault -- VaultThreshold --> RaidManager
+|-- escrow
+|-- RaidOpened event
+|-- settlement authorization
+`-- claims / sweep / cancel
+Contract Responsibility
+MiniCoinFactory Approved launch flow; enforces
+caps/approved Hook version/config
+boundaries
+MiniCoin Plain fixed-supply ERC-20
+MiniCoinHook v1 Gate approved pool init as required;
+capture static WMON hook fee;
+attribute accrual
+FeeAccumulator Minimal per-pool WMON accrual
+custody/accounting
+12
+
+--- PAGE 13 ---
+Contract Responsibility
+EconomyManager Per-pool allocation and delayed config
+changes
+PrizeVault Free/locked balances; WMON +
+manually deposited approved
+ERC-20/ERC-721 rewards
+CommunityStrategy v0 simple WMON community
+allocation / approved Raid funding
+RaidManager VaultThreshold Economy Raids,
+Funded Raids, escrow, settlement,
+claims, expiry/cancel
+Registry Cabinets/games, Community Assets,
+optional MiniCoin/economy refs,
+approved Hook versions,
+creator/submission state as needed
+LP Lock Holds LP position; allows only
+approved recovery/migration path
+TA Treasury Multisig wallet, not custom token
+logic
+Player identity, scores, cosmetics, and run artifacts remain offchain in v0, keyed
+to the Token Arcade/Privy identity model.
+13. Monad / Uniswap v0 references
+Monad mainnet chain id: 143.
+Current references from the prior verified spec; re-check all addresses/interfaces
+immediately before deployment :
+• PoolManager - 0x188d586ddcf52439676ca21a244753fa19f9ea8e
+Previously verified against the oﬀicial Uniswap SDK.
+• PositionManager - 0x5b7ec4a94ff9bedb700fb82ab09d5846972f4016
+Previously verified against the oﬀicial Uniswap SDK.
+• WMON - 0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A
+Canonical reference in the current notes.
+• Universal Router v2.1.2 - 0xa6CE4F10d83dBdDAc17E68e1837ca9cE6a1b596e
+Current target in the existing spec.
+• Older Universal Router - 0x0d97dc33264bfc1c226207428a79b26757fb9dc3
+Older deployment; do not target by default.
+13
+
+--- PAGE 14 ---
+• Permit2 - 0x000000000022D473030F116dDEE9F6B43aC78BA3
+Re-verify before v0 deployment.
+Routing wording: v0 does not depend on third-party frontends automati-
+cally discovering the MiniCoin pool. Token Arcade should execute supported
+swaps through the chosen current router/path using the explicit approved pool
+configuration.
+14. Metropolis Cabinet / economy map
+The initial Cartridge integration and the economic demo are different steps.
+eMONAD Cabinet
+• Community concept: eMONAD
+• F ounder-supplied reference: 0x81a224f8a62f52bde942dbf23a56df77a10b7777
+• Game/theme state: built from the Buy Bounce source/Skeleton; public
+branding becomes eMONAD-specific.
+• Economy state: a game-specific MiniCoin is planned/compatible, but
+it is not implemented inside the Cartridge-integration run. Verify current
+Community Asset/address/liquidity before live protocol deployment.
+Two Places at Once
+• Community concept: Skrumpeys ERC-721
+• Game/theme state: preserve the existing game. Additive Skrumpey
+enemies/traits/content may come later.
+• Economy state: Community association can exist before the MiniCoin.
+A game-specific MiniCoin/Community Strategy may be enabled later with-
+out changing the Cabinet ID. No fungible Skrumpeys pair is implied.
+Coindle
+• Community concept: COIN / R W A
+• Game/theme state: no reskin.
+• Economy state: Game-only / Economy Coming Soon until an
+approved supported asset path exists.
+Skip to 10K
+• Community concept: ETH / WETH
+• Game/theme state: no reskin.
+• Economy state: game-only/economy-compatible metadata for now. Do
+not deploy against an unverified bridged WETH path. Stretch second
+14
+
+--- PAGE 15 ---
+MiniCoin only after infrastructure is verified and the primary economic
+loop is stable.
+Skrumpey Slide
+• Community concept: Skrumpeys ERC-721
+• Game/theme state: intentionally withheld from the initial legacy im-
+port; it enters through the real Creator Portal.
+• Economy state: hero end-to-end economic target after Submit
+-> Approve -> Developer Deploy ; MiniCoin/WMON -> Hook ->
+PrizeVault -> VaultThreshold -> Raid.
+No partnership with any referenced community is implied unless separately con-
+firmed. Use stand-ins where rights/permission are not available.
+Skrumpey NFT reward v0: manual approved NFT deposit. Automated
+NFT acquisition is later. When an approved NFT is present in the Raid reward
+configuration, the Raid can settle it to the winner without the game itself holding
+NFT logic.
+15. v0 parameters - proposals unless stated
+Parameter v0 value Mutable?
+Pair asset WMON fixed for Metropolis v0
+LP fee 0.30% static PoolKey / immutable
+for pool
+Hook fee 1.00% WMON leg; max
+5%
+immutable per pool in
+v0
+Allocation 65 / 20 / 15 / 0 delayed config where
+supported
+Supply / founder
+creator allocation
+1B / 0% default fixed at launch
+Trigger VaultThreshold v0 decision
+prizeBps 2500 = 25% proposal per future Raid config,
+subject to maxPrize
+Claim window 14 days proposal future Raids only
+Settlement timeout 7 days proposal future Raids only
+15
+
+--- PAGE 16 ---
+16. Roadmap - protocol/economy
+• v0 Metropolis: curated MiniCoins, WMON pair, static Hook fee, FeeAc-
+cumulator, EconomyManager, simple CommunityStrategy, PrizeVault,
+VaultThreshold Economy Raids, free-entry Funded/Economy Raids.
+• v1: approved/audited creator launch authorizations; safer Strategy tog-
+gles at launch; stronger operational controls/audit.
+• v2: AI/Mad-Lib creator launchpad against audited Gameplay Skele-
+tons/Cartridges and constrained economic templates.
+• later: direct Community Asset pairs, DynamicFeeStrategy/new Hook
+versions, AssetAccumulationStrategy, HolderRewardStrategy, LP-
+Strategy, more TriggerStrategies, automated NFT acquisition after
+marketplace/security design, broader multichain adapters.
+• not v0: betting/wagering/paid-entry pots; automated floor sweeps; $TA
+dependency.
+17. Risks and guardrails
+Hook / pool risk
+• Keep Hook tiny.
+• Treat current v4 call details as implementation hypotheses until com-
+piled/tested against current dependencies.
+• Fuzz conservation: captured fee == attributed/distributable fee.
+• Do not let Raid/Strategy failure become swap failure.
+• Hook cannot be patched in place; recovery means new Hook version/pool
++ controlled migration.
+Vault / Raid risk
+• no arbitrary admin withdrawal
+• signer bounded to Raid escrow
+• mixed ERC-20/ERC-721 settlement explicit
+• cancellation/timeout returns assets to source
+• hostile tests before creator launch expansion
+Score cheating
+• client untrusted
+• game-specific Score Verifier
+• session/rules/version binding
+• replay protection
+• deterministic replay only where practical, not a blanket rewrite require-
+ment
+16
+
+--- PAGE 17 ---
+Liquidity / launch risk
+• seed/range/start-price/lock mechanics not yet frozen
+• no irreversible mainnet liquidity action without founder approval
+• creator allocation/caps enforced by approved Factory config when intro-
+duced
+Community/IP relations
+• do not claim partnership without permission
+• NFT/brand asset availability does not automatically equal commercial
+rehosting/use rights
+• stand-ins are labeled
+Regulation / wagering
+• v0 Raids are free entry
+• no player-funded pot
+• no yield/revenue-share/price-promise language
+• non-ETF invariant: no redemption path into Strategy/Vault/Treasury
+assets
+• R W A/tokenized-equity concepts remain game-only until compliant sup-
+ported assets are verified
+18. Open questions
+1. Final seed-liquidity structure, start price/range, LP lock duration, and
+migration mechanism.
+2. Final Hook/LP fee values and 65/20/15 split; config-delay length.
+3. Per-Cabinet Raid threshold, prizeBps, maxPrize, cooldown, duration,
+attempts, tie-breaks.
+4. Which Score Verifier each Cabinet uses in Metropolis; whether any verifier
+warrants a challenge window now.
+5. NFT/community holder eligibility: live balance, snapshot, delegated own-
+ership, and timing of checks.
+6. Skrumpeys permission / hero NFT source; stand-in if unavailable.
+7. TA Treasury multisig signers/spending policy.
+8. Gas sponsorship: which actions, if any, are sponsored on mainnet.
+9. When CommunityStrategy funding becomes rule-based instead of
+operator-triggered.
+10. Exact creator-facing Deploy authorization: Registry allowlist, signed
+launch authorization, relayer, or other constrained v0 mechanism.
+11. Verify the current eMONAD Community Asset/address/liquidity before
+economic use.
+17
+
+--- PAGE 18 ---
+12. Verify the current Monad WETH/bridged ETH path before enabling Skip
+to 10K economy.
+19. Changelog - v0.2.1 -> v0.2.2
+• Added Cabinet vs Gameplay Skeleton identity rule; leaderboards are
+per Cabinet/deployment, not per Skeleton.
+• Aligned creator lifecycle to Submit -> Admin Approve -> Devel-
+oper Deploy -> Published , while preserving constrained v0 protocol
+authority.
+• Updated Metropolis Cabinet map:
+– Buy Bounce source becomes an eMONAD-branded Cabinet rather
+than a public “Buy Bounce” listing.
+– Two Places is associated with Skrumpeys without a broad reskin.
+– Coindle stays game-first with COIN/R W A economy unavail-
+able/Coming Soon.
+– Skip to 10K stays unreskinned with ETH/WETH concept and no
+unverified WETH deployment.
+– Skrumpey Slide is withheld from initial import and becomes the hero
+real submission/deployment path.
+• Reaﬀirmed game-specific Score V erifier model; deterministic replay is
+not universally required.
+• Clarified mixed WMON + optional hero NFT settlement.
+• Preserved Hook -> FeeAccumulator -> EconomyManager -> Strategies
+separation.
+• Preserved VaultThreshold as the only v0 automatic trigger.
+• Reaﬀirmed unresolved liquidity mechanics as parameters/open questions
+rather than defaults Codex may invent.
+20. Codex implementation directive
+This document is the Protocol/Economy Source of Truth.
+Do not redesign its economics during implementation.
+Before writing production Solidity:
+1. inspect the repository’s current Uniswap v4 dependencies
+2. verify current Monad deployment addresses/interfaces
+3. compile a minimal spike for the Hook custom-accounting path
+4. flag API mismatches rather than silently changing the economic model
+5. write unit/fuzz/invariant tests before irreversible deployment
+6. do not seed real mainnet liquidity without explicit founder approval
+18
+
+--- PAGE 19 ---
+The smallest required protocol slice is:
+MiniCoin
+-> Pool
+-> Hook fee
+-> per-PoolId accrual
+-> EconomyManager
+-> PrizeVault
+-> VaultThreshold
+-> RaidOpened
+Then connect the already-built application/cartridge layer to that slice.
+19

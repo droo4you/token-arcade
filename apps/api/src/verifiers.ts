@@ -1,8 +1,11 @@
 import type { GameRules, GameRunConfig, GameRunResult, GameVerifier } from "../../../packages/sdk/src/index.ts";
 import { scoreWarmupProof, WARMUP_GAME_ID } from "../../../packages/sdk/src/warmup.ts";
+import { createEmonadVerifier, createTwoPlacesVerifier } from "./gameVerification.ts";
 
-/** Only reviewed adapters are registered here. External launch games remain pending. */
+/** Reviewed simulation verifiers are keyed by reusable adapter; sessions own Cabinet identity. */
 export interface AdapterReadiness {
+  /** Registry adapter key may be shared by independent Cabinet gameIds. */
+  adapterId?: string;
   gameId: string;
   freePlaySmokeTest: boolean;
   verifier?: GameVerifier;
@@ -33,15 +36,18 @@ export class AdapterRegistry {
 
   constructor() {
     this.register({ gameId: WARMUP_GAME_ID, freePlaySmokeTest: true, verifier: warmupVerifier });
+    this.register({ adapterId: "buy-bounce", gameId: "emonad-cabinet", freePlaySmokeTest: true, verifier: createEmonadVerifier(), rankedRules: { viewportWidth: 390, viewportHeight: 844 }, runTimeoutMs: 600_000 });
+    this.register({ adapterId: "two-places", gameId: "two-places", freePlaySmokeTest: true, verifier: createTwoPlacesVerifier(), rankedRules: { level: 0 }, runTimeoutMs: 600_000 });
   }
 
   register(readiness: AdapterReadiness): void {
     if (readiness.runTimeoutMs !== undefined && (!Number.isSafeInteger(readiness.runTimeoutMs) || readiness.runTimeoutMs < 30_000 || readiness.runTimeoutMs > 86_400_000)) {
       throw new RangeError("Run timeout must be 30 seconds to 24 hours");
     }
-    this.adapters.set(readiness.gameId, { ...readiness, ...(readiness.rankedRules ? { rankedRules: normalizeRunRules(readiness.rankedRules) } : {}) });
+    this.adapters.set(readiness.adapterId ?? readiness.gameId, { ...readiness, ...(readiness.rankedRules ? { rankedRules: normalizeRunRules(readiness.rankedRules) } : {}) });
   }
   get(adapterId: string): AdapterReadiness | undefined { return this.adapters.get(adapterId); }
+  keys(): string[] { return [...this.adapters.keys()]; }
 }
 
 const warmupVerifier: GameVerifier = {

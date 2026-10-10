@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "incremental": false, "types": ["node", "react", "react-dom"] },
+  "include": ["arcade/main.tsx", "test/arcade.test.ts"],
+  "exclude": ["node_modules", "arcade-dist"]
+}

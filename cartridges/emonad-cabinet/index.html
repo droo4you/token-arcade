@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#070707">
+<title>BUY BOUNCE</title>
+<meta name="description" content="Slide the BUY button under the falling chart. Every bounce prints a higher low.">
+<meta property="og:title" content="BUY BOUNCE">
+<meta property="og:description" content="Every bounce prints a higher low. How high can you take it?">
+<meta property="og:type" content="website">
+<link rel="icon" href="./public/assets/buy-cap.png">
+<link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+
+<div id="hud">
+  <div class="row">
+    <div class="stat"><div class="k">Market cap</div><div class="v" id="mcap">$0</div></div>
+    <div class="stat r ath"><div class="k">ATH</div><div class="v" id="ath">$0</div></div>
+  </div>
+  <div id="pills"></div>
+</div>
+
+<button id="gear">&#9881;</button>
+
+<div id="cfg">
+  <div class="cfghead"><h3>Tuning</h3><button id="cfgClose">Done</button></div>
+  <h3>Palette</h3>
+  <div class="sw" id="sw"></div>
+  <div class="pick">
+    <div>Accent <input type="color" id="pAcc" value="#CCFF00"></div>
+    <div>Base <input type="color" id="pBg" value="#070707"></div>
+  </div>
+  <h3>Head <b id="lhd">Cursor</b></h3>
+  <div class="sw hw" id="hw"></div>
+  <input type="range" id="shd" min="0" max="1" step="1" value="0" hidden>
+  <h3>Music <b id="lmus">Breakout</b></h3>
+  <div class="mw" id="mw"></div>
+  <input type="range" id="smus" min="0" max="3" step="1" value="1" hidden>
+  <div class="sl"><label>Music volume <b id="lmv">60</b></label><input type="range" id="smv" min="0" max="100" step="5" value="60"></div>
+  <h3>Feel</h3>
+  <div class="sl"><label>Gravity <b id="lg">2650</b></label><input type="range" id="sg" min="1200" max="4200" step="50" value="2650"></div>
+  <div class="sl"><label>Bounce <b id="lb">980</b></label><input type="range" id="sb" min="700" max="1500" step="20" value="980"></div>
+  <div class="sl"><label>Chart speed <b id="ls">210</b></label><input type="range" id="ss" min="90" max="380" step="5" value="210"></div>
+  <div class="sl"><label>Button width <b id="lw">96</b></label><input type="range" id="sw2" min="60" max="200" step="4" value="96"></div>
+  <div class="sl"><label>Ramp <b id="lr">1.0</b></label><input type="range" id="sr" min="0" max="2" step="0.1" value="1"></div>
+  <div class="sl"><label>Chart noise <b id="ln">3.5</b></label><input type="range" id="sn" min="0" max="9" step="0.5" value="3.5"></div>
+  <div class="sl"><label>Brand assets <b id="lbr">on</b></label><input type="range" id="sbr" min="0" max="1" step="1" value="1"></div>
+  <div class="sl"><label>Sound <b id="lsnd">on</b></label><input type="range" id="ssnd" min="0" max="1" step="1" value="1"></div>
+  <div class="cfgnote" id="audioDiag"></div>
+
+  <h3>Setup</h3>
+  <div class="cfgrow">
+    <button class="cfgbtn" id="cfgReset">Reset to default</button>
+    <button class="cfgbtn primary" id="cfgShare">Copy setup</button>
+  </div>
+  <div class="cfgnote" id="cfgNote">Send the copied link to droober. It opens the game with your exact values.</div>
+</div>
+
+<div class="veil" id="menu">
+  <div class="eyebrow">Robinhood Chain &middot; 4663</div>
+  <h1>Buy<span>Bounce</span></h1>
+  <p class="sub">The chart falls. Slide the <b>BUY</b> button under it. Every bounce prints a higher low. Miss once and the run is over.</p>
+  <div class="legend">
+    <div class="lg"><span class="chip" style="background:#6fe37a">BID</span> Retail bid. Small lift. Chain them for more.</div>
+    <div class="lg"><span class="chip" style="background:#CCFF00">2X</span> Leverage. Doubles gains, heavier gravity.</div>
+    <div class="lg"><span class="chip" style="background:#00c805">WHALE</span> Whale buy. Sends it. Long hang time.</div>
+    <div class="lg"><span class="chip" style="background:#ff3b30">DUMP</span> Whale sell. Instant drop. React fast.</div>
+    <div class="lg"><span class="chip" style="background:#7fe6ff">HOLD</span> Diamond hands. Survive one miss.</div>
+  </div>
+  <button class="cta window" id="startWindow" hidden>Enter the window</button>
+  <div class="modeline window" id="windowState" hidden></div>
+  <button class="cta" id="start">Play today's chart</button>
+  <div class="modeline" id="dailyState">3 runs today &middot; best one counts</div>
+  <button class="cta ghost" id="startFree">Free play</button>
+  <div class="navrow"><button class="navlink" id="menuBoard">Leaderboard</button><button class="navlink wallet" data-wallet hidden>Connect wallet</button></div>
+  <div class="foot">Drag anywhere to move the button</div>
+</div>
+
+<div class="veil hide" id="over">
+  <div class="eyebrow" id="verdict">Run over</div>
+  <p class="sub" style="margin:0">You took $BUY to</p>
+  <div class="big" id="finalAth">$0</div>
+  <div class="ticketline" id="fTickets">TICKETS 0/10</div>
+  <div class="rankline" id="rankline">&nbsp;</div>
+  <div class="grid2">
+    <div class="card"><div class="k">Buys</div><div class="v" id="fBuys">0</div></div>
+    <div class="card"><div class="k">Best streak</div><div class="v" id="fStreak">0</div></div>
+    <div class="card"><div class="k">Higher lows</div><div class="v" id="fMult">0</div></div>
+    <div class="card"><div class="k">Time alive</div><div class="v" id="fTime">0.0s</div></div>
+  </div>
+  <button class="cta" id="again">Run it back</button>
+  <div class="modeline" id="overState"></div>
+  <button class="cta ghost" id="againFree">Free play</button>
+  <div class="navrow">
+    <button class="navlink" id="overHome">Home</button>
+    <span class="navsep">&middot;</span>
+    <button class="navlink" id="overBoard">Leaderboard</button>
+    <button class="navlink wallet" data-wallet hidden>Connect wallet</button>
+  </div>
+  <div class="foot">Screenshot the chart. That was your run.</div>
+</div>
+
+<div class="veil hide" id="board">
+  <div class="eyebrow">Leaderboard</div>
+  <div class="tabs">
+    <button class="tab on" id="tabDaily" data-tab="daily">Today</button>
+    <button class="tab" id="tabAll" data-tab="allTime">All time</button>
+    <button class="tab window" id="tabWindow" data-tab="window" hidden>Window</button>
+  </div>
+  <div class="bwrap"><ol class="blist" id="blist"><li class="bempty">Loading…</li></ol></div>
+  <div class="navrow"><button class="navlink" id="boardHome">Home</button></div>
+  <div class="foot" id="boardFoot">&nbsp;</div>
+</div>
+<script src="./src/game.js"></script>
+</body>
+</html>

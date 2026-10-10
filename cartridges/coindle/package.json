@@ -1,0 +1,32 @@
+{
+  "name": "pythcoindle",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "build:arcade": "node ../../node_modules/vite/bin/vite.js build --config arcade.vite.config.ts",
+    "test:arcade": "tsx test/arcade.test.ts"
+  },
+  "dependencies": {
+    "@farcaster/miniapp-sdk": "^0.2.3",
+    "@remotion/cli": "4.0.438",
+    "@remotion/tailwind-v4": "4.0.438",
+    "@supabase/supabase-js": "^2.100.0",
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "next": "^16.2.1",
+    "postcss": "^8.5.8",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.0",
+    "remotion": "4.0.438",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
+}

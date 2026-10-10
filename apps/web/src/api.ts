@@ -10,6 +10,7 @@ export interface LeaderboardEntry {
   playerId: string;
   displayName: string;
   primaryMetric: number;
+  secondaryMetrics?: Record<string, number>;
   objective: string;
   finishedAt: string;
   runId: string;

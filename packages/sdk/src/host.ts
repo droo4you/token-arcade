@@ -9,15 +9,18 @@ export class CartridgeHost {
   async mount(cartridge: TokenArcadeGame, container: HTMLElement, config: GameRunConfig, onComplete: (result: GameRunResult) => void): Promise<void> {
     this.destroy();
     const generation = this.generation;
+    // A pending iframe is owned immediately so navigation also cancels its handshake.
+    this.cartridge = cartridge;
     try {
       await cartridge.mount(container, config);
       if (generation !== this.generation) {
-        cartridge.destroy();
         return;
       }
       this.unsubscribe = cartridge.onRunComplete(onComplete);
       this.cartridge = cartridge;
     } catch (error) {
+      if (generation !== this.generation) return;
+      this.cartridge = null;
       cartridge.destroy();
       throw error;
     }

@@ -48,7 +48,7 @@ function resultFor(run: GameRunConfig, score = 1_200): GameRunResult {
   };
 }
 
-test("published catalog excludes unintegrated external cartridges", async () => {
+test("published catalog contains exactly four Cabinet imports while the fixture stays internal", async () => {
   const health = await api("/api/health");
   assert.equal(health.status, 200);
   assert.equal(health.body.auth.privy, false);
@@ -56,19 +56,19 @@ test("published catalog excludes unintegrated external cartridges", async () => 
   assert.equal(health.body.settlement.ready, false);
 
   const publicGames = await api("/api/games");
-  assert.deepEqual(publicGames.body.games.map((game: any) => game.manifest.id), [WARMUP_GAME_ID]);
+  assert.deepEqual(publicGames.body.games.map((game: any) => game.manifest.id), ["coindle", "emonad-cabinet", "skip-to-10k", "two-places"]);
+  assert.equal((await api("/api/raids")).body.raids.some((raid: any) => raid.gameId === WARMUP_GAME_ID), false);
   const adminGames = await api("/api/admin/games", { auth: "admin" });
   assert.equal(adminGames.body.games.length, 5);
-  assert.equal(adminGames.body.games.find((game: any) => game.manifest.id === "skrumpey-slide").status, "draft");
+  assert.equal(adminGames.body.games.some((game: any) => game.manifest.id === "skrumpey-slide" || game.manifest.id === "buy-bounce"), false);
 });
 
-test("admin allowlist and publish readiness block unintegrated games", async () => {
+test("admin allowlist cannot bypass the creator Deploy action", async () => {
   assert.equal((await api("/api/admin/games")).status, 401);
   assert.equal((await api("/api/admin/games", { auth: "player" })).status, 403);
-  const publish = await api("/api/admin/games/skrumpey-slide/publish", { method: "POST", auth: "admin" });
+  const publish = await api("/api/admin/games/emonad-cabinet/publish", { method: "POST", auth: "admin" });
   assert.equal(publish.status, 409);
-  assert.equal(publish.body.error.code, "NOT_READY");
-  assert.ok(publish.body.error.details.some((item: string) => item.includes("adapter")));
+  assert.equal(publish.body.error.code, "DEVELOPER_DEPLOY_REQUIRED");
   assert.equal((await api("/api/games/skrumpey-slide")).status, 404);
 });
 
@@ -155,7 +155,7 @@ test("expired raids project as closed and cannot be reopened", async () => {
     feeSplitBps: { prize: 0, community: 0, treasury: 10_000 }, status: "open",
   });
   const listed = await api("/api/raids");
-  assert.equal(listed.body.raids.find((raid: any) => raid.id === "expired-raid").status, "closed");
+  assert.equal(listed.body.raids.find((raid: any) => raid.id === "expired-raid"), undefined);
   const detail = await api("/api/raids/expired-raid");
   assert.equal(detail.body.raid.status, "closed");
   const admin = await api("/api/admin/raids", { auth: "admin" });
@@ -167,11 +167,11 @@ test("expired raids project as closed and cannot be reopened", async () => {
 });
 
 test("ERC-1155 Community Asset needs an unsigned uint256 token ID", async () => {
-  const games = await api("/api/admin/games", { auth: "admin" });
-  const manifest = games.body.games.find((game: any) => game.manifest.id === "skrumpey-slide").manifest;
+  const manifest = { id: "community-required-fixture", name: "Community fixture", description: "Test fixture", developer: "Tests", adapterId: "pending-fixture", version: "1.0.0", supportedModes: ["free"], supportedObjectives: ["score"], communityOptional: false, minicoinOptional: true };
+  assert.equal((await api("/api/admin/games", { method: "POST", auth: "admin", body: { manifest } })).status, 201);
   const community = { id: "skrumpeys", name: "Skrumpeys", type: "erc1155", chainId: 31337, address: "0x1111111111111111111111111111111111111111" };
   for (const tokenId of [undefined, "bad", (2n ** 256n).toString()]) {
-    const response = await api("/api/admin/games/skrumpey-slide", { method: "PATCH", auth: "admin", body: { manifest, community: { ...community, ...(tokenId === undefined ? {} : { tokenId }) } } });
+    const response = await api("/api/admin/games/community-required-fixture", { method: "PATCH", auth: "admin", body: { manifest, community: { ...community, ...(tokenId === undefined ? {} : { tokenId }) } } });
     assert.equal(response.status, 400);
     assert.equal(response.body.error.code, "INVALID_COMMUNITY");
   }
@@ -179,13 +179,13 @@ test("ERC-1155 Community Asset needs an unsigned uint256 token ID", async () => 
 
 test("Minicoin deployment is gated and requires immutable community configuration", async () => {
   const body = { name: "Skrumpey Coin", symbol: "SKR", metadataURI: "https://example.com/coin.json", initialSupply: "1000000000000000000" };
-  const missingCommunity = await api("/api/admin/games/skrumpey-slide/minicoin", { method: "POST", auth: "admin", body });
+  const missingCommunity = await api("/api/admin/games/community-required-fixture/minicoin", { method: "POST", auth: "admin", body });
   assert.equal(missingCommunity.body.error.code, "COMMUNITY_REQUIRED");
-  const disabled = await api("/api/admin/games/buy-bounce/minicoin", { method: "POST", auth: "admin", body });
-  assert.equal(disabled.status, 503);
-  assert.equal(disabled.body.error.code, "SETTLEMENT_NOT_READY");
-  const recover = await api("/api/admin/games/buy-bounce/minicoin/reconcile", { method: "POST", auth: "admin", body: { transactionHash: `0x${"1".repeat(64)}` } });
-  assert.equal(recover.body.error.code, "SETTLEMENT_NOT_READY");
+  const disabled = await api("/api/admin/games/emonad-cabinet/minicoin", { method: "POST", auth: "admin", body });
+  assert.equal(disabled.status, 409);
+  assert.equal(disabled.body.error.code, "ECONOMY_PENDING");
+  const recover = await api("/api/admin/games/emonad-cabinet/minicoin/reconcile", { method: "POST", auth: "admin", body: { transactionHash: `0x${"1".repeat(64)}` } });
+  assert.equal(recover.body.error.code, "ECONOMY_PENDING");
 });
 
 test("ranked standings and Passport bests separate objectives and game versions", async () => {
@@ -320,11 +320,176 @@ test("built web files and SPA routes are served from the API origin", async () =
     const origin = `http://127.0.0.1:${(staticServer.address() as AddressInfo).port}`;
     assert.match(await (await fetch(origin + "/")).text(), /arcade test/);
     assert.match(await (await fetch(origin + "/games/buy-bounce")).text(), /arcade test/);
-    assert.equal((await (await fetch(origin + "/api/games")).json() as any).games.length, 0);
+    assert.equal((await (await fetch(origin + "/api/games")).json() as any).games.length, 4);
   } finally {
     await new Promise<void>((resolve) => staticServer.close(() => resolve()));
     staticStore.close();
     unlinkSync(index);
     rmdirSync(directory);
   }
+});
+
+const technicalReview = { builds: true, mounts: true, destroys: true, resultSchema: true, mobile: true, sourceReviewed: true, notes: "Reviewed versioned test artifact and lifecycle." };
+function submittedManifest(id: string) {
+  return { id, name: `Cabinet ${id}`, description: "A generic future cartridge.", version: "1.0.0", developer: "Creator", adapterId: "future-skeleton", skeletonId: "future-skeleton", supportedModes: ["free"], supportedObjectives: ["score"], communityOptional: true, minicoinOptional: true,
+    entry: { kind: "iframe", url: `http://127.0.0.1:8788/${id}/v/1.0.0/`, origin: "http://127.0.0.1:8788" } };
+}
+
+test("a new reviewed iframe follows creator submission, admin approval and creator deployment", async () => {
+  const id = "future-cabinet";
+  const manifest = submittedManifest(id);
+  assert.equal((await api("/api/creator/games", { method: "POST", body: { manifest } })).status, 401);
+  const submitted = await api("/api/creator/games", { method: "POST", auth: "maker", body: { manifest, creatorId: "local-demo:admin", status: "published", review: { approvedBy: "forged" }, communityConcept: { name: "Future community", type: "concept", verification: "unverified" }, economy: { status: "coming_soon", reason: "Game first, economy later." } } });
+  assert.equal(submitted.status, 201, JSON.stringify(submitted.body));
+  assert.equal(submitted.body.game.creatorId, "local-demo:maker");
+  assert.equal(submitted.body.game.status, "submitted");
+  assert.equal(submitted.body.game.review, undefined);
+  assert.equal((await api(`/api/games/${id}`)).status, 404);
+  assert.equal((await api(`/api/creator/games/${id}/deploy`, { method: "POST", auth: "maker" })).body.error.code, "NOT_APPROVED");
+  assert.equal((await api(`/api/admin/games/${id}/approve`, { method: "POST", auth: "maker" })).status, 403);
+  assert.equal((await api(`/api/admin/games/${id}/approve`, { method: "POST", auth: "admin" })).body.error.code, "NOT_VALIDATED");
+  assert.equal((await api(`/api/admin/games/${id}/validate`, { method: "POST", auth: "admin", body: technicalReview })).status, 200);
+  const approved = await api(`/api/admin/games/${id}/approve`, { method: "POST", auth: "admin" });
+  assert.equal(approved.body.game.status, "approved");
+  assert.equal((await api(`/api/games/${id}`)).status, 404);
+  for (const outsider of ["other-maker", "admin"]) assert.equal((await api(`/api/creator/games/${id}/deploy`, { method: "POST", auth: outsider })).status, 404);
+  const published = await api(`/api/creator/games/${id}/deploy`, { method: "POST", auth: "maker" });
+  assert.equal(published.status, 200, JSON.stringify(published.body));
+  assert.equal((await api(`/api/games/${id}`)).body.game.status, "published");
+  assert.ok((await api("/api/games")).body.games.some((game: any) => game.manifest.id === id));
+  assert.equal((await api("/api/creator/games", { auth: "other-maker" })).body.games.length, 0);
+  assert.equal((await api(`/api/creator/games/${id}`, { method: "PATCH", auth: "maker", body: { manifest } })).body.error.code, "GAME_PUBLISHED");
+  assert.equal((await api(`/api/admin/games/${id}`, { method: "PATCH", auth: "admin", body: { status: "paused" } })).status, 200);
+  const changed = await api(`/api/creator/games/${id}`, { method: "PATCH", auth: "maker", body: { manifest: { ...manifest, description: "Revised artifact metadata" } } });
+  assert.equal(changed.body.game.status, "submitted");
+  assert.equal(changed.body.game.review, undefined);
+  assert.equal((await api(`/api/creator/games/${id}/deploy`, { method: "POST", auth: "maker" })).body.error.code, "NOT_APPROVED");
+  const rejected = await api(`/api/admin/games/${id}/reject`, { method: "POST", auth: "admin", body: { reason: "Review the new build first." } });
+  assert.equal(rejected.body.game.status, "rejected");
+  assert.equal(rejected.body.game.review.note, "Review the new build first.");
+});
+
+test("artifact admission rejects unapproved origins, mutable paths, modules and claimed economies", async () => {
+  const manifest = submittedManifest("unsafe-cabinet");
+  const entries = [
+    { kind: "module", url: "/game.js", origin: "http://127.0.0.1:8788" },
+    { kind: "iframe", url: "https://unreviewed.example/v/1.0.0/", origin: "https://unreviewed.example" },
+    { kind: "iframe", url: "http://127.0.0.1:8788/latest/", origin: "http://127.0.0.1:8788" },
+    { kind: "iframe", url: "http://127.0.0.1:8788/unsafe/v/1.0.0/", origin: "https://different.example" },
+  ];
+  for (const entry of entries) assert.equal((await api("/api/creator/games", { method: "POST", auth: "maker", body: { manifest: { ...manifest, entry } } })).status, 400);
+  assert.equal((await api("/api/creator/games", { method: "POST", auth: "maker", body: { manifest, economy: { status: "enabled", reason: "Forged" } } })).body.error.code, "INVALID_ECONOMY");
+  const previous = process.env.ALLOWED_CARTRIDGE_ORIGINS;
+  process.env.ALLOWED_CARTRIDGE_ORIGINS = base;
+  try {
+    const sameOrigin = { kind: "iframe", url: `${base}/unsafe/v/1.0.0/`, origin: base };
+    const denied = await api("/api/creator/games", { method: "POST", auth: "maker", body: { manifest: { ...manifest, entry: sameOrigin } } });
+    assert.equal(denied.status, 400);
+    assert.ok(denied.body.error.details.some((detail: string) => detail.includes("separate origin")));
+  } finally { if (previous === undefined) delete process.env.ALLOWED_CARTRIDGE_ORIGINS; else process.env.ALLOWED_CARTRIDGE_ORIGINS = previous; }
+});
+
+test("shared Skeleton verifier keeps independent Cabinet scores and rejects paused results", async () => {
+  const isolatedStore = new ArcadeStore(":memory:", false);
+  const adapters = new AdapterRegistry();
+  adapters.register({ adapterId: "shared-skeleton", gameId: "shared-skeleton", freePlaySmokeTest: true, verifier: { gameId: "shared-skeleton", async verify(config, result) { return { valid: result.primaryMetric === (config.gameId === "cabinet-a" ? 11 : 22) }; } } });
+  for (const id of ["cabinet-a", "cabinet-b"]) isolatedStore.saveGame({ manifest: { id, name: id, version: "1.0.0", description: "Shared Skeleton test", developer: "Tests", adapterId: "shared-skeleton", skeletonId: "shared-skeleton", supportedModes: ["free", "ranked"], supportedObjectives: ["score"], communityOptional: true, minicoinOptional: true }, status: "published", createdAt: new Date().toISOString() });
+  const isolatedServer = createArcadeServer({ store: isolatedStore, adapters, authSettings: { localDemoMode: true }, staticRoot: "nonexistent-build" });
+  await new Promise<void>((resolve) => isolatedServer.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(isolatedServer.address() as AddressInfo).port}`;
+  const call = async (path: string, body?: unknown) => {
+    const response = await fetch(origin + path, { method: body ? "POST" : "GET", headers: { authorization: "Bearer local-demo:player", ...(body ? { "content-type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    return { status: response.status, body: await response.json() as any };
+  };
+  try {
+    for (const [id, score] of [["cabinet-a", 11], ["cabinet-b", 22]] as const) {
+      const run = (await call("/api/runs", { gameId: id, mode: "ranked" })).body.run;
+      assert.equal((await call(`/api/runs/${run.runId}/complete`, resultFor(run, score))).status, 200);
+      assert.deepEqual((await call(`/api/leaderboards/${id}`)).body.entries.map((entry: any) => entry.primaryMetric), [score]);
+    }
+    const run = (await call("/api/runs", { gameId: "cabinet-a", mode: "ranked" })).body.run;
+    const game = isolatedStore.getGame("cabinet-a")!;
+    isolatedStore.saveGame({ ...game, status: "paused" });
+    assert.equal((await call(`/api/runs/${run.runId}/complete`, resultFor(run, 11))).body.error.code, "GAME_UNAVAILABLE");
+    assert.equal(isolatedStore.listAcceptedResults("cabinet-a", "ranked").length, 1);
+    assert.equal(isolatedStore.listAcceptedResults("cabinet-b", "ranked").length, 1);
+  } finally { await new Promise<void>((resolve) => isolatedServer.close(() => resolve())); isolatedStore.close(); }
+});
+
+test("Two Places standings prioritize apples before time and require three authored raid levels", async () => {
+  const isolatedStore = new ArcadeStore(":memory:", false);
+  const adapters = new AdapterRegistry();
+  adapters.register({ adapterId: "two-places", gameId: "two-places", freePlaySmokeTest: true, rankedRules: { level: 0 }, verifier: { gameId: "two-places", async verify() { return { valid: true }; } } });
+  const isolatedServer = createArcadeServer({ store: isolatedStore, adapters, authSettings: { localDemoMode: true }, staticRoot: "nonexistent-build" });
+  await new Promise<void>((resolve) => isolatedServer.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(isolatedServer.address() as AddressInfo).port}`;
+  const call = async (path: string, player: string, body?: unknown) => {
+    const response = await fetch(origin + path, { method: body ? "POST" : "GET", headers: { authorization: `Bearer local-demo:${player}`, ...(body ? { "content-type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    return { status: response.status, body: await response.json() as any };
+  };
+  try {
+    for (const [player, time, apples] of [["alice", 100, 1], ["alice", 300, 3], ["bob", 200, 3], ["charlie", 50, 2]] as const) {
+      const run = (await call("/api/runs", player, { gameId: "two-places", mode: "ranked" })).body.run;
+      assert.equal((await call(`/api/runs/${run.runId}/complete`, player, { ...resultFor(run, time), secondaryMetrics: { apples, ticks: time * 60 / 1000 } })).status, 200);
+    }
+    const entries = (await call("/api/leaderboards/two-places", "alice")).body.entries;
+    assert.deepEqual(entries.map((entry: any) => [entry.displayName, entry.secondaryMetrics.apples, entry.primaryMetric]), [["Bob", 3, 200], ["Alice", 3, 300], ["Charlie", 2, 50]]);
+    const input = { name: "Three levels", gameId: "two-places", communityId: "skrumpeys", objective: "completion_time", startsAt: new Date(Date.now() - 1000).toISOString(), endsAt: new Date(Date.now() + 60_000).toISOString(), maxAttempts: 2, reward: { type: "none" } };
+    const missing = await call("/api/admin/raids", "admin", input);
+    assert.equal(missing.body.raid.status, "draft");
+    assert.ok(missing.body.raid.readiness.blockers.some((blocker: string) => blocker.includes("three distinct")));
+    const valid = await call("/api/admin/raids", "admin", { ...input, rules: { levelSet: "0,1,2" } });
+    assert.equal(valid.body.raid.status, "open");
+    assert.equal((await call("/api/runs", "alice", { gameId: "two-places", mode: "raid", raidId: valid.body.raid.id })).status, 201);
+  } finally { await new Promise<void>((resolve) => isolatedServer.close(() => resolve())); isolatedStore.close(); }
+});
+
+test("legacy import migration preserves cabinet state and history and only runs once", () => {
+  const directory = mkdtempSync(join(tmpdir(), "token-arcade-import-"));
+  const filename = join(directory, "arcade.sqlite");
+  let migrated = new ArcadeStore(filename, false);
+  try {
+    const old = migrated.getGame("emonad-cabinet")!;
+    delete old.legacyImportRevision;
+    old.manifest.name = "eMONAD Bounce";
+    old.manifest.description = "Old integration copy";
+    old.manifest.supportedModes = ["free"];
+    old.status = "paused";
+    old.communityStrategy = "retained-strategy";
+    old.economy = { status: "pending", reason: "Retained review notes" };
+    migrated.saveGame(old);
+    const passport = migrated.getOrCreatePassport("local-demo:archive");
+    const config: GameRunConfig = { gameId: old.manifest.id, gameVersion: "1.0.0", runId: "historical-run", mode: "ranked", objective: "score", seed: "historic", startedAt: new Date().toISOString() };
+    migrated.createSession({ config, playerId: passport.playerId });
+    migrated.acceptResult({ config, playerId: passport.playerId }, resultFor(config, 123), (current) => current);
+    migrated.close(); migrated = new ArcadeStore(filename, false);
+    const repaired = migrated.getGame("emonad-cabinet")!;
+    assert.equal(repaired.manifest.name, "eMONAD cabinet");
+    assert.deepEqual(repaired.manifest.supportedModes, ["free", "ranked", "raid"]);
+    assert.equal(repaired.status, "paused");
+    assert.equal(repaired.communityStrategy, "retained-strategy");
+    assert.equal(repaired.economy?.reason, "Retained review notes");
+    assert.equal(migrated.listAcceptedResults("emonad-cabinet", "ranked")[0].result.primaryMetric, 123);
+    repaired.manifest.name = "Operator's later title";
+    migrated.saveGame(repaired);
+    migrated.close(); migrated = new ArcadeStore(filename, false);
+    assert.equal(migrated.getGame("emonad-cabinet")?.manifest.name, "Operator's later title");
+  } finally { migrated.close(); unlinkSync(filename); rmdirSync(directory); }
+});
+
+test("eMONAD raids inherit fixed viewport rules and unchanged paused imports can resume", async () => {
+  const input = { name: "eMONAD viewport test", gameId: "emonad-cabinet", communityId: "emonad", objective: "score", startsAt: new Date(Date.now() - 1000).toISOString(), endsAt: new Date(Date.now() + 60_000).toISOString(), maxAttempts: 2, reward: { type: "none" } };
+  const created = await api("/api/admin/raids", { method: "POST", auth: "admin", body: input });
+  assert.equal(created.body.raid.status, "open");
+  assert.deepEqual(created.body.raid.rules, { viewportHeight: 844, viewportWidth: 390 });
+  const issued = await api("/api/runs", { method: "POST", auth: "player", body: { gameId: "emonad-cabinet", mode: "raid", raidId: created.body.raid.id } });
+  assert.equal(issued.status, 201);
+  assert.deepEqual(issued.body.run.rules, created.body.raid.rules);
+  const bad = await api("/api/admin/raids", { method: "POST", auth: "admin", body: { ...input, rules: { viewportWidth: 999 } } });
+  assert.equal(bad.body.raid.status, "draft");
+  assert.ok(bad.body.raid.readiness.blockers.some((item: string) => item.includes("390×844")));
+  assert.equal((await api("/api/admin/games/emonad-cabinet", { method: "PATCH", auth: "admin", body: { status: "paused" } })).status, 200);
+  assert.equal((await api("/api/admin/games/emonad-cabinet/resume", { method: "POST", auth: "player" })).status, 403);
+  assert.equal((await api("/api/admin/games/emonad-cabinet/resume", { method: "POST", auth: "admin" })).body.game.status, "published");
+  assert.equal((await api("/api/admin/games/future-cabinet/resume", { method: "POST", auth: "admin" })).body.error.code, "INVALID_STATE");
 });
