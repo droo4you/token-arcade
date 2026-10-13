@@ -159,6 +159,10 @@ const SIM = (() => {
   }
 
   // ---------- run ----------
+  // Passport Play: the server-issued opaque seed -> uint32 (FNV-1a). Shared by the cartridge and the server verifier.
+  function issuedSeed(value) { let h = 2166136261; for (const c of String(value)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+  // Passport Play uses this fixed loadout (all upgrades level 0) so every player has the same stats.
+  const STANDARD_LOADOUT = Object.freeze({});
   function newRun(up, seed) {
     const s = stats(up);
     const run = {
@@ -432,7 +436,7 @@ const SIM = (() => {
   return {
     DT, G, PX_PER_DAY, DOCK_ALT, DOCK_X, ALT_5K, ALT_10K, TODAY_DAY, ERAS, ICE, UPGRADES, MAX_LVL,
     priceAt, dayAt, dateAt, eraIndexAt, onIce, stats, upgradeCost, newRun, throwRock, step, results,
-    hitBox, whaleTailUp, airAlt, botInput, speed,
+    hitBox, whaleTailUp, airAlt, botInput, speed, issuedSeed, STANDARD_LOADOUT,
   };
 })();
 if (typeof module !== 'undefined') module.exports = SIM;
