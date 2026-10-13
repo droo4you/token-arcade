@@ -21,6 +21,7 @@ function compileContracts(extraSources = {}) {
     language: "Solidity",
     sources,
     settings: {
+      evmVersion: "cancun",
       optimizer: { enabled: true, runs: 200 },
       outputSelection: { "*": { "*": ["abi", "evm.bytecode.object", "evm.deployedBytecode.object"] } },
     },
