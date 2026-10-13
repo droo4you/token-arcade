@@ -16,6 +16,15 @@ test("separate Cartridge origin serves reviewed assets and excludes server/sourc
     assert.match(await entry.text(), /\/sdk\/bridge\.js/);
     const hosts = await fetch(`${origin}/sdk/hosts.js`);
     assert.match(await hosts.text(), /window.TA_HOST_ORIGINS=/);
+    const slide = await fetch(`${origin}/skrumpey-slide/v/1.0.0/`);
+    assert.equal(slide.status, 200);
+    assert.match(await slide.text(), /Skrumpey Slide/);
+    for (const [path, type] of [["assets/models/10.glb", "model/gltf-binary"], ["vendor/draco/draco_decoder.wasm", "application/wasm"], ["assets/nuts/site-nuts.png", "image/png"], ["assets/nuts/site-nuts-plain.png", "image/png"]]) {
+      const asset = await fetch(`${origin}/skrumpey-slide/v/1.0.0/${path}`);
+      assert.equal(asset.status, 200, path);
+      assert.equal(asset.headers.get("content-type"), type);
+      assert.ok((await asset.arrayBuffer()).byteLength > 0, path);
+    }
     for (const path of ["/skip-to-10k/v/1.0.0/.env", "/emonad-cabinet/v/1.0.0/tools/verify.js", "/emonad-cabinet/v/1.0.0/TOOLS/verify.js", "/emonad-cabinet/v/1.0.0/tools%5cverify.js", "/skip-to-10k/v/9.0.0/", "/skip-to-10k/v/1.0.0/%2e%2e%2f%2e%2e%2fpackage.json"]) {
       assert.equal((await fetch(origin + path)).status, 404, path);
     }

@@ -8,6 +8,14 @@ Read order: Documentation Index → Product Handoff → Economy v0.2.2 → Cartr
 
 The intended model is: reusable **Skeleton** → versioned **Cartridge** using the existing SDK → independently identified **Cabinet** → published Registry discovery. Token Arcade owns identity, Passport, sessions, per-cabinet standings/raids, publication and optional economy. The game owns its simulation, input, score and rendering. Optional economics do not block game publication or require a new game ID later.
 
+### Founder clarification — 11 October 2026
+
+- Up to three player-facing modes: **Free Play**, **Passport Play**, and **Community Raids**. Passport Play is the public name for authenticated free play with persistent scores and cosmetic progression; cosmetic claiming is future work. The UI uses Passport Play; the internal API mode remains `ranked` for compatibility.
+- Community Raids are time-bounded competitions for Passport players with defined Community Asset rewards, eligibility, attempts, verification and settlement. v0 entry remains free and prizes must be funded before they are offered.
+- The hackathon demonstration must show the founder logging in, deploying a MiniCoin, and playing its associated game(s). Starting a Community Raid is a stretch goal under this latest direction, superseding the older handoff's mandatory Raid demo scope. This does not change the frozen economic invariants.
+- The demo must explain what a MiniCoin is, how it works, evidence that it works, what a Community Asset is, and how the Cabinet, MiniCoin and Community Asset relate.
+- Replay verification checks legal simulation outcomes, not human authorship. Server-issued sessions/seeds, plausibility checks and identity/attempt limits are complementary controls. Challenge windows remain later scope in Economy v0.2.2, not an implemented protection.
+
 ### Exact stale implementation conflicts corrected
 
 | Earlier implementation | Owning requirement | Resolution |

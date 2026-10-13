@@ -7,7 +7,7 @@ import { useArcadeAuth } from "./auth";
 import { createClientCartridge, hasClientCartridge } from "./cartridges";
 import { gameHref, getCatalog, getGame, playHref, type ArcadeGame } from "./catalog";
 import { CreatorPortal } from "./CreatorPortal";
-import { getGuideTopic, guideTopics, type GuideTopic, type GuideTopicId } from "./guideContent";
+import { getGuideTopic, guideTopics, guideFaq, guideDefinitions, type GuideTopic, type GuideTopicId } from "./guideContent";
 
 const brandLine = "The Internet Is Fun.";
 
@@ -113,11 +113,12 @@ function Header({ health }: { health: Health | null }) {
         <Link href="/raids" className="nav-link">Community raids</Link>
         <Link href="/passport" className="nav-link">Passport</Link>
         <Link href="/guide" className="nav-link">Take a tour</Link>
+        <Link href="/demo" className="nav-link">Demo flow</Link>
         <Link href="/launch" className="nav-link nav-launch">Launch Console</Link>
       </nav>
       <div className="header-actions">
-        {auth.authenticated ? <Link href="/passport" className="passport-chip"><UserRound size={17} /><span>{auth.identityLabel}</span></Link> : <button className="passport-chip" onClick={() => navigate("/passport")}><UserRound size={17} /><span>Guest</span></button>}
-        {health?.auth.localDemo && <span className="dev-dot" title="Local demo identity is enabled">demo</span>}
+        {!auth.ready ? <span className="passport-chip"><UserRound size={17} /><span>Checking account…</span></span> : auth.authenticated ? <Link href="/passport" className="passport-chip"><UserRound size={17} /><span>{auth.identityLabel}</span></Link> : <button className="passport-chip" onClick={() => navigate("/passport")}><UserRound size={17} /><span>Guest</span></button>}
+        {health?.auth.localDemo && <span className="dev-dot" title="Local demo identities are available">demo available</span>}
         <button className="menu-button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={22} /> : <Menu size={22} />}</button>
       </div>
     </div>
@@ -149,7 +150,7 @@ function GameTile({ game, variant = "normal" }: { game: ArcadeGame; variant?: "n
   </article>;
 }
 
-function Home({ records, raids, loading, health }: { records: GameRecord[]; raids: Raid[]; loading: boolean; health: Health | null }) {
+function Home({ records, raids, loading, health, registryError, refresh }: { records: GameRecord[]; raids: Raid[]; loading: boolean; health: Health | null; registryError: string; refresh: () => void }) {
   const catalog = getCatalog(records);
   const fixture = catalog.find((game) => game.fixture);
   const externals = catalog.filter((game) => !game.fixture);
@@ -178,12 +179,13 @@ function Home({ records, raids, loading, health }: { records: GameRecord[]; raid
 
     <main>
       <section id="games" className="shelf-section page-width">
-        <div className="section-heading"><div><span className="section-kicker">THE GAME SHELF</span><h2>Pick your next obsession.</h2><p>{liveExternalCount ? `${liveExternalCount} game${liveExternalCount === 1 ? " is" : "s are"} ready to play, with more cabinets on the way.` : "Published cabinets will appear here as they open."}</p></div><span className="handdrawn-arrow" aria-hidden="true">↘</span></div>
+        <div className="section-heading"><div><span className="section-kicker">THE GAME SHELF</span><h2>Pick your next obsession.</h2><p>{registryError ? "The game shelf couldn’t connect. Try loading it again." : loading ? "Loading cabinets…" : liveExternalCount ? `${liveExternalCount} game${liveExternalCount === 1 ? " is" : "s are"} ready to play, with more cabinets on the way.` : "Published cabinets will appear here as they open."}</p></div><span className="handdrawn-arrow" aria-hidden="true">↘</span></div>
+        {registryError && <button className="action action-light" onClick={refresh}>Retry loading games</button>}
         <div className="game-shelf">{externals.map((game, index) => <GameTile key={game.id} game={game} variant={index % 3 === 0 ? "wide" : "normal"} />)}</div>
       </section>
 
       <section className="lower-grid page-width">
-        <div className="warmup-panel"><div className="panel-top"><span className="panel-icon"><Gamepad2 size={24} /></span><StatusBadge tone={featured ? "good" : "wait"}>{featured ? "Playable now" : "Opening soon"}</StatusBadge></div><div className="warmup-panel-art"><span>●</span><span>◆</span><span>▲</span><span>✳</span></div><h2>{fixture ? <>A quick game while<br />you wait.</> : featured ? <>A new game to<br />jump into.</> : <>Good games<br />are on their way.</>}</h2><p>{fixture ? "Try the arcade’s internal test cabinet. Guest Free Play works right away. With a player account, you can test verified Ranked Runs and raids." : featured ? `${featured.name} is ready for Free Play. Open its cabinet and start playing.` : "The launch games are being built in their own workshops. Explore the shelf to see what is coming."}</p>{featured ? <ActionLink href={gameHref(featured.id)} tone="ink">Open {featured.name}</ActionLink> : <Link href="#games" className="action action-ink">Explore games <ArrowUpRight size={17} /></Link>}{fixture && <small>Clearly labeled test fixture, not a launch title.</small>}</div>
+        <div className="warmup-panel"><div className="panel-top"><span className="panel-icon"><Gamepad2 size={24} /></span><StatusBadge tone={featured ? "good" : "wait"}>{featured ? "Playable now" : "Opening soon"}</StatusBadge></div><div className="warmup-panel-art"><span>●</span><span>◆</span><span>▲</span><span>✳</span></div><h2>{fixture ? <>A quick game while<br />you wait.</> : featured ? <>A new game to<br />jump into.</> : <>Good games<br />are on their way.</>}</h2><p>{fixture ? "Try the arcade’s internal test cabinet. Guest Free Play works right away. With a player account, you can test verified Passport Play and raids." : featured ? `${featured.name} is ready for Free Play. Open its cabinet and start playing.` : "The launch games are being built in their own workshops. Explore the shelf to see what is coming."}</p>{featured ? <ActionLink href={gameHref(featured.id)} tone="ink">Open {featured.name}</ActionLink> : <Link href="#games" className="action action-ink">Explore games <ArrowUpRight size={17} /></Link>}{fixture && <small>Clearly labeled test fixture, not a launch title.</small>}</div>
         <div className="raid-panel"><div className="panel-top"><span className="panel-icon panel-icon-pink"><Trophy size={23} /></span><span className="raid-scribble">PLAY TOGETHER ✳</span></div><h2>Community<br />raids live here.</h2>{openRaid ? <><p>{openRaid.name} is open now. See the rules, standings, and attempts in the lobby.</p><div className="raid-feature"><span>OPEN RAID</span><strong>{openRaid.name}</strong><span>Closes {formatDate(openRaid.endsAt)}</span></div><ActionLink href={`/raids/${openRaid.id}`} tone="light">Enter the lobby</ActionLink></> : <><p>Limited-time challenges turn a game into a shared event, with clear rules and a real leaderboard.</p><div className="raid-empty"><span>✦</span><strong>No open raids right now</strong><span>{loading ? "Checking the arcade…" : "Check back for the next event."}</span></div><ActionLink href="/raids" tone="light">See raids</ActionLink></>}</div>
       </section>
       <section className="closing-band"><div className="page-width closing-inner"><span>{featured ? "PLAY FIRST. EVERYTHING ELSE CAN WAIT." : "THE NEXT CABINET IS ALMOST HERE."}</span><strong>{brandLine}</strong><Link href={featured ? playHref(featured.id) : "#games"} className="closing-play">{featured ? "Start playing" : "Browse games"} <ArrowUpRight size={21} /></Link></div></section>
@@ -197,6 +199,31 @@ function metricText(value: number, objective: string) { return objective === "co
 function Leaderboard({ entries, objective = "score" }: { entries: LeaderboardEntry[]; objective?: string }) {
   if (!entries.length) return <div className="empty-list"><Trophy size={28} /><strong>No verified runs yet</strong><span>The first accepted result will appear here.</span></div>;
   return <div className="leaderboard"><div className="leaderboard-head"><span>Place</span><span>Player</span><span>{objective.replaceAll("_", " ")}</span></div>{entries.map((entry, index) => <div className="leaderboard-row" key={entry.runId}><span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span><span>{entry.displayName}</span><strong>{entry.secondaryMetrics?.apples !== undefined && <small>{entry.secondaryMetrics.apples} apples · </small>}{metricText(entry.primaryMetric, objective)}</strong></div>)}</div>;
+}
+
+function MinicoinEvidence({ record, playable }: { record: GameRecord; playable: boolean }) {
+  const coin = record.minicoin;
+  if (!coin) return null;
+  const community = record.community
+    ? `${record.community.name} (${record.community.type.toUpperCase()} asset)`
+    : record.communityConcept
+      ? `${record.communityConcept.name} (${record.communityConcept.verification} reference)`
+      : "No Community Asset configured";
+  const passportPlay = record.manifest.supportedModes.includes("ranked");
+  return <section className="minicoin-evidence" aria-label="MiniCoin association evidence">
+    <div className="minicoin-evidence-heading"><div><span className="section-kicker">RECORDED ASSOCIATION</span><h2>MiniCoin for this cabinet</h2></div><StatusBadge tone="wait">{coin.chainId === 31337 ? "Local-chain experimental token rehearsal" : "Experimental token association"}</StatusBadge></div>
+    <p>The factory transaction links this token to the Cabinet ID. Its Community Asset is shown separately so an unverified reference cannot be mistaken for a live economic integration.</p>
+    <dl className="minicoin-evidence-grid">
+      <div><dt>Cabinet ID</dt><dd>{record.manifest.id}</dd></div>
+      <div><dt>MiniCoin</dt><dd>{coin.symbol}</dd></div>
+      <div><dt>Chain ID</dt><dd>{coin.chainId}</dd></div>
+      <div><dt>Community Asset</dt><dd>{community}</dd></div>
+      <div className="minicoin-evidence-wide"><dt>Token address</dt><dd><code>{coin.address}</code></dd></div>
+      <div className="minicoin-evidence-wide"><dt>Deployment transaction</dt><dd><code>{coin.deploymentTx}</code></dd></div>
+    </dl>
+    <p className="minicoin-protocol-note">The full MiniCoin economy remains pending: this record does not prove an active pool, hook, liquidity, LP custody, fee routing, or prize funding.</p>
+    {playable && <ActionLink href={playHref(record.manifest.id, passportPlay ? "ranked" : "free")} tone="ink">Play associated game{passportPlay ? " with Passport" : ""}</ActionLink>}
+  </section>;
 }
 
 function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid[] }) {
@@ -220,10 +247,11 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
       <div className="detail-copy">
         <div className="detail-flags"><StatusBadge tone={game.playable ? "good" : "wait"}>{game.fixture ? "Internal test fixture" : game.playable ? "Playable now" : "Adapter pending"}</StatusBadge><span>{game.genre}</span></div>
         <h1>{game.name}</h1><p className="detail-lead">{game.description}</p><GuideLink topic="cabinets">How cabinets work</GuideLink>
-        {game.record?.economy && !game.record.minicoin && <div className="cabinet-economy"><StatusBadge tone="wait">MiniCoin Economy — Coming Soon</StatusBadge><p>{game.record.economy.reason}</p></div>}
+         {game.record?.economy && <div className="cabinet-economy"><StatusBadge tone="wait">{game.record.minicoin ? "Full MiniCoin economy pending" : "MiniCoin Economy — Coming Soon"}</StatusBadge><p>{game.record.economy.reason}</p></div>}
+         {game.record?.minicoin && <MinicoinEvidence record={game.record} playable={game.playable} />}
         <div className="detail-mode-list">
           <div><span className="mode-icon mode-free"><Play size={20} fill="currentColor" /></span><div><strong>Free Play</strong><small>No account. No limit. Just play.</small></div>{game.playable ? <Link href={playHref(game.id)} className="mini-action">Play Free <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Awaiting adapter</span>}</div>
-          <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>Ranked Run</strong><small>Verified score and a place on the board.</small></div>{competitive ? <Link href={playHref(game.id, "ranked")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
+          <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>Passport Play</strong><small>Verified score and a place on the board.</small></div>{competitive ? <Link href={playHref(game.id, "ranked")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
           <div><span className="mode-icon mode-raid"><Sparkles size={21} /></span><div><strong>Community Raid</strong><small>Same challenge, shared standings.</small></div>{openRaid ? <Link href={`/raids/${encodeURIComponent(openRaid.id)}`} className="mini-action">See raid <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">No open raid</span>}</div>
         </div>
         {!game.playable && <div className="pending-note"><LockKeyhole size={20} /><span>{game.name} needs a reviewed browser cartridge before play opens here.</span></div>}
@@ -231,7 +259,7 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
     </div>
     <div className="detail-below">
       <section className="detail-info"><h2>About this cabinet</h2><p>{game.fixture ? "Warmup Cabinet checks the cartridge host, Free Play, server-issued runs, and score verification. It is a test fixture for this arcade, not one of the four launch games." : game.playable ? "This cartridge is installed and ready for browser play. Competitive modes appear when its verifier and rules are published." : "The arcade is reserving this cabinet for its incoming game. Game play and competitive modes will open after the actual game is imported and verified."}</p><div className="info-pairs"><div><span>Made by</span><strong>{game.record?.manifest.developer ?? (game.fixture ? "Token Arcade" : "External game team")}</strong></div><div><span>Community</span><strong>{game.community}</strong></div><div><span>Version</span><strong>{game.record?.manifest.version ?? "Awaiting import"}</strong></div></div>{game.record?.community && <details className="financial-details"><summary>Community asset <ChevronDown size={16} /></summary><p>{game.record.community.name} ({game.record.community.type.toUpperCase()})</p><code>{game.record.community.address}</code></details>}{game.record?.communityConcept && <details className="financial-details"><summary>Community association <ChevronDown size={16} /></summary><p>{game.record.communityConcept.name} · {game.record.communityConcept.type.toUpperCase()}</p><p>{game.record.communityConcept.description}</p>{game.record.communityConcept.address && <code>{game.record.communityConcept.address}</code>}<p>Association does not imply an official partnership.</p></details>}{game.record?.manifest.verifier && <p className="verification-note">{game.record.manifest.verifier.description}</p>}</section>
-      <section className="detail-board"><div className="board-heading"><div><h2>Ranked board</h2><p>Verified runs belong to this cabinet.</p></div><Trophy size={26} /></div>{error ? <ErrorNote error={error} /> : <Leaderboard entries={entries} objective={game.record?.manifest.supportedObjectives[0] ?? "score"} />}</section>
+      <section className="detail-board"><div className="board-heading"><div><h2>Passport Play leaderboard</h2><p>Verified runs belong to this cabinet.</p></div><Trophy size={26} /></div>{error ? <ErrorNote error={error} /> : <Leaderboard entries={entries} objective={game.record?.manifest.supportedObjectives[0] ?? "score"} />}</section>
     </div>
   </main>;
 }
@@ -272,7 +300,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   token.current = auth.getToken;
   useEffect(() => {
     completionGeneration.current += 1;
-    if (!game?.playable || (mode !== "free" && !auth.authenticated)) return;
+    if (!game?.playable || (mode !== "free" && (!auth.ready || !auth.identityKey))) return;
     let active = true;
     setConfig(null); setResult(null); setVerified(false); setError("");
     if (mode === "free") {
@@ -283,11 +311,12 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
       api<RunResponse>("/api/runs", token.current, { method: "POST", body: { gameId: game.id, mode, raidId } }).then((response) => { if (active) setConfig(response.run); }).catch((reason) => { if (active) setError(messageFor(reason)); }).finally(() => { if (active) setLoading(false); });
     }
     return () => { active = false; completionGeneration.current += 1; };
-  }, [game?.id, attempt, mode, raidId, auth.authenticated]);
+  }, [game?.id, attempt, mode, raidId, auth.ready, auth.identityKey]);
   if (!game) return <NotFound />;
   if (!game.playable) return <main className="page-width centered-state"><LockKeyhole size={42} /><h1>{game.name} is on its way.</h1><p>The browser cartridge has not arrived in this workspace. We’ll open its cabinet after import and review.</p><ActionLink href={gameHref(game.id)}>Back to game details</ActionLink></main>;
   if (mode !== "free" && (game.record?.status !== "published" || !game.record.manifest.supportedModes.includes(mode))) return <main className="page-width centered-state"><LockKeyhole size={42} /><h1>This mode is not available yet.</h1><p>Free Play is ready while this game’s competitive rules are reviewed.</p><ActionLink href={playHref(game.id)}>Play Free</ActionLink></main>;
-  if (mode !== "free" && !auth.authenticated) return <main className="page-width centered-state"><UserRound size={42} /><h1>A player account keeps your score.</h1><p>Sign in before a {mode === "raid" ? "Community Raid" : "Ranked Run"}. Free Play is open right now.</p><div className="state-actions"><ActionLink href={playHref(game.id)}>Play Free</ActionLink><ActionLink href="/passport" tone="light">Set up account</ActionLink></div></main>;
+  if (mode !== "free" && (!auth.ready || (auth.authenticated && !auth.identityKey))) return <main className="page-width centered-state"><div className="loading-slab">Checking your player account…</div></main>;
+  if (mode !== "free" && !auth.authenticated) return <main className="page-width centered-state"><UserRound size={42} /><h1>A player account keeps your score.</h1><p>Sign in to start {mode === "raid" ? "a Community Raid" : "Passport Play"}. Your run will open here after sign-in. Free Play is open right now.</p><div className="state-actions"><ActionLink href={playHref(game.id)}>Play Free</ActionLink>{auth.configured ? <button className="action action-lime" onClick={auth.login}>Sign in with Privy <ArrowUpRight size={18} /></button> : <ActionLink href="/passport" tone="light">Set up account</ActionLink>}</div></main>;
   const complete = async (runResult: GameRunResult) => {
     const generation = completionGeneration.current;
     setResult(runResult); setVerified(false); setError("");
@@ -299,14 +328,14 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
     } catch (reason) { if (completionGeneration.current === generation) setError(messageFor(reason)); }
     finally { if (completionGeneration.current === generation) setLoading(false); }
   };
-  return <main className="page-width player-page"><div className="player-top"><Link href={gameHref(game.id)} className="back-link"><ArrowLeft size={17} /> Leave cabinet</Link><div className="player-mode"><span className="live-dot" />{mode === "free" ? "Free Play" : mode === "ranked" ? "Ranked Run" : "Community Raid"}</div></div><div className="player-heading"><div><span className="section-kicker">{game.fixture ? "INTERNAL TEST CARTRIDGE" : "ARCADE CARTRIDGE"}</span><h1>{game.name}</h1><p>{game.fixture ? "Match the big symbol using the four pads. Twelve rounds. Twenty seconds." : game.description}</p></div>{game.fixture && <div className="player-rule"><Clock3 size={21} /><span>12 rounds<br /><strong>20 seconds</strong></span></div>}</div>
+  return <main className="page-width player-page"><div className="player-top"><Link href={gameHref(game.id)} className="back-link"><ArrowLeft size={17} /> Leave cabinet</Link><div className="player-mode"><span className="live-dot" />{mode === "free" ? "Free Play" : mode === "ranked" ? "Passport Play" : "Community Raid"}</div></div><div className="player-heading"><div><span className="section-kicker">{game.fixture ? "INTERNAL TEST CARTRIDGE" : "ARCADE CARTRIDGE"}</span><h1>{game.name}</h1><p>{game.fixture ? "Match the big symbol using the four pads. Twelve rounds. Twenty seconds." : game.description}</p></div>{game.fixture && <div className="player-rule"><Clock3 size={21} /><span>12 rounds<br /><strong>20 seconds</strong></span></div>}</div>
     {loading && !result && <div className="loading-slab">Issuing your {mode === "raid" ? "raid attempt" : "run"}…</div>}
     {error && <ErrorNote error={error} />}
     {config && (!result || mode === "free") && <CartridgeView key={config.runId} config={config} manifest={game.record!.manifest} onComplete={complete} />}
     {result && <div className="result-panel"><div className="result-medal"><Trophy size={31} /></div><div>
       <span>{result.result === "failed" ? "RUN FINISHED" : mode === "free" ? "LOCAL RESULT" : loading ? "VERIFYING RESULT" : verified ? "VERIFIED RESULT" : "RESULT NOT VERIFIED"}</span>
        <h2>{metricText(result.primaryMetric, result.objective)}</h2><span className="result-metric">{result.objective.replaceAll("_", " ")}</span>
-      <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "This result stays local. Competitive scores are available only in a cabinet’s enabled Ranked or Raid mode." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
+      <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "This result stays local. Competitive scores are available only in a cabinet’s enabled Passport Play or Community Raid mode." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
       {result.secondaryMetrics && <dl className="result-details">{Object.entries(result.secondaryMetrics).filter(([key]) => !["ticks", "elapsedMs"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1")}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl>}
     </div><button className="action action-lime" disabled={loading} onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
     {game.record?.manifest.controls?.orientation === "landscape" && <p className="orientation-note">On a phone, turn sideways for the full playfield.</p>}
@@ -379,7 +408,7 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
 
 function AccountPrompt({ health }: { health: Health | null }) {
   const auth = useArcadeAuth();
-  return <div className="account-prompt"><div className="prompt-art"><span>✦</span></div><div><h2>Your arcade identity starts here.</h2><p>A Player Passport keeps verified scores and raid history together. You can browse the arcade without one.</p><div className="prompt-actions">{auth.configured ? <button className="action action-lime" onClick={auth.login}>Create player account <ArrowUpRight size={18} /></button> : <div className="setup-note"><Settings2 size={19} /><span>Privy sign-in is not configured. Add <code>VITE_PRIVY_APP_ID</code> and server credentials to enable player accounts.</span></div>}<ActionLink href="/" tone="light">Browse as Guest</ActionLink></div>{health?.auth.localDemo && <div className="demo-controls"><strong>Local developer demo</strong><span>These identities only work with LOCAL_DEMO_MODE on loopback.</span><div><button onClick={() => auth.setDemoRole("player")}>Enter as test player</button><button onClick={() => auth.setDemoRole("admin")}>Enter as test admin</button></div></div>}</div></div>;
+  return <div className="account-prompt"><div className="prompt-art"><span>✦</span></div><div><h2>Your arcade identity starts here.</h2><p>A Player Passport keeps verified scores and raid history together. You can browse the arcade without one.</p><div className="prompt-actions">{auth.configured ? <button className="action action-lime" onClick={auth.login}>Create player account <ArrowUpRight size={18} /></button> : <div className="setup-note"><Settings2 size={19} /><span>Privy sign-in is not configured. Add <code>VITE_PRIVY_APP_ID</code> and server credentials to enable player accounts.</span></div>}<ActionLink href="/" tone="light">Browse as Guest</ActionLink></div>{health?.auth.localDemo && <div className="demo-controls"><strong>Local developer demo</strong><span>These identities only work with LOCAL_DEMO_MODE on loopback.</span><div><button onClick={() => auth.setDemoRole("player")}>Enter as test player</button>{health.auth.localDemoAdmin && <button onClick={() => auth.setDemoRole("admin")}>Enter as test admin</button>}</div>{health.auth.localDemoAdmin === false && <span>Curator actions require an allowlisted Privy account in this rehearsal.</span>}</div>}</div></div>;
 }
 
 function PassportPage({ health, records }: { health: Health | null; records: GameRecord[] }) {
@@ -393,14 +422,19 @@ function PassportPage({ health, records }: { health: Health | null; records: Gam
   const [walletBusy, setWalletBusy] = useState(false);
   const [error, setError] = useState("");
   const [walletNotice, setWalletNotice] = useState("");
+  const [walletSync, setWalletSync] = useState<PassportResponse["walletSync"]>();
+  const [creatingArcadeWallet, setCreatingArcadeWallet] = useState(false);
+  const [passportLoad, setPassportLoad] = useState(0);
   useEffect(() => {
-    if (!auth.authenticated) { setPassport(null); return; }
+    if (!auth.ready) return;
+    setPassport(null); setWalletSync(undefined); setError("");
+    if (!auth.identityKey) return;
     const controller = new AbortController();
     api<PassportResponse>("/api/me", auth.getToken, { signal: controller.signal })
-      .then((data) => { setPassport(data.passport); setDisplayName(data.passport.displayName); setAvatarUrl(data.passport.avatarUrl ?? ""); })
+      .then((data) => { setPassport(data.passport); setWalletSync(data.walletSync); setDisplayName(data.passport.displayName); setAvatarUrl(data.passport.avatarUrl ?? ""); })
       .catch((reason) => { if (!(reason instanceof DOMException && reason.name === "AbortError")) setError(messageFor(reason)); });
     return () => controller.abort();
-  }, [auth.authenticated, auth.demoRole]);
+  }, [auth.ready, auth.identityKey, passportLoad]);
   const save = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError("");
     try {
@@ -408,6 +442,15 @@ function PassportPage({ health, records }: { health: Health | null; records: Gam
       setPassport(response.passport); setEditing(false);
     } catch (reason) { setError(messageFor(reason)); }
     finally { setSaving(false); }
+  };
+  const createArcadeWallet = async () => {
+    setCreatingArcadeWallet(true); setError(""); setWalletNotice("");
+    try {
+      await auth.createArcadeWallet();
+      setWalletNotice("Arcade wallet created. Syncing your Passport…");
+      setPassportLoad((value) => value + 1);
+    } catch (reason) { setError(messageFor(reason)); }
+    finally { setCreatingArcadeWallet(false); }
   };
   const linkWallet = async () => {
     setWalletBusy(true); setError(""); setWalletNotice("");
@@ -435,10 +478,11 @@ function PassportPage({ health, records }: { health: Health | null; records: Gam
     finally { setWalletBusy(false); }
   };
   return <main className="page-width passport-page">
-    <div className="page-intro"><div className="intro-icon"><UserRound size={30} /></div><span className="section-kicker">PLAYER PASSPORT</span><h1>Keep the good runs.</h1><p>Your little record of time spent in the arcade.</p><GuideLink topic="passport">How Passport works</GuideLink></div>
-    {!auth.authenticated ? <AccountPrompt health={health} /> : <>
+    <div className="page-intro"><div className="intro-icon"><UserRound size={30} /></div><span className="section-kicker">PLAYER PASSPORT</span><h1>Keep the good runs.</h1><p>Your little record of time spent in the arcade.</p><GuideLink topic="passport">How Passport works</GuideLink><Link href="/demo" className="guide-context-link">Follow the founder demo <ArrowUpRight size={15} /></Link></div>
+    {!auth.ready ? <div className="loading-slab">Checking your player account…</div> : !auth.authenticated ? <AccountPrompt health={health} /> : <>
+      {auth.demoRole && <div className="setup-note"><Settings2 size={19} /><span>Local demo Passport. This test identity is separate from Privy and has no embedded wallet.</span></div>}
       {error && <ErrorNote error={error} />}{walletNotice && <div className="success-note" role="status"><BadgeCheck size={18} />{walletNotice}</div>}
-      {!passport ? <div className="loading-slab">Opening your Passport…</div> : <div className="passport-layout">
+      {!passport ? error ? <button className="action action-light" onClick={() => setPassportLoad((value) => value + 1)}>Retry opening Passport</button> : <div className="loading-slab">Opening your Passport…</div> : <div className="passport-layout">
         <section className="passport-card">
           <div className="passport-card-top"><span>TOKEN ARCADE</span><span>PLAYER PASSPORT / V0</span></div>
           <div className="passport-avatar">{passport.avatarUrl ? <img src={passport.avatarUrl} alt="Player avatar" /> : passport.displayName.slice(0, 1).toUpperCase()}</div>
@@ -446,17 +490,116 @@ function PassportPage({ health, records }: { health: Health | null; records: Gam
           {editing && <form className="name-form" onSubmit={save}><label htmlFor="display-name">Display name</label><div><input id="display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={32} required /><button disabled={saving} type="submit">{saving ? "Saving…" : "Save"}</button></div><label htmlFor="avatar-url">Avatar image URL</label><input id="avatar-url" type="url" value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} placeholder="https://…" /></form>}
           <div className="passport-card-bottom"><span>ID {passport.playerId.slice(0, 12)}</span><span>★ ARCADE MEMBER</span></div>
         </section>
-        <section className="passport-stats"><div className="stat"><span>Games played</span><strong>{passport.gamesPlayed}</strong></div><div className="stat"><span>Ranked runs</span><strong>{passport.rankedRuns}</strong></div><div className="stat"><span>Raids entered</span><strong>{passport.raidsEntered}</strong></div><div className="stat"><span>Wins</span><strong>{passport.wins}</strong></div></section>
+        <section className="passport-stats"><div className="stat"><span>Games played</span><strong>{passport.gamesPlayed}</strong></div><div className="stat"><span>Passport Play runs</span><strong>{passport.rankedRuns}</strong></div><div className="stat"><span>Raids entered</span><strong>{passport.raidsEntered}</strong></div><div className="stat"><span>Wins</span><strong>{passport.wins}</strong></div></section>
          <section className="passport-history"><h2>Best scores</h2>{Object.entries(passport.bestScores).length ? <div>{Object.entries(passport.bestScores).map(([key, score]) => {
            const separator = key.lastIndexOf(":");
            const gameId = separator < 0 ? key : key.slice(0, separator);
            const objective = separator < 0 ? "score" : key.slice(separator + 1);
            const gameName = records.find((record) => record.manifest.id === gameId)?.manifest.name ?? getGame(gameId, [])?.name ?? gameId;
            return <div className="history-row" key={key}><span>{gameName} · {objective.replaceAll("_", " ")}</span><strong>{score.toLocaleString()}</strong></div>;
-         })}</div> : <div className="empty-list"><Gamepad2 size={27} /><strong>No verified scores yet</strong><span>{rankedGame ? "Finish a Ranked Run to add your first one." : "Your verified scores will appear when Ranked Runs open."}</span></div>}{rankedGame && <ActionLink href={playHref(rankedGame.id, "ranked")}>Try a Ranked Run</ActionLink>}</section>
-        <section className="passport-wallet"><h2>Wallets & communities</h2><div className="rule-row"><span>Arcade wallet</span><strong>{shortAddress(passport.arcadeWallet)}</strong></div><div className="rule-row"><span>Ownership wallets</span><strong>{passport.ownershipWallets.length}</strong></div>{passport.ownershipWallets.map((address) => <div className="linked-wallet" key={address}><code>{shortAddress(address)}</code><button disabled={walletBusy} onClick={() => void unlinkWallet(address)}>Unlink</button></div>)}<button className="wallet-link-button" disabled={walletBusy} onClick={() => void linkWallet()}>{walletBusy ? "Waiting for wallet…" : "Link ownership wallet"}<ArrowUpRight size={16} /></button><p>Sign a message to associate an external wallet. No asset transfer is requested. Holder eligibility needs a configured Community Asset and Monad RPC.</p><div className="rule-row"><span>Communities</span><strong>{passport.communities.length ? passport.communities.join(", ") : "None yet"}</strong></div><button className="text-button" onClick={() => void auth.logout()}>Sign out</button></section>
+         })}</div> : <div className="empty-list"><Gamepad2 size={27} /><strong>No verified scores yet</strong><span>{rankedGame ? "Finish a Passport Play run to add your first one." : "Your verified scores will appear when Passport Play opens."}</span></div>}{rankedGame && <ActionLink href={playHref(rankedGame.id, "ranked")}>Try Passport Play</ActionLink>}</section>
+        <section className="passport-wallet"><h2>Wallets & communities</h2><div className="rule-row"><span>Arcade wallet</span><strong>{auth.demoRole ? "Demo identity · no wallet" : passport.arcadeWallet ? shortAddress(passport.arcadeWallet) : walletSync?.ready === false ? "Wallet sync unavailable" : "Waiting for Privy wallet"}</strong></div>{!auth.demoRole && !passport.arcadeWallet && <>{walletSync?.ready === false && <p role="status">{walletSync.reason}</p>}{!auth.hasEmbeddedWallet && <button className="text-button" disabled={creatingArcadeWallet} onClick={() => void createArcadeWallet()}>{creatingArcadeWallet ? "Creating arcade wallet…" : "Create arcade wallet"}</button>}<button className="text-button" onClick={() => setPassportLoad((value) => value + 1)}>Refresh wallet</button></>}<div className="rule-row"><span>Ownership wallets</span><strong>{passport.ownershipWallets.length}</strong></div>{passport.ownershipWallets.map((address) => <div className="linked-wallet" key={address}><code>{shortAddress(address)}</code><button disabled={walletBusy} onClick={() => void unlinkWallet(address)}>Unlink</button></div>)}<button className="wallet-link-button" disabled={walletBusy} onClick={() => void linkWallet()}>{walletBusy ? "Waiting for wallet…" : "Link ownership wallet"}<ArrowUpRight size={16} /></button><p>Sign a message to associate an external wallet. No asset transfer is requested. Holder eligibility needs a configured Community Asset and Monad RPC.</p><div className="rule-row"><span>Communities</span><strong>{passport.communities.length ? passport.communities.join(", ") : "None yet"}</strong></div><button className="text-button" onClick={() => void auth.logout()}>Sign out</button></section>
       </div>}
     </>}
+  </main>;
+}
+
+function FounderAccountSetup({ id }: { id: string | null }) {
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "unavailable">("idle");
+  useEffect(() => setCopyStatus("idle"), [id]);
+  if (!id?.startsWith("did:privy:")) return null;
+  const copyId = async () => {
+    try { await navigator.clipboard.writeText(id); setCopyStatus("copied"); }
+    catch { setCopyStatus("unavailable"); }
+  };
+  return <details className="demo-account-setup">
+    <summary>Founder account setup</summary>
+    <p>Confirm this is the founder account before granting curator access. If this is the burner test account, sign out and use the founder account.</p>
+    <span>Current signed-in Privy account ID</span>
+    <div><code>{id}</code><button type="button" onClick={() => void copyId()}>{copyStatus === "copied" ? "Copied" : "Copy ID"}</button></div>
+    <p className="demo-account-copy-status" role="status">{copyStatus === "unavailable" ? "Copy is unavailable here. Select the account ID above to copy it." : "This ID identifies the account for local setup. It is not a wallet key or secret."}</p>
+  </details>;
+}
+
+function FounderDemo({ records, health, loading, registryError, refresh }: { records: GameRecord[]; health: Health | null; loading: boolean; registryError: string; refresh: () => void }) {
+  const auth = useArcadeAuth();
+  const token = useRef(auth.getToken); token.current = auth.getToken;
+  const [adminGames, setAdminGames] = useState<GameRecord[] | null>(null);
+  const [adminAccess, setAdminAccess] = useState<"checking" | "ready" | "denied" | "unavailable">("checking");
+  const [passport, setPassport] = useState<Passport | null>(null);
+  const [passportError, setPassportError] = useState("");
+  const [loadedIdentity, setLoadedIdentity] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("game"));
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    if (!auth.ready || !auth.authenticated) { setAdminGames(null); setAdminAccess("checking"); setPassport(null); setPassportError(""); setLoadedIdentity(null); return; }
+    let active = true;
+    setAdminAccess("checking");
+    void Promise.allSettled([
+      api<PassportResponse>("/api/me", token.current),
+      api<GamesResponse>("/api/admin/games", token.current),
+    ]).then(([passportResult, adminResult]) => {
+      if (!active) return;
+      setLoadedIdentity(auth.identityKey);
+      if (passportResult.status === "fulfilled") { setPassport(passportResult.value.passport); setPassportError(""); }
+      else { setPassport(null); setPassportError(messageFor(passportResult.reason)); }
+      if (adminResult.status === "fulfilled") { setAdminGames(adminResult.value.games); setAdminAccess("ready"); }
+      else { setAdminGames(null); setAdminAccess(adminResult.reason instanceof ApiError && adminResult.reason.status === 403 ? "denied" : "unavailable"); }
+    });
+    return () => { active = false; };
+  }, [auth.ready, auth.identityKey, reload]);
+
+  const dataCurrent = auth.authenticated && loadedIdentity === auth.identityKey;
+  const visiblePassport = dataCurrent ? passport : null;
+  const visibleAdminAccess = dataCurrent ? adminAccess : "checking";
+  const choices = (dataCurrent && adminGames ? adminGames : records).filter((record) => record.manifest.id !== "arcade-warmup");
+  const selected = choices.find((record) => record.manifest.id === selectedId)
+    ?? choices.find((record) => record.minicoin)
+    ?? choices.find((record) => record.manifest.id === "emonad-cabinet")
+    ?? choices[0];
+  const arcadeGame = selected ? getGame(selected.manifest.id, records) : undefined;
+  const realSignIn = auth.authenticated && !auth.demoRole;
+  const curatorSignIn = realSignIn && visibleAdminAccess === "ready";
+  const cabinetSupportsPassportPlay = Boolean(arcadeGame?.playable && selected?.manifest.supportedModes.includes("ranked"));
+  const canPassportPlay = realSignIn && cabinetSupportsPassportPlay;
+  const objective = selected?.manifest.supportedObjectives[0] ?? "score";
+  const score = selected ? visiblePassport?.bestScores[`${selected.manifest.id}:${objective}`] : undefined;
+  const hasScore = realSignIn && typeof score === "number";
+  const rehearsalReady = Boolean(health?.settlement.minicoin?.rehearsalReady);
+  const selectedEconomyPending = selected?.economy?.status !== "enabled" || selected?.communityConcept?.verification === "unverified";
+  const curatorHref = selected ? `/admin-tools?game=${encodeURIComponent(selected.manifest.id)}` : "/admin-tools";
+  return <main className="page-width demo-page">
+    <div className="page-intro demo-intro"><div className="intro-icon"><Sparkles size={30} /></div><span className="section-kicker">FOUNDER REHEARSAL / LIVE STATE</span><h1>Show the whole loop.</h1><p>Sign in, record a local experimental token association, play its Cabinet, and show a server-verified score. Each step reads the current arcade state.</p><button className="text-button" type="button" onClick={() => { refresh(); setReload((value) => value + 1); }}>Refresh evidence</button></div>
+    {registryError && <ErrorNote error={registryError} />}
+    <section className="demo-cabinet-picker" aria-label="Choose a demo cabinet">
+      <div><span className="section-kicker">DEMO CABINET</span><h2>{selected?.manifest.name ?? (loading ? "Loading cabinets…" : "No cabinet available")}</h2><p>{selected ? `${selected.manifest.id} · ${selected.status} · ${selected.community?.name ?? selected.communityConcept?.name ?? "No Community Asset reference"}` : "Published cabinets appear here after the Registry loads."}</p></div>
+      {choices.length > 1 && <label>Choose cabinet<select value={selected?.manifest.id ?? ""} onChange={(event) => setSelectedId(event.target.value)}>{choices.map((record) => <option key={record.manifest.id} value={record.manifest.id}>{record.manifest.name}{record.minicoin ? " · token recorded" : ""}</option>)}</select></label>}
+    </section>
+    <section className="demo-run-of-show" aria-label="Suggested live demo order">
+      <div className="demo-run-of-show-heading"><span className="section-kicker">SUGGESTED LIVE ORDER</span><h2>One published game, two account roles.</h2></div>
+      <ol>
+        <li><strong>Guest:</strong> open this Cabinet in Free Play. No sign-in is needed. {selected?.status === "published" && arcadeGame?.playable && <Link href={playHref(selected.manifest.id)}>Play Free <ArrowUpRight size={14} /></Link>}</li>
+        <li><strong>Test player (optional):</strong> sign in, play Passport Play, show the score, then sign out.</li>
+        <li><strong>Founder curator:</strong> sign in with the allowlisted Privy account and record the local MiniCoin token association below.</li>
+        <li><strong>Founder curator:</strong> play the same Cabinet in Passport Play, then show the accepted score in Passport and on the Cabinet board.</li>
+      </ol>
+      <details><summary>Showing a new game build too?</summary><p>That is a separate flow in <Link href="/launch">Launch Console <ArrowUpRight size={14} /></Link>: the creator submits a playable versioned game build, the curator reviews and approves it, then the same creator deploys the Cabinet. The curator handles any MiniCoin association after the Cabinet is published.</p></details>
+    </section>
+    <div className="demo-steps">
+      <section className={`demo-step ${curatorSignIn ? "is-complete" : ""}`}>
+        <span className="demo-step-number">01</span><div className="demo-step-body"><div className="demo-step-top"><span className="section-kicker">IDENTITY</span><StatusBadge tone={curatorSignIn ? "good" : "wait"}>{curatorSignIn ? "Curator access confirmed" : realSignIn && visibleAdminAccess === "denied" ? "Player account · curator access needed" : realSignIn && visibleAdminAccess === "unavailable" ? "Curator check unavailable" : realSignIn ? "Checking curator access" : auth.demoRole ? "Local demo identity" : "Waiting for Privy"}</StatusBadge></div><h2>Founder uses a curator account</h2><p>{curatorSignIn ? `${visiblePassport?.displayName ?? "Privy player"} is signed in with curator access${visiblePassport?.arcadeWallet ? ` and arcade wallet ${shortAddress(visiblePassport.arcadeWallet)}` : ""}.` : realSignIn && visibleAdminAccess === "denied" ? `${visiblePassport?.displayName ?? "A test/player account"} is signed in as a player. Curator access is needed to complete the founder sign-in step.` : realSignIn ? "A Privy player is signed in. Curator access has not been confirmed for this account." : auth.demoRole ? "A local demo identity is active. Sign in with the founder’s Privy curator account for this step." : "Sign in with the founder’s Privy curator account to rehearse token association and play."}</p><div className="demo-actions">{realSignIn ? <><ActionLink href="/passport" tone="light">Open this Passport</ActionLink><button className="action action-light" type="button" onClick={() => void auth.logout().catch((reason) => setPassportError(messageFor(reason)))}>Sign out to switch accounts</button></> : auth.configured ? <button className="action action-lime" type="button" onClick={auth.login}>Sign in with Privy <ArrowUpRight size={18} /></button> : <p>Privy sign-in needs configuration before this step can run.</p>}</div><FounderAccountSetup id={realSignIn && visibleAdminAccess === "denied" ? auth.identityKey : null} />{dataCurrent && passportError && <ErrorNote error={passportError} />}</div>
+      </section>
+      <section className={`demo-step ${selected?.minicoin ? "is-complete" : ""}`}>
+        <span className="demo-step-number">02</span><div className="demo-step-body"><div className="demo-step-top"><span className="section-kicker">TOKEN ASSOCIATION</span><StatusBadge tone={selected?.minicoin ? "good" : "wait"}>{selected?.minicoin ? "Factory record confirmed" : "Pending"}</StatusBadge></div><h2>Record a MiniCoin rehearsal</h2>{selected?.minicoin ? <MinicoinEvidence record={selected} playable={false} /> : <><p>{selected?.economy?.reason ?? "No token association is recorded for this Cabinet yet."}</p><p>{selectedEconomyPending ? "The full economy is pending. The local token rehearsal is a separate, experimental proof of the Cabinet association." : "A reviewed economy configuration is needed before a live deployment."}</p>{visibleAdminAccess === "denied" ? <p className="demo-readiness">This Privy account needs curator access to perform the token rehearsal.</p> : visibleAdminAccess === "unavailable" ? <p className="demo-readiness">Curator access could not be checked. Refresh after the API is available.</p> : visibleAdminAccess === "checking" && auth.authenticated ? <p className="demo-readiness">Checking curator access…</p> : null}{selectedEconomyPending && !rehearsalReady && <p className="demo-readiness">Local-chain rehearsal is not configured yet; the deploy control stays unavailable.</p>}{selected && visibleAdminAccess === "ready" && <ActionLink href={curatorHref} tone="light">{rehearsalReady && selectedEconomyPending ? "Open rehearsal form" : "View curator configuration"}</ActionLink>}</>}</div>
+      </section>
+      <section className="demo-step">
+        <span className="demo-step-number">03</span><div className="demo-step-body"><div className="demo-step-top"><span className="section-kicker">GAMEPLAY</span><StatusBadge tone={canPassportPlay ? "good" : "wait"}>{canPassportPlay ? "Passport Play ready" : cabinetSupportsPassportPlay ? "Sign in to play" : "Awaiting published verifier"}</StatusBadge></div><h2>Play the associated game</h2><p>{selected?.minicoin ? `This is the same Cabinet ID recorded in the token association: ${selected.manifest.id}.` : "The Cabinet can be played before its optional MiniCoin exists; the association will stay tied to this Cabinet ID."}</p>{canPassportPlay && selected ? <ActionLink href={playHref(selected.manifest.id, "ranked")}>Start Passport Play</ActionLink> : cabinetSupportsPassportPlay && auth.configured ? <button className="action action-lime" type="button" onClick={auth.login}>Sign in for Passport Play <ArrowUpRight size={18} /></button> : arcadeGame?.playable && selected ? <ActionLink href={playHref(selected.manifest.id)} tone="light">Play Free</ActionLink> : <p>Publish a playable Cabinet with a reviewed score verifier to demonstrate a Passport Play run.</p>}</div>
+      </section>
+      <section className={`demo-step ${hasScore ? "is-complete" : ""}`}>
+        <span className="demo-step-number">04</span><div className="demo-step-body"><div className="demo-step-top"><span className="section-kicker">SERVER-VERIFIED RESULT</span><StatusBadge tone={hasScore ? "good" : "wait"}>{hasScore ? "Accepted score recorded" : "Awaiting a run"}</StatusBadge></div><h2>Show the signed-in player’s score</h2>{hasScore && selected ? <p className="demo-score">{metricText(score, objective)} <small>{objective.replaceAll("_", " ")} · {selected.manifest.name} · {visiblePassport?.displayName ?? "signed-in player"}</small></p> : <p>{realSignIn ? "No accepted Passport Play score for this Cabinet and signed-in player yet. Complete a run, then refresh this page." : "Sign in with Privy and complete a Passport Play run to show a verified score for that player."}</p>}<div className="demo-actions"><ActionLink href="/passport" tone="light">Open Passport</ActionLink>{selected?.status === "published" && <ActionLink href={gameHref(selected.manifest.id)} tone="light">See cabinet board</ActionLink>}</div></div>
+      </section>
+    </div>
+    <section className="demo-explainer"><span className="section-kicker">WHAT THE DEMO PROVES</span><h2>Cabinet, MiniCoin, Community Asset</h2><div className="demo-definitions"><div><strong>Cabinet</strong><p>The published game identity. Runs and leaderboards stay attached to its game ID.</p></div><div><strong>MiniCoin</strong><p>An optional game-specific token. A local rehearsal proves the token-to-Cabinet factory record, not an operating economy.</p></div><div><strong>Community Asset</strong><p>An existing token or collection associated with the game. A reference stays unverified until its chain, address, and ownership rules are approved.</p></div></div><p className="minicoin-protocol-note">The full MiniCoin economy still needs an approved pool and hook, seeded liquidity, LP custody, strategy wiring, and funded rewards. No gameplay score mints MiniCoins.</p></section>
   </main>;
 }
 
@@ -481,6 +624,18 @@ function GameConfigEditor({ game, health, onSaved, onClose }: { game: AdminGame;
   const [minicoin, setMinicoin] = useState({ name: `${game.manifest.name} Minicoin`, symbol: "", metadataURI: "", initialSupply: "" });
   const [minicoinAcknowledged, setMinicoinAcknowledged] = useState(false);
   const [reconcileHash, setReconcileHash] = useState("");
+  const economyPending = (game.legacyImportRevision && game.economy?.status !== "enabled") || game.communityConcept?.verification === "unverified" || (game.economy && game.economy.status !== "enabled");
+  const rehearsalReady = Boolean(economyPending && health?.settlement.minicoin?.rehearsalReady);
+  const rehearsalReconcileReady = Boolean(economyPending && health?.settlement.minicoin?.rehearsalReconcileReady);
+  useEffect(() => {
+    if (!rehearsalReady || game.manifest.id !== "emonad-cabinet") return;
+    setMinicoin((current) => current.symbol || current.metadataURI || current.initialSupply ? current : {
+      name: "eMONAD Rehearsal Coin",
+      symbol: "EMDEMO",
+      metadataURI: "http://127.0.0.1:5173/minicoin-rehearsal/emonad.json",
+      initialSupply: "1000000000000000000",
+    });
+  }, [rehearsalReady, game.manifest.id]);
   const toggleMode = (mode: GameManifest["supportedModes"][number]) => setManifest((prior) => ({ ...prior, supportedModes: prior.supportedModes.includes(mode) ? prior.supportedModes.filter((item) => item !== mode) : [...prior.supportedModes, mode] }));
   const toggleObjective = (objective: GameManifest["supportedObjectives"][number]) => setManifest((prior) => ({ ...prior, supportedObjectives: prior.supportedObjectives.includes(objective) ? prior.supportedObjectives.filter((item) => item !== objective) : [...prior.supportedObjectives, objective] }));
   const setPrimaryObjective = (objective: GameManifest["supportedObjectives"][number]) => setManifest((prior) => ({ ...prior, supportedObjectives: [objective, ...prior.supportedObjectives.filter((item) => item !== objective)] }));
@@ -502,26 +657,26 @@ function GameConfigEditor({ game, health, onSaved, onClose }: { game: AdminGame;
   };
   const reconcileMinicoin = async (event: FormEvent) => {
     event.preventDefault();
-    if (!health?.settlement.minicoin?.reconcileReady) return;
+    if (!(economyPending ? rehearsalReconcileReady : health?.settlement.minicoin?.reconcileReady)) return;
     setSaving(true); setError(""); setDetails([]); setNotice("");
     try {
-      const response = await api<{ game: GameRecord; minicoin: NonNullable<GameRecord["minicoin"]> }>(`/api/admin/games/${encodeURIComponent(game.manifest.id)}/minicoin/reconcile`, auth.getToken, {
+      const response = await api<{ game: GameRecord; minicoin: NonNullable<GameRecord["minicoin"]> }>(`/api/admin/games/${encodeURIComponent(game.manifest.id)}/minicoin/${economyPending ? "rehearse/reconcile" : "reconcile"}`, auth.getToken, {
         method: "POST", body: { transactionHash: reconcileHash.trim() },
       });
-      setNotice(`Confirmed and associated ${response.minicoin.symbol} with ${response.game.manifest.name}.`);
+      setNotice(`${economyPending ? "Local-chain rehearsal confirmed" : "Confirmed"} and associated ${response.minicoin.symbol} with ${response.game.manifest.name}.`);
       await onSaved();
     } catch (reason) { setError(messageFor(reason)); if (reason instanceof ApiError) setDetails(reason.details); }
     finally { setSaving(false); }
   };
-  const deployMinicoin = async (event: FormEvent) => {
+  const deployMinicoin = async (event: FormEvent, rehearsal = false) => {
     event.preventDefault();
-    if (!health?.settlement.minicoin?.ready || !minicoinAcknowledged) return;
+    if (!(rehearsal ? rehearsalReady : health?.settlement.minicoin?.ready) || !minicoinAcknowledged) return;
     setSaving(true); setError(""); setDetails([]); setNotice("");
     try {
-      const response = await api<{ game: GameRecord; minicoin: NonNullable<GameRecord["minicoin"]> }>(`/api/admin/games/${encodeURIComponent(game.manifest.id)}/minicoin`, auth.getToken, {
+      const response = await api<{ game: GameRecord; minicoin: NonNullable<GameRecord["minicoin"]> }>(`/api/admin/games/${encodeURIComponent(game.manifest.id)}/minicoin${rehearsal ? "/rehearse" : ""}`, auth.getToken, {
         method: "POST", body: { name: minicoin.name.trim(), symbol: minicoin.symbol.trim(), metadataURI: minicoin.metadataURI.trim(), initialSupply: minicoin.initialSupply.trim() },
       });
-      setNotice(`${response.minicoin.symbol} deployed and associated with ${response.game.manifest.name}. Transaction: ${response.minicoin.deploymentTx}`);
+      setNotice(`${response.minicoin.symbol} ${rehearsal ? "deployed on the local test chain" : "deployed"} and associated with ${response.game.manifest.name}. Transaction: ${response.minicoin.deploymentTx}`);
       await onSaved();
     } catch (reason) {
       setError(messageFor(reason));
@@ -539,9 +694,9 @@ function GameConfigEditor({ game, health, onSaved, onClose }: { game: AdminGame;
       <div className="form-row"><label>Version<input value={manifest.version} onChange={(event) => setManifest({ ...manifest, version: event.target.value })} required /></label><label>Adapter ID<input value={manifest.adapterId} onChange={(event) => setManifest({ ...manifest, adapterId: event.target.value })} required /></label></div>
       <label>Description<textarea value={manifest.description} onChange={(event) => setManifest({ ...manifest, description: event.target.value })} required /></label>
       <div className="form-row"><label>Developer<input value={manifest.developer} onChange={(event) => setManifest({ ...manifest, developer: event.target.value })} required /></label><label>Artwork URL<input value={manifest.artwork ?? ""} onChange={(event) => setManifest({ ...manifest, artwork: event.target.value || undefined })} placeholder="/art/game.png" /></label></div>
-      <fieldset className="check-field"><legend>Supported modes</legend>{(["free", "ranked", "raid"] as const).map((mode) => <label key={mode}><input type="checkbox" checked={manifest.supportedModes.includes(mode)} onChange={() => toggleMode(mode)} />{mode === "free" ? "Free Play" : mode === "ranked" ? "Ranked Run" : "Community Raid"}</label>)}</fieldset>
+      <fieldset className="check-field"><legend>Supported modes</legend>{(["free", "ranked", "raid"] as const).map((mode) => <label key={mode}><input type="checkbox" checked={manifest.supportedModes.includes(mode)} onChange={() => toggleMode(mode)} />{mode === "free" ? "Free Play" : mode === "ranked" ? "Passport Play" : "Community Raid"}</label>)}</fieldset>
       <fieldset className="check-field"><legend>Competitive objectives</legend>{objectiveOptions.map((objective) => <label key={objective}><input type="checkbox" checked={manifest.supportedObjectives.includes(objective)} onChange={() => toggleObjective(objective)} />{objective.replaceAll("_", " ")}</label>)}</fieldset>
-      <label>Ranked Run primary objective <span>The first objective in the manifest determines the Ranked Run metric. Raids choose their own objective.</span><select required value={manifest.supportedObjectives[0] ?? ""} onChange={(event) => setPrimaryObjective(event.target.value as GameManifest["supportedObjectives"][number])}><option value="" disabled>Select an objective above</option>{manifest.supportedObjectives.map((objective) => <option key={objective} value={objective}>{objective.replaceAll("_", " ")}</option>)}</select></label>
+      <label>Passport Play primary objective <span>The first objective in the manifest determines the Passport Play metric. Raids choose their own objective.</span><select required value={manifest.supportedObjectives[0] ?? ""} onChange={(event) => setPrimaryObjective(event.target.value as GameManifest["supportedObjectives"][number])}><option value="" disabled>Select an objective above</option>{manifest.supportedObjectives.map((objective) => <option key={objective} value={objective}>{objective.replaceAll("_", " ")}</option>)}</select></label>
       <fieldset className="check-field"><legend>Optional systems</legend><label><input type="checkbox" checked={manifest.communityOptional} onChange={(event) => setManifest({ ...manifest, communityOptional: event.target.checked })} />Community Asset optional</label><label><input type="checkbox" checked={manifest.minicoinOptional} onChange={(event) => setManifest({ ...manifest, minicoinOptional: event.target.checked })} />Minicoin optional</label></fieldset>
       {game.minicoin ? <div className="setup-note"><LockKeyhole size={18} /><span>Community Asset and Strategy are locked after this game’s Minicoin is associated.</span></div> : <>
         <fieldset className="check-field"><legend>Community Asset</legend><label><input type="checkbox" checked={hasCommunity} onChange={(event) => setHasCommunity(event.target.checked)} />Associate an asset</label></fieldset>
@@ -551,25 +706,27 @@ function GameConfigEditor({ game, health, onSaved, onClose }: { game: AdminGame;
     </form>}
     <div className="minicoin-config">
       <h3>Experimental Minicoin</h3>
-      {game.minicoin ? <p className="minicoin-association">Associated on chain {game.minicoin.chainId}: <strong>{game.minicoin.symbol}</strong> at <code>{game.minicoin.address}</code>. Transaction <code>{game.minicoin.deploymentTx}</code>.</p> : game.manifest.id === "arcade-warmup" ? <p>The internal test cartridge cannot deploy a Minicoin.</p> : (game.economy && game.economy.status !== "enabled") || game.communityConcept?.verification === "unverified" ? <p>{game.economy?.reason ?? "Economy awaits protocol and asset verification."}</p> : <>
-        <p>Deploy a game-specific token and associate it with this game through the verified factory. This action sends an irreversible onchain transaction.</p>
-        {!health?.settlement.minicoin?.ready && <div className="setup-note"><ShieldCheck size={18} /><span>{health?.settlement.minicoin?.reason ?? "Minicoin deployment is disabled until the onchain configuration and explicit write flag are ready."}</span></div>}
-        <form className="console-form" onSubmit={deployMinicoin}>
+      {game.minicoin ? <><p className="console-hint">Full MiniCoin economy: {game.economy?.status ?? "pending"}. {game.economy?.reason}</p><MinicoinEvidence record={game} playable={game.status === "published" && hasClientCartridge(game.manifest.id, game.manifest.adapterId, game.manifest)} /></> : game.manifest.id === "arcade-warmup" ? <p>The internal test cartridge cannot deploy a Minicoin.</p> : <>
+        {economyPending ? <p>Full MiniCoin economy pending: {game.economy?.reason ?? "Community Asset and strategy await protocol verification."} A local-chain token rehearsal can record a separate experimental association without enabling the economy.</p> : <p>Deploy a game-specific token and associate it with this game through the verified factory. This action sends an irreversible onchain transaction.</p>}
+        {!economyPending && !health?.settlement.minicoin?.ready && <div className="setup-note"><ShieldCheck size={18} /><span>{health?.settlement.minicoin?.reason ?? "Minicoin deployment is disabled until the onchain configuration and explicit write flag are ready."}</span></div>}
+        {economyPending && !rehearsalReady && <div className="setup-note"><ShieldCheck size={18} /><span>Local-chain token rehearsal is not configured for this cabinet. The full economy remains pending.</span></div>}
+        {rehearsalReady && game.manifest.id === "emonad-cabinet" && <div className="setup-note"><ShieldCheck size={18} /><span>Local test values are prefilled. The metadata link works only on this computer while the rehearsal runs. These are not final token settings.</span></div>}
+        {(rehearsalReady || !economyPending) && <form className="console-form" onSubmit={(event) => void deployMinicoin(event, Boolean(economyPending))}>
           <div className="form-row"><label>Token name<input value={minicoin.name} onChange={(event) => setMinicoin({ ...minicoin, name: event.target.value })} maxLength={80} required /></label><label>Symbol<input value={minicoin.symbol} onChange={(event) => setMinicoin({ ...minicoin, symbol: event.target.value })} placeholder="GAME" maxLength={20} required /></label></div>
           <label>Metadata URI<input value={minicoin.metadataURI} onChange={(event) => setMinicoin({ ...minicoin, metadataURI: event.target.value })} placeholder="ipfs://… or https://…" required /></label>
           <label>Initial supply <span>Raw 18-decimal base units; 1 token is 1000000000000000000 units.</span><input inputMode="numeric" pattern="[1-9][0-9]*" value={minicoin.initialSupply} onChange={(event) => setMinicoin({ ...minicoin, initialSupply: event.target.value })} placeholder="1000000000000000000" required /></label>
-          <label className="minicoin-ack"><input type="checkbox" checked={minicoinAcknowledged} onChange={(event) => setMinicoinAcknowledged(event.target.checked)} required /> I understand this deploys a token onchain and cannot be undone.</label>
-          <button type="submit" className="action action-ink" disabled={saving || !health?.settlement.minicoin?.ready || !minicoinAcknowledged}>{saving ? "Deploying…" : "Deploy and associate"}<ArrowUpRight size={17} /></button>
-        </form>
-        <div className="minicoin-reconcile">
+          <label className="minicoin-ack"><input type="checkbox" checked={minicoinAcknowledged} onChange={(event) => setMinicoinAcknowledged(event.target.checked)} required /> I understand this {economyPending ? "sends a token transaction to a local test chain and does not activate the MiniCoin economy" : "deploys a token onchain and cannot be undone"}.</label>
+          <button type="submit" className="action action-ink" disabled={saving || !(economyPending ? rehearsalReady : health?.settlement.minicoin?.ready) || !minicoinAcknowledged}>{saving ? "Deploying…" : economyPending ? "Rehearse token association" : "Deploy and associate"}<ArrowUpRight size={17} /></button>
+        </form>}
+        {(!economyPending || rehearsalReconcileReady) && <div className="minicoin-reconcile">
           <h4>Recover an existing deployment</h4>
           <p>Paste the transaction hash if a deployment was sent but the arcade did not record it. This checks the existing receipt and never sends a new transaction.</p>
           <form className="console-form" onSubmit={reconcileMinicoin}>
             <label>Deployment transaction hash<input value={reconcileHash} onChange={(event) => setReconcileHash(event.target.value)} pattern="0x[a-fA-F0-9]{64}" placeholder="0x…" required /></label>
-            <button type="submit" className="action action-light" disabled={saving || !health?.settlement.minicoin?.reconcileReady}>{saving ? "Checking…" : "Check existing transaction"}<ArrowUpRight size={17} /></button>
+            <button type="submit" className="action action-light" disabled={saving || !(economyPending ? rehearsalReconcileReady : health?.settlement.minicoin?.reconcileReady)}>{saving ? "Checking…" : "Check existing transaction"}<ArrowUpRight size={17} /></button>
           </form>
-          {!health?.settlement.minicoin?.reconcileReady && <p>Receipt checking needs the configured chain RPC and factory address.</p>}
-        </div>
+          {!economyPending && !health?.settlement.minicoin?.reconcileReady && <p>Receipt checking needs the configured chain RPC and factory address.</p>}
+        </div>}
       </>}
     </div>
   </section>;
@@ -578,7 +735,7 @@ function GameConfigEditor({ game, health, onSaved, onClose }: { game: AdminGame;
 function LaunchConsole({ health, refresh }: { health: Health | null; refresh: () => void }) {
   const auth = useArcadeAuth();
   const [games, setGames] = useState<AdminGame[]>([]);
-  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("game"));
   const [error, setError] = useState("");
   const [details, setDetails] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
@@ -600,7 +757,7 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     if (selectedGameId) document.getElementById("game-config-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [selectedGameId]);
+  }, [selectedGameId, games]);
   const pauseGame = async (id: string) => {
     setLoading(true); setError(""); setDetails([]); setNotice("");
     try { const response = await api<GameResponse>(`/api/admin/games/${encodeURIComponent(id)}`, auth.getToken, { method: "PATCH", body: { status: "paused" } }); setNotice(`${response.game.manifest.name} paused.`); await load(); refresh(); }
@@ -621,7 +778,7 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
   };
   const selectedGame = games.find((game) => game.manifest.id === selectedGameId);
   return <main className="page-width launch-page">
-    <div className="page-intro"><div className="intro-icon"><Settings2 size={30} /></div><span className="section-kicker">CURATOR ACCESS</span><h1>Arcade operations</h1><p>Manage published cabinets, community configuration and free raids.</p><Link href="/launch" className="action action-light">Creator submissions and review</Link></div>
+    <div className="page-intro"><div className="intro-icon"><Settings2 size={30} /></div><span className="section-kicker">CURATOR ACCESS</span><h1>Arcade operations</h1><p>Manage published cabinets, community configuration and free raids.</p><Link href="/launch" className="action action-light">Creator submissions and review</Link><Link href="/demo" className="guide-context-link">Open founder demo flow <ArrowUpRight size={15} /></Link></div>
     {!auth.authenticated ? <AccountPrompt health={health} /> : !authorized ? <ErrorNote error={error || "Checking your admin access…"} /> : <>
       {notice && <div className="success-note" role="status"><BadgeCheck size={19} />{notice}</div>}
       {error && <ErrorNote error={error} details={details} />}
@@ -682,6 +839,16 @@ function GuideHub() {
       </Link>)}
     </div>
     <p className="guide-footnote"><CircleHelp size={18} /> Each published cabinet has its own scores, community, and optional economy.</p>
+    <section className="guide-reference" aria-label="FAQ and definitions">
+      <details className="guide-dropdown">
+        <summary><span>FAQ<small>A few things you might be wondering.</small></span><ChevronDown size={24} aria-hidden="true" /></summary>
+        <div className="guide-dropdown-content">{guideFaq.map((item) => <article key={item.question}><h3>{item.question}</h3><p>{item.answer}</p></article>)}</div>
+      </details>
+      <details className="guide-dropdown">
+        <summary><span>Definitions<small>The arcade’s vocabulary, in plain English.</small></span><ChevronDown size={24} aria-hidden="true" /></summary>
+        <dl className="guide-dropdown-content">{guideDefinitions.map((item) => <div key={item.term}><dt>{item.term}</dt><dd>{item.definition}</dd></div>)}</dl>
+      </details>
+    </section>
   </main>;
 }
 
@@ -751,7 +918,7 @@ export function App() {
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
   let page: ReactNode;
-  if (path === "/") page = <Home records={records} raids={raids} loading={loading} health={health} />;
+  if (path === "/") page = <Home records={records} raids={raids} loading={loading} health={health} registryError={registryError} refresh={refresh} />;
   else if (path === "/guide") page = <GuideHub />;
   else if (path.startsWith("/guide/")) {
     const topic = getGuideTopic(path.slice(7));
@@ -764,6 +931,7 @@ export function App() {
   else if (path === "/raids") page = <RaidIndex raids={raids} />;
   else if (path.startsWith("/raids/")) page = <RaidDetail key={path} id={decodeURIComponent(path.slice(7))} records={records} />;
   else if (path === "/passport") page = <PassportPage health={health} records={records} />;
+  else if (path === "/demo") page = <FounderDemo records={records} health={health} loading={loading} registryError={registryError} refresh={refresh} />;
   else if (path === "/launch") page = <CreatorPortal health={health} refresh={refresh} />;
   else if (path === "/admin-tools") page = <LaunchConsole health={health} refresh={refresh} />;
   else page = <NotFound />;
