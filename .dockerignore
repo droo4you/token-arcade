@@ -9,3 +9,4 @@ dist
 contracts/.data
 contracts/deployments/local-*.json
 .git
+indexer

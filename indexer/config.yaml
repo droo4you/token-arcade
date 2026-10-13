@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+# Token Arcade economy indexer (Monad testnet 10143).
+# Addresses come from env (see .env.example / `npm run addresses`, which reads
+# ../contracts/deployments/monad-testnet.json). Placeholders (0x…01..05) index nothing.
+name: token-arcade-indexer
+description: Token Arcade MiniCoin economy + raid vaults on Monad
+field_selection:
+  transaction_fields:
+    - hash
+    - from
+contracts:
+  - name: EconomyRaidVault
+    abi_file_path: ./abis/EconomyRaidVault.json
+    events:
+      - event: ConfigUpdated
+      - event: RaidOpened
+      - event: RaidSettled
+      - event: PrizeClaimed
+      - event: RaidCancelled
+      - event: RaidTimedOut
+      - event: PrizeExpired
+  - name: CommunityNftRaidVault
+    abi_file_path: ./abis/CommunityNftRaidVault.json
+    events:
+      - event: TemplateSet
+      - event: RaidOpened
+      - event: Awarded
+      - event: Claimed
+      - event: RefundAvailable
+      - event: Refunded
+  - name: EconomyManager
+    abi_file_path: ./abis/EconomyManager.json
+    events:
+      - event: PoolConfigured
+      - event: Distributed
+  - name: FeeAccumulator
+    abi_file_path: ./abis/FeeAccumulator.json
+    events:
+      - event: HookSet
+      - event: Redeemed
+  - name: MiniCoinHook
+    abi_file_path: ./abis/MiniCoinHook.json
+    events:
+      - event: FeeCaptured
+      - event: FeeCollected
+chains:
+  - id: 10143
+    start_block: ${ENVIO_START_BLOCK:-0}
+    contracts:
+      - name: EconomyRaidVault
+        address: "${ENVIO_RAID_VAULT:-0x0000000000000000000000000000000000000001}"
+      - name: CommunityNftRaidVault
+        address: "${ENVIO_NFT_RAID_VAULT:-0x0000000000000000000000000000000000000002}"
+      - name: EconomyManager
+        address: "${ENVIO_ECONOMY_MANAGER:-0x0000000000000000000000000000000000000003}"
+      - name: FeeAccumulator
+        address: "${ENVIO_FEE_ACCUMULATOR:-0x0000000000000000000000000000000000000004}"
+      - name: MiniCoinHook
+        address: "${ENVIO_MINICOIN_HOOK:-0x0000000000000000000000000000000000000005}"

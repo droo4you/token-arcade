@@ -1,0 +1,2 @@
+{ "compilerOptions": { "target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext", "strict": true, "noImplicitAny": false, "skipLibCheck": true, "noEmit": true, "types": ["node"] },
+  "include": ["src", "envio-env.d.ts", ".envio/types.d.ts"] }

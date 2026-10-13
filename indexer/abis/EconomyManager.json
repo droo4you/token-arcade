@@ -1,0 +1,139 @@
+[
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "poolId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "total",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "prize",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "community",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "treasury",
+    "type": "uint256"
+   }
+  ],
+  "name": "Distributed",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "feeSource",
+    "type": "address"
+   }
+  ],
+  "name": "FeeSourceSet",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferStarted",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferred",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "poolId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "prizeVault",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "communityRecipient",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "address",
+    "name": "treasuryRecipient",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint16",
+    "name": "prizeBps",
+    "type": "uint16"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint16",
+    "name": "communityBps",
+    "type": "uint16"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint16",
+    "name": "treasuryBps",
+    "type": "uint16"
+   }
+  ],
+  "name": "PoolConfigured",
+  "type": "event"
+ }
+]

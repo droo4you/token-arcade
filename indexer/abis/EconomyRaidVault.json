@@ -1,0 +1,275 @@
+[
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "threshold",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "maxPrize",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint16",
+    "name": "prizeBps",
+    "type": "uint16"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint64",
+    "name": "cooldown",
+    "type": "uint64"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint64",
+    "name": "duration",
+    "type": "uint64"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint64",
+    "name": "settlementTimeout",
+    "type": "uint64"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint64",
+    "name": "claimWindow",
+    "type": "uint64"
+   },
+   {
+    "indexed": false,
+    "internalType": "bytes32",
+    "name": "rulesHash",
+    "type": "bytes32"
+   }
+  ],
+  "name": "ConfigUpdated",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferStarted",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferred",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "raidId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "winner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "to",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "amount",
+    "type": "uint256"
+   }
+  ],
+  "name": "PrizeClaimed",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "raidId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "returnedToFree",
+    "type": "uint256"
+   }
+  ],
+  "name": "PrizeExpired",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "raidId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "returnedToFree",
+    "type": "uint256"
+   }
+  ],
+  "name": "RaidCancelled",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "raidId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "gameId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "minicoin",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "prize",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "startsAt",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "endsAt",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "settleBy",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "bytes32",
+    "name": "rulesHash",
+    "type": "bytes32"
+   }
+  ],
+  "name": "RaidOpened",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "raidId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "winner",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "prize",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "bytes32",
+    "name": "resultHash",
+    "type": "bytes32"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "claimDeadline",
+    "type": "uint256"
+   }
+  ],
+  "name": "RaidSettled",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "raidId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "returnedToFree",
+    "type": "uint256"
+   }
+  ],
+  "name": "RaidTimedOut",
+  "type": "event"
+ }
+]

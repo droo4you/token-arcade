@@ -1,0 +1,214 @@
+[
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "raidId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "winner",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "bytes32",
+    "name": "resultHash",
+    "type": "bytes32"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "claimDeadline",
+    "type": "uint256"
+   }
+  ],
+  "name": "Awarded",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "raidId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "to",
+    "type": "address"
+   }
+  ],
+  "name": "Claimed",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferStarted",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "previousOwner",
+    "type": "address"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "newOwner",
+    "type": "address"
+   }
+  ],
+  "name": "OwnershipTransferred",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "raidId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "gameId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "depositor",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "address",
+    "name": "collection",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "tokenId",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "startsAt",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint256",
+    "name": "endsAt",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "bytes32",
+    "name": "rulesHash",
+    "type": "bytes32"
+   }
+  ],
+  "name": "RaidOpened",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "raidId",
+    "type": "bytes32"
+   }
+  ],
+  "name": "RefundAvailable",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "raidId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "to",
+    "type": "address"
+   }
+  ],
+  "name": "Refunded",
+  "type": "event"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "gameId",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "collection",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "address",
+    "name": "signer",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "bytes32",
+    "name": "rulesHash",
+    "type": "bytes32"
+   },
+   {
+    "indexed": false,
+    "internalType": "bool",
+    "name": "enabled",
+    "type": "bool"
+   }
+  ],
+  "name": "TemplateSet",
+  "type": "event"
+ }
+]
