@@ -43,5 +43,7 @@ export function createCartridgeServer() {
 }
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.env.CARTRIDGE_PORT || 8788);
-  createCartridgeServer().listen(port, '127.0.0.1', () => console.log(`Cartridges: http://127.0.0.1:${port}`));
+  // CARTRIDGE_HOST=0.0.0.0 is for container hosting only (cartridge origin has no auth surface).
+  const host = process.env.CARTRIDGE_HOST || '127.0.0.1';
+  createCartridgeServer().listen(port, host, () => console.log(`Cartridges: http://${host}:${port}`));
 }
