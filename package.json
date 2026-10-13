@@ -10,6 +10,7 @@
     "dev": "node scripts/dev.mjs",
     "dev:web": "vite --host 127.0.0.1",
     "dev:api": "node --env-file-if-exists=.env --experimental-sqlite --experimental-strip-types apps/api/src/server.ts",
+    "rehearse:minicoin": "node --env-file-if-exists=.env --experimental-sqlite scripts/local-minicoin-rehearsal.mjs",
     "build": "npm run build:cartridges && tsc --noEmit && vite build",
     "setup:cartridges": "npm ci --prefix cartridges/coindle",
     "build:cartridges": "vite build --config cartridges/coindle/arcade.vite.config.ts",
