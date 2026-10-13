@@ -7,7 +7,10 @@
     "compile": "node scripts/compile.cjs",
     "artifacts": "node scripts/compile.cjs --artifacts",
     "test": "node --test --experimental-test-isolation=none",
-    "deploy": "node scripts/deploy.cjs"
+    "deploy": "node scripts/deploy.cjs",
+    "deploy:economy:testnet": "node scripts/deploy-economy-testnet.cjs",
+    "raid:testnet": "node scripts/raid-loop-testnet.cjs",
+    "rehearse:economy": "node scripts/rehearse-economy-local.cjs"
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.6.1",
