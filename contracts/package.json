@@ -6,11 +6,13 @@
   "scripts": {
     "compile": "node scripts/compile.cjs",
     "artifacts": "node scripts/compile.cjs --artifacts",
-    "test": "node test/contracts.test.cjs",
+    "test": "node --test --experimental-test-isolation=none",
     "deploy": "node scripts/deploy.cjs"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "5.6.1"
+    "@openzeppelin/contracts": "5.6.1",
+    "@uniswap/v4-core": "1.0.2",
+    "solmate": "6.8.0"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "3.1.3",
