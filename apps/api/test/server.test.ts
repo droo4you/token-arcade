@@ -464,7 +464,7 @@ test("legacy import migration preserves cabinet state and history and only runs 
     migrated.acceptResult({ config, playerId: passport.playerId }, resultFor(config, 123), (current) => current);
     migrated.close(); migrated = new ArcadeStore(filename, false);
     const repaired = migrated.getGame("emonad-cabinet")!;
-    assert.equal(repaired.manifest.name, "eMONAD cabinet");
+    assert.equal(repaired.manifest.name, "Uppers");
     assert.deepEqual(repaired.manifest.supportedModes, ["free", "ranked", "raid"]);
     assert.equal(repaired.status, "paused");
     assert.equal(repaired.communityStrategy, "retained-strategy");

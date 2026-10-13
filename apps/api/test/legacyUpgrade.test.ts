@@ -25,3 +25,14 @@ test("existing Skip to 10K legacy import gains Passport Play on restart, keeping
     store.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("untouched emonad-cabinet legacy import is renamed to Uppers, id unchanged", async () => {
+  const file = join(mkdtempSync(join(tmpdir(), "uppers-")), "a.sqlite");
+  let store = new ArcadeStore(file, false);
+  const prior = store.getGame("emonad-cabinet")!;
+  store.saveGame({ ...prior, manifest: { ...prior.manifest, name: "eMONAD cabinet" }, legacyImportRevision: 2 });
+  store.close(); store = new ArcadeStore(file, false);
+  const g = store.getGame("emonad-cabinet")!;
+  assert.equal(g.manifest.id, "emonad-cabinet"); assert.equal(g.manifest.name, "Uppers"); assert.equal(g.legacyImportRevision, 3);
+  store.close();
+});
