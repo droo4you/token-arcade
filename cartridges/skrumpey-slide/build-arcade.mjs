@@ -15,9 +15,11 @@ replace('function ac(){', 'function ac(){if(arcadePaused||arcadeDestroyed)return
 replace('loadBuddies();', "const buddiesReady=loadBuddies(); buddiesReady.catch(error=>hosted&&TA.error(error.message));");
 replace(".classList.add('sel');loadChar(selected);", ".classList.add('sel');const characterReady=loadChar(selected); characterReady.catch(error=>hosted&&TA.error(error.message));");
 replace('function start(m){ac();', "function start(m){if(hosted){if(!TA.active||arcadePaused||arcadeDestroyed||!TA.beginRun())return;m='free';}ac();");
+// Passport Play (ranked/raid): play the server-issued seed; the server replays the input log with sim.js.
+replace("const seed=params.get('seed')?", "const seed=hosted&&TA.config.mode!=='free'?SIM.dailySeed(String(TA.config.seed)):params.get('seed')?");
 replace("if(mode==='ranked'){const all=lb();", "if(!hosted&&mode==='ranked'){const all=lb();");
 replace("$('oBoard').innerHTML=board;$('over').classList.remove('hid');}", `$('oBoard').innerHTML=board;$('over').classList.remove('hid');
- if(hosted) TA.complete({result:'completed',primaryMetric:r.score,durationMs:Math.round(r.endTick*SIM.DT*1000),secondaryMetrics:{distance:r.distance,bestCombo:r.bestCombo,perfects:r.perfects,collectibles:r.gems,kills:r.kills,hits:r.hits,falls:r.falls,rescued:r.rescued,trainBest:r.trainBest,ticks:r.endTick}});
+ if(hosted) TA.complete({result:'completed',primaryMetric:r.score,durationMs:Math.round(r.endTick*SIM.DT*1000),secondaryMetrics:{distance:r.distance,bestCombo:r.bestCombo,perfects:r.perfects,collectibles:r.gems,kills:r.kills,hits:r.hits,falls:r.falls,rescued:r.rescued,trainBest:r.trainBest,ticks:r.endTick},...(TA.config.mode!=='free'?{proof:{v:1,seed:r.seed,input:r.replay}}:{})});
 }`);
 replace('function frame(t){requestAnimationFrame(frame);', 'function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame);if(arcadePaused){last=t;acc=0;return;}');
 replace('requestAnimationFrame(t=>{last=t;frame(t);});', 'frameId=requestAnimationFrame(t=>{last=t;frame(t);});');
@@ -28,7 +30,7 @@ if(hosted){
   $('bRanked').disabled=true;
   TA.register({version:'1.0.0',capabilities:{touch:true},
     async mount(config){
-      if(config.mode!=='free')throw new Error('Skrumpey Slide competitive verification is not installed yet.');
+      if(config.mode!=='free'&&!config.seed)throw new Error('Passport Play needs a server-issued seed.');
       muted=Boolean(config.muted ?? true);
       await Promise.all([buddiesReady,characterReady]);
     },
@@ -42,4 +44,4 @@ if(hosted){
 }
 </script></body></html>`);
 writeFileSync(new URL('arcade.html', root), html);
-console.log('Built Skrumpey Slide Free Play cartridge from unchanged standalone source.');
+console.log('Built Skrumpey Slide cartridge (Free Play + Passport Play replay proof) from unchanged standalone source.');

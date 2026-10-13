@@ -582,7 +582,7 @@ $('jumpBtn').addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDef
 let annDummy=0,lastJH='';let state='menu',mode='free',acc=0,last=0,popT=0,bannerT=0,shake=0,curBiome=-1,trailT=0;
 const _d=new Date(),today=`${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
 function newWorld(seed){S=SIM.create(seed);W=S.W;worldSeed=seed;sling.position.y=W.h(-2)-0.3;clearChunks();for(const [,m] of entMeshes)disposeGroup(m);entMeshes.clear();curBiome=-1;}
-function start(m){if(hosted){if(!TA.active||arcadePaused||arcadeDestroyed||!TA.beginRun())return;m='free';}ac();try{if(!localStorage.getItem('skr_hint')){localStorage.setItem('skr_hint','1');setTimeout(()=>say('HOLD TO DIVE · LET GO TO FLY','#ffffff',2,2.2),1800);}}catch{}mode=m;const seed=params.get('seed')?+params.get('seed'):m==='ranked'?SIM.dailySeed(today):(Math.random()*2**32)>>>0;
+function start(m){if(hosted){if(!TA.active||arcadePaused||arcadeDestroyed||!TA.beginRun())return;m='free';}ac();try{if(!localStorage.getItem('skr_hint')){localStorage.setItem('skr_hint','1');setTimeout(()=>say('HOLD TO DIVE · LET GO TO FLY','#ffffff',2,2.2),1800);}}catch{}mode=m;const seed=hosted&&TA.config.mode!=='free'?SIM.dailySeed(String(TA.config.seed)):params.get('seed')?+params.get('seed'):m==='ranked'?SIM.dailySeed(today):(Math.random()*2**32)>>>0;
  newWorld(seed);state='play';held=false;$('menu').classList.add('hid');$('over').classList.add('hid');$('hud').classList.remove('hid');$('sunbar').classList.remove('hid');document.body.classList.add('playing');}
 $('bCopy').onclick=()=>{const t=$('shareTxt');t.select();(navigator.clipboard?navigator.clipboard.writeText(t.value):Promise.reject()).then(()=>$('bCopy').textContent='Copied!').catch(()=>{try{document.execCommand('copy');$('bCopy').textContent='Copied!';}catch{}});};
 $('bFree').onclick=()=>start('free');$('bRanked').onclick=()=>start('ranked');$('bAgain').onclick=()=>start(mode);
@@ -630,7 +630,7 @@ function end(){state='over';AQ.length=0;aCur=null;{const a=$('announce');a.style
   board='<table>'+all[today].map((e,i)=>`<tr><td>${i+1}</td><td>#${e.c}</td><td>${e.s}</td><td>${e.d} m</td></tr>`).join('')+'</table>';
   submitScoreStub(r);$('oStub').textContent='Local leaderboard for '+today+' · online submit is a STUB (not sent anywhere)';}
  $('oBoard').innerHTML=board;$('over').classList.remove('hid');
- if(hosted) TA.complete({result:'completed',primaryMetric:r.score,durationMs:Math.round(r.endTick*SIM.DT*1000),secondaryMetrics:{distance:r.distance,bestCombo:r.bestCombo,perfects:r.perfects,collectibles:r.gems,kills:r.kills,hits:r.hits,falls:r.falls,rescued:r.rescued,trainBest:r.trainBest,ticks:r.endTick}});
+ if(hosted) TA.complete({result:'completed',primaryMetric:r.score,durationMs:Math.round(r.endTick*SIM.DT*1000),secondaryMetrics:{distance:r.distance,bestCombo:r.bestCombo,perfects:r.perfects,collectibles:r.gems,kills:r.kills,hits:r.hits,falls:r.falls,rescued:r.rescued,trainBest:r.trainBest,ticks:r.endTick},...(TA.config.mode!=='free'?{proof:{v:1,seed:r.seed,input:r.replay}}:{})});
 }
 function handleEvents(ev){for(const e of ev){
  if(e.t==='land'){const big=Math.min(1,e.sp/40);emit(e.x,e.y+0.2,1,8+big*14,biomeBlend(e.x,'top').getHex(),6+big*6,0.5,0.6,-14);
@@ -761,7 +761,7 @@ if(hosted){
   $('bRanked').disabled=true;
   TA.register({version:'1.0.0',capabilities:{touch:true},
     async mount(config){
-      if(config.mode!=='free')throw new Error('Skrumpey Slide competitive verification is not installed yet.');
+      if(config.mode!=='free'&&!config.seed)throw new Error('Passport Play needs a server-issued seed.');
       muted=Boolean(config.muted ?? true);
       await Promise.all([buddiesReady,characterReady]);
     },
