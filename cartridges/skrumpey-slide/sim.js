@@ -51,6 +51,10 @@ function makeWorld(seed){
     chunks.push({x0,x1:L().x,kind,biome:b});lastBiome=b;chunkN++;
     // resolve entity heights (y relative to ground where not set)
     for(const e of ents)if(e._res!==true&&e.x<=L().x){const g=evalH(e.x);if(e.laneGem)e.y=g+1.2;else if(e.type!=='gem')e.y=e.arc!==undefined?e.arc:(g<=PIT+1?evalH(e.x+30):g)+(e.air||0);e.y0=e.y;e._res=true;}
+    // Templates emit by type, but collision, bot and rendering scans stop at
+    // the first distant entity. Keep spatial order after every generated chunk.
+    // x0 is stable even when walkers move around their spawn point.
+    ents.sort((a,b)=>a.x0-b.x0);
   }
   function seg(x){let lo=0,hi=pts.length-2;while(lo<hi){const m=(lo+hi+1)>>1;if(pts[m].x<=x)lo=m;else hi=m-1;}return lo;}
   function evalH(x){if(x<pts[0].x)return pts[0].y;if(x>=L().x)return L().y;const i=seg(x),a=pts[i],b=pts[i+1];if(a.gap)return PIT;

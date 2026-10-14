@@ -4,6 +4,8 @@ Checkpoint: 2026-10-13. Private GitHub backup: `droo4you/token-arcade`.
 
 ## Latest release work (supersedes the original checkpoint below)
 
+Follow-up phone pickup report: reproduced a real simulation bug with seed 1, buddy at x=253. Chunk templates append entities by type, while scans stop at the first distant entity; distant spikes prevented the nearby buddy from being checked. Each generated chunk now sorts entities by stable spawn x0. Ten focused pickup/input/replay tests pass. This changes simulation outcomes: deploy cartridge and API verifier together, and start fresh runs after rollout (the verifier loads sim.js at process start). LAN preview at http://192.168.86.22:8796/skrumpey-slide/v/1.0.0/ serves the fix immediately on reload. Production remains unchanged.
+
 Phone QA reported landscape failure, portrait framing too close, no Dive button, and lane swipes conflicting with Jump. The follow-up fixes add independent pointer ownership, a visible Dive control outside runner sections, swipe/tap separation, portrait camera framing, and compact landscape menus. Standalone source and generated arcade adapter are updated together; simulation rules are unchanged. Eight focused touch/replay tests and TypeScript pass. Local browser previews at 390x844 and 844x390 show controls and menus within the viewport, including rotation during play. This is not a physical-phone pass: mobile approval remains unchecked until the updated artifact is deployed and retested.
 
 PR #1 is the release review: https://github.com/droo4you/token-arcade/pull/1. Production branch pushes require the pending explicit user approval after automatic approval review rejected the earlier push. Do not infer that the phone bug report grants production deployment approval.
