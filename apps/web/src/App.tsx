@@ -103,6 +103,17 @@ function ErrorNote({ error, details }: { error: string; details?: string[] }) {
 
 function Header({ health }: { health: Health | null }) {
   const auth = useArcadeAuth();
+  const token = useRef(auth.getToken); token.current = auth.getToken;
+  const [profile, setProfile] = useState<{ identity: string | null; name: string } | null>(null);
+  useEffect(() => {
+    if (!auth.authenticated) { setProfile(null); return; }
+    const controller = new AbortController();
+    const refresh = () => { void api<PassportResponse>("/api/me", token.current, { signal: controller.signal }).then(({ passport }) => setProfile({ identity: auth.identityKey, name: passport.displayName })).catch(() => {}); };
+    refresh();
+    window.addEventListener("arcade:profile-updated", refresh);
+    window.addEventListener("focus", refresh);
+    return () => { controller.abort(); window.removeEventListener("arcade:profile-updated", refresh); window.removeEventListener("focus", refresh); };
+  }, [auth.authenticated, auth.identityKey]);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => setMenuOpen(false), [useRoute()]);
   return <header className="site-header">
@@ -117,7 +128,7 @@ function Header({ health }: { health: Health | null }) {
         <Link href="/launch" className="nav-link nav-launch">Launch Console</Link>
       </nav>
       <div className="header-actions">
-        {!auth.ready ? <span className="passport-chip"><UserRound size={17} /><span>Checking account…</span></span> : auth.authenticated ? <Link href="/passport" className="passport-chip"><UserRound size={17} /><span>{auth.identityLabel}</span></Link> : <button className="passport-chip" onClick={() => navigate("/passport")}><UserRound size={17} /><span>Guest</span></button>}
+        {!auth.ready ? <span className="passport-chip"><UserRound size={17} /><span>Checking account…</span></span> : auth.authenticated ? <Link href="/passport" className="passport-chip"><UserRound size={17} /><span>{profile?.identity === auth.identityKey ? profile.name : "My Passport"}</span></Link> : <button className="passport-chip" onClick={() => navigate("/passport")}><UserRound size={17} /><span>Guest</span></button>}
         {health?.auth.localDemo && <span className="dev-dot" title="Local demo identities are available">demo available</span>}
         <button className="menu-button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={22} /> : <Menu size={22} />}</button>
       </div>
@@ -439,6 +450,7 @@ function PassportPage({ health, records }: { health: Health | null; records: Gam
     event.preventDefault(); setSaving(true); setError("");
     try {
       const response = await api<PassportResponse>("/api/me", auth.getToken, { method: "PATCH", body: { displayName: displayName.trim(), avatarUrl: avatarUrl.trim() } });
+      window.dispatchEvent(new Event("arcade:profile-updated"));
       setPassport(response.passport); setEditing(false);
     } catch (reason) { setError(messageFor(reason)); }
     finally { setSaving(false); }

@@ -48,6 +48,7 @@ export interface GameRecord {
   manifest: GameManifest;
   status: "draft" | "submitted" | "approved" | "rejected" | "published" | "paused";
   creatorId?: string;
+  submission?: { sourceUrl: string; preparation: "help" | "agent"; requestedModes: GameMode[]; configuredAt?: string; configuredBy?: string };
   submittedAt?: string;
   /** Internal migration marker for the curated initial import only. */
   legacyImportRevision?: number;

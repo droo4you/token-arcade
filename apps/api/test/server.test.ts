@@ -508,3 +508,46 @@ test("eMONAD raids inherit fixed viewport rules and unchanged paused imports can
   assert.equal((await api("/api/admin/games/emonad-cabinet/resume", { method: "POST", auth: "admin" })).body.game.status, "published");
   assert.equal((await api("/api/admin/games/future-cabinet/resume", { method: "POST", auth: "admin" })).body.error.code, "INVALID_STATE");
 });
+
+
+test("source intake requires configuration and review, privately notifies creator, and supports controlled reassignment", async () => {
+  const body = { name: "Source Demo", description: "A source-only submission", developer: "Maker", sourceUrl: "https://github.com/example/private-game", preparation: "agent", requestedModes: ["free", "ranked", "raid"] };
+  assert.equal((await api("/api/creator/submissions", { method: "POST", body })).status, 401);
+  assert.equal((await api("/api/creator/submissions", { method: "POST", auth: "intake-maker", body: { ...body, sourceUrl: "https://secret@example.com/game" } })).status, 400);
+  const submitted = await api("/api/creator/submissions", { method: "POST", auth: "intake-maker", body: { ...body, creatorId: "local-demo:admin", status: "approved" } });
+  assert.equal(submitted.status, 201, JSON.stringify(submitted.body));
+  const id = submitted.body.game.manifest.id;
+  assert.equal(submitted.body.game.creatorId, "local-demo:intake-maker");
+  assert.equal(submitted.body.game.manifest.entry, undefined);
+  assert.deepEqual(submitted.body.game.manifest.supportedModes, ["free"]);
+  await api(`/api/admin/games/${id}/validate`, { method: "POST", auth: "admin", body: technicalReview });
+  assert.equal((await api(`/api/admin/games/${id}/approve`, { method: "POST", auth: "admin" })).status, 409);
+  const manifest = submittedManifest(id);
+  assert.equal((await api(`/api/admin/games/${id}`, { method: "PATCH", auth: "intake-maker", body: { manifest } })).status, 403);
+  const configured = await api(`/api/admin/games/${id}`, { method: "PATCH", auth: "admin", body: { manifest } });
+  assert.equal(configured.status, 200, JSON.stringify(configured.body));
+  assert.ok(configured.body.game.submission.configuredAt);
+  assert.equal(configured.body.game.review, undefined);
+  assert.equal((await api(`/api/creator/submissions/${id}`, { method: "PATCH", auth: "other-maker", body })).status, 404);
+  const revised = await api(`/api/creator/submissions/${id}`, { method: "PATCH", auth: "intake-maker", body });
+  assert.equal(revised.status, 200);
+  assert.equal(revised.body.game.submission.configuredAt, undefined);
+  assert.deepEqual(revised.body.game.manifest.entry, manifest.entry);
+  assert.equal((await api(`/api/admin/games/${id}/approve`, { method: "POST", auth: "admin" })).status, 409);
+  await api(`/api/admin/games/${id}`, { method: "PATCH", auth: "admin", body: { manifest } });
+  await api(`/api/admin/games/${id}/validate`, { method: "POST", auth: "admin", body: technicalReview });
+  assert.equal((await api(`/api/admin/games/${id}/approve`, { method: "POST", auth: "admin" })).status, 200);
+  const inbox = await api("/api/creator/games", { auth: "intake-maker" });
+  assert.equal(inbox.body.games.find((g: any) => g.manifest.id === id).status, "approved");
+  const recipient = await api("/api/me", { auth: "new-owner" });
+  assert.equal((await api("/api/admin/creators", { auth: "intake-maker" })).status, 403);
+  assert.equal((await api(`/api/admin/games/${id}/transfer`, { method: "POST", auth: "intake-maker", body: { playerId: recipient.body.passport.playerId } })).status, 403);
+  assert.equal((await api(`/api/admin/games/${id}/transfer`, { method: "POST", auth: "admin", body: { playerId: recipient.body.passport.playerId } })).status, 200);
+  assert.equal((await api(`/api/creator/games/${id}/deploy`, { method: "POST", auth: "intake-maker" })).status, 404);
+  assert.equal((await api(`/api/creator/games/${id}/deploy`, { method: "POST", auth: "new-owner" })).status, 409);
+  await api(`/api/admin/games/${id}/validate`, { method: "POST", auth: "admin", body: technicalReview });
+  await api(`/api/admin/games/${id}/approve`, { method: "POST", auth: "admin" });
+  assert.equal((await api(`/api/creator/games/${id}/deploy`, { method: "POST", auth: "new-owner" })).status, 200);
+  assert.equal((await api(`/api/games/${id}`)).body.game.submission, undefined);
+  assert.equal((await api("/api/games")).body.games.find((g: any) => g.manifest.id === id).submission, undefined);
+});

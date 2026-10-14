@@ -175,6 +175,17 @@ export class ArcadeStore {
     return row ? JSON.parse(row.json) as Passport : undefined;
   }
 
+  listCreatorAccounts(): { playerId: string; displayName: string }[] {
+    return (this.db.prepare("SELECT json FROM players").all() as JsonRow[]).map(row => {
+      const p = JSON.parse(row.json) as Passport;
+      return { playerId: p.playerId, displayName: p.displayName };
+    });
+  }
+
+  identityForPlayer(playerId: string): string | undefined {
+    return (this.db.prepare("SELECT identity_id FROM players WHERE id = ?").get(playerId) as { identity_id: string } | undefined)?.identity_id;
+  }
+
   savePassport(passport: Passport): void {
     this.db.prepare("UPDATE players SET json = ? WHERE id = ?").run(JSON.stringify(passport), passport.playerId);
   }

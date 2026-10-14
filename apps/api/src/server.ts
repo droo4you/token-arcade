@@ -185,6 +185,7 @@ function validateEconomy(value: unknown): GameRecord["economy"] {
 
 function gameBlockers(game: GameRecord, adapters: AdapterRegistry, allowedOrigins = configuredCartridgeOrigins(), host?: string): string[] {
   const blockers: string[] = [];
+  if (game.submission && !game.submission.configuredAt) blockers.push("Admin must configure the cartridge before technical review and approval");
   const adapter = adapters.get(game.manifest.adapterId);
   if (game.manifest.entry) {
     blockers.push(...artifactBlockers(game, allowedOrigins, host));
@@ -432,12 +433,13 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           cartridge: { installed: store.listGames(true).filter((game) => game.manifest.id !== WARMUP_GAME_ID).map((game) => game.manifest.id), verifierAdapters: adapters.keys() },
         });
       }
-      if (method === "GET" && path === "/api/games") return respond(response, 200, { games: store.listGames(true).filter((game) => game.manifest.id !== WARMUP_GAME_ID) });
+      if (method === "GET" && path === "/api/games") return respond(response, 200, { games: store.listGames(true).filter((game) => game.manifest.id !== WARMUP_GAME_ID).map(({ submission, ...game }) => game) });
       if (method === "GET" && /^\/api\/games\/[^/]+$/.test(path)) {
         const id = decodeURIComponent(path.split("/")[3]);
         const game = store.getGame(id);
         if (!game || game.status !== "published") fail(404, "NOT_FOUND", "Published game not found");
-        return respond(response, 200, { game });
+        const { submission, ...publicGame } = game;
+        return respond(response, 200, { game: publicGame });
       }
       if (method === "GET" && path === "/api/raids") return respond(response, 200, { raids: store.listRaids().filter((raid) => raid.status !== "draft" && raid.gameId !== WARMUP_GAME_ID).map((raid) => currentRaid(raid)) });
       if (method === "GET" && /^\/api\/raids\/[^/]+$/.test(path)) {
@@ -550,6 +552,31 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         return respond(response, 200, { eligible, configured: true });
       }
 
+      if ((method === "POST" && path === "/api/creator/submissions") || (method === "PATCH" && /^\/api\/creator\/submissions\/[^/]+$/.test(path))) {
+        const identity = await auth.authenticate(request);
+        const body = await readJson(request);
+        const previous = method === "PATCH" ? store.getGame(decodeURIComponent(path.split("/")[4])) : undefined;
+        if (method === "PATCH" && (!previous || previous.creatorId !== identity.id)) fail(404, "NOT_FOUND", "Your submission was not found");
+        if (previous?.status === "published") fail(409, "GAME_PUBLISHED", "An admin must pause the game before revision");
+        const name = requiredString(body.name, "name", 80);
+        const sourceUrl = requiredString(body.sourceUrl, "sourceUrl", 2000);
+        let source: URL;
+        try { source = new URL(sourceUrl); } catch { fail(400, "INVALID_SOURCE", "Enter an HTTPS repository or source download link"); }
+        if (source!.protocol !== "https:" || source!.username || source!.password) fail(400, "INVALID_SOURCE", "Use an HTTPS link without embedded credentials");
+        if (body.preparation !== "help" && body.preparation !== "agent") fail(400, "INVALID_INPUT", "Choose help or agent preparation");
+        const requestedModes = body.requestedModes;
+        if (!Array.isArray(requestedModes) || !requestedModes.length || requestedModes.some(m => !["free", "ranked", "raid"].includes(String(m)))) fail(400, "INVALID_INPUT", "Choose supported play modes");
+        const stem = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 45).replace(/-$/g, "") || "game";
+        const id = previous?.manifest.id ?? stem + "-" + randomUUID().slice(0, 8);
+        const now = new Date().toISOString();
+        const game: GameRecord = { manifest: { id, name, description: requiredString(body.description, "description", 2000), developer: requiredString(body.developer, "developer", 100), version: "1.0.0", adapterId: id, skeletonId: id, supportedModes: ["free"], supportedObjectives: ["score"], communityOptional: true, minicoinOptional: true },
+          creatorId: identity.id, status: "submitted", createdAt: now, submittedAt: now,
+          submission: { sourceUrl: source!.href, preparation: body.preparation, requestedModes: [...new Set(["free", ...requestedModes])] as ("free" | "ranked" | "raid")[] },
+          communityConcept: validateConcept(body.communityConcept), economy: { status: "pending", reason: "Optional economy awaits protocol review." } };
+        if (previous) { game.manifest = { ...previous.manifest, name, description: game.manifest.description, developer: game.manifest.developer }; game.createdAt = previous.createdAt; game.community = previous.community; game.communityStrategy = previous.communityStrategy; game.minicoin = previous.minicoin; game.economy = previous.economy; }
+        store.saveGame(game);
+        return respond(response, method === "POST" ? 201 : 200, { game });
+      }
       if (path.startsWith("/api/creator/games")) {
         const identity = await auth.authenticate(request);
         const readiness = (game: GameRecord) => ({ ...game, readiness: { ready: gameBlockers(game, adapters, configuredCartridgeOrigins(), request.headers.host).length === 0, blockers: gameBlockers(game, adapters, configuredCartridgeOrigins(), request.headers.host) } });
@@ -595,6 +622,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
             if (body.economy !== undefined) game.economy = validateEconomy(body.economy);
             const blockers = artifactBlockers(game, configuredCartridgeOrigins(), request.headers.host);
             if (blockers.length) fail(400, "INVALID_ARTIFACT", "Cartridge entry is not supported", blockers);
+            if (game.submission) { delete game.submission.configuredAt; delete game.submission.configuredBy; }
             game.status = "submitted"; game.submittedAt = new Date().toISOString(); delete game.review; store.saveGame(game);
             return respond(response, 200, { game: readiness(game) });
           }
@@ -676,6 +704,16 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const identity = await auth.authenticate(request);
         if (localMinicoinRehearsalRequested && identity.source === "local-demo") fail(403, "FORBIDDEN", "Local demo identities cannot curate the founder rehearsal");
         requireAdmin(identity);
+        if (method === "GET" && path === "/api/admin/creators") return respond(response, 200, { creators: store.listCreatorAccounts() });
+        if (method === "POST" && /^\/api\/admin\/games\/[^/]+\/transfer$/.test(path)) {
+          const game = store.getGame(decodeURIComponent(path.split("/")[4]));
+          if (!game || game.status === "published" || game.minicoin) fail(409, "INVALID_STATE", "Only an unpublished game without a MiniCoin can be reassigned");
+          const body = await readJson(request);
+          const owner = store.identityForPlayer(requiredString(body.playerId, "playerId", 80));
+          if (!owner) fail(404, "NOT_FOUND", "Creator account not found");
+          game.creatorId = owner; game.status = "submitted"; delete game.review;
+          store.saveGame(game); return respond(response, 200, { game });
+        }
         if (method === "GET" && path === "/api/admin/games") {
           return respond(response, 200, { games: store.listGames().map((game) => ({ ...game, readiness: { ready: gameBlockers(game, adapters).length === 0, blockers: gameBlockers(game, adapters) } })) });
         }
@@ -835,6 +873,11 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
             }
             if (body.communityConcept !== undefined) game.communityConcept = validateConcept(body.communityConcept);
             if (body.economy !== undefined) game.economy = validateEconomy(body.economy);
+            if (game.submission && body.manifest !== undefined) {
+              const blockers = artifactBlockers(game, configuredCartridgeOrigins(), request.headers.host);
+              if (!game.manifest.entry || blockers.length) fail(400, "INVALID_ARTIFACT", "Configure an approved, versioned cartridge build", blockers);
+              game.submission.configuredAt = new Date().toISOString(); game.submission.configuredBy = identity.id;
+            }
             delete game.review;
             game.status = game.creatorId ? "submitted" : "draft";
           }

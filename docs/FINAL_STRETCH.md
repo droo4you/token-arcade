@@ -1,3 +1,15 @@
+## Current Codex release update
+
+- Production deploys from `main`; Grok commit `c4865e0` is included.
+- Actual Monad testnet deployment and raid claim are documented in `docs/TESTNET_DEPLOYMENT.md` and `contracts/deployments/monad-testnet.json`.
+- Creator intake accepts an HTTPS repository/source download link and a preparation choice. Source links remain private to the creator and admins. This does not fetch or execute source automatically.
+- Admin Configure cartridge connects a prepared build and verifier. Technical validation and approval are required; the creator then sees an in-app approval notice and Deploy. No email notification is sent.
+- Revisions and owner reassignment clear approval. Reassignment is restricted to unpublished games without a MiniCoin.
+- The header displays the saved Passport name and refreshes after profile edits/account changes.
+- Verification: 74 app tests, TypeScript check, Vite production build. Skrumpey approval/deployment are reserved for the user's recording.
+- Grok owns hosted Envio verification and X graphics. X: @TokenArcadeFun. Envio start block 70821881; verify the claimed raid after sync past 70822798.
+
+The original handoff below is historical.
 # Final stretch (grok/final-stretch) — 2026-10-13
 
 Branch = `codex/backup-integration-20261013` + `codex/minicoin-economy` (clean merge, no conflicts) + the commits below.
@@ -35,3 +47,4 @@ or run `npm start` + two tunnels on droober's machine. Two public origins are re
 set CARTRIDGE_ORIGIN / ARCADE_HOST_ORIGINS / ARCADE_API_ORIGIN, NODE_ENV=production, LOCAL_DEMO_MODE=false.
 VITE_PRIVY_APP_ID must be present at build time; PRIVY_APP_ID/PRIVY_APP_SECRET/ADMIN_PRIVY_IDS at runtime.
 Never expose a LOCAL_DEMO_MODE process publicly (tunnels look like loopback).
+
