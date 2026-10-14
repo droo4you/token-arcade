@@ -4,6 +4,10 @@ Checkpoint: 2026-10-13. Private GitHub backup: `droo4you/token-arcade`.
 
 ## Latest release work (supersedes the original checkpoint below)
 
+Phone QA reported landscape failure, portrait framing too close, no Dive button, and lane swipes conflicting with Jump. The follow-up fixes add independent pointer ownership, a visible Dive control outside runner sections, swipe/tap separation, portrait camera framing, and compact landscape menus. Standalone source and generated arcade adapter are updated together; simulation rules are unchanged. Eight focused touch/replay tests and TypeScript pass. Local browser previews at 390x844 and 844x390 show controls and menus within the viewport, including rotation during play. This is not a physical-phone pass: mobile approval remains unchecked until the updated artifact is deployed and retested.
+
+PR #1 is the release review: https://github.com/droo4you/token-arcade/pull/1. Production branch pushes require the pending explicit user approval after automatic approval review rejected the earlier push. Do not infer that the phone bug report grants production deployment approval.
+
 The nine creator testnet launch files were committed as `23c7c0e`; Grok's final-stretch branch was merged as `e23a8e1`. Avatar removal is repaired. The merged application suite passes 67 tests; the 20 contract tests and new router liquidity-authorization regression pass. Full production build and creator launch local-chain test pass.
 
 Real testnet deployment evidence lives in `contracts/deployments/monad-testnet.json`. This includes all deployment and raid transaction hashes. See `docs/TESTNET_DEPLOYMENT.md` for the human-readable receipt summary and `docs/RELEASE_TASKS.md` for next owners and tasks. Do not repeat the raid loop unless another run is intentional.

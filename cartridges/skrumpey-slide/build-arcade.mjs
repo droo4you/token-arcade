@@ -35,11 +35,11 @@ if(hosted){
       await Promise.all([buddiesReady,characterReady]);
     },
     start(){},
-    pause(){arcadePaused=true;held=false;jumpQueued=false;laneQ=0;swipeX=null;acc=0;AC?.suspend();},
-    resume(){arcadePaused=false;held=false;jumpQueued=false;laneQ=0;acc=0;last=performance.now();if(!muted)AC?.resume();},
+    pause(){arcadePaused=true;resetInput();acc=0;AC?.suspend();},
+    resume(){arcadePaused=false;resetInput();acc=0;last=performance.now();if(!muted)AC?.resume();},
     restart(){start('free');},
     audio(value){muted=value;if(value)AC?.suspend();else if(!arcadePaused)AC?.resume();},
-    destroy(){arcadeDestroyed=true;held=false;cancelAnimationFrame(frameId);clearInterval(musicTimer);AC?.close();draco.dispose();scene.traverse(o=>{o.geometry?.dispose();for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m)continue;for(const v of Object.values(m))if(v?.isTexture)v.dispose();m.dispose();}});renderer.dispose();renderer.forceContextLoss();}
+    destroy(){arcadeDestroyed=true;resetInput();cancelAnimationFrame(frameId);clearInterval(musicTimer);AC?.close();draco.dispose();scene.traverse(o=>{o.geometry?.dispose();for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m)continue;for(const v of Object.values(m))if(v?.isTexture)v.dispose();m.dispose();}});renderer.dispose();renderer.forceContextLoss();}
   });
 }
 </script></body></html>`);

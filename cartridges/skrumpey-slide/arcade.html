@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <link rel="icon" href="data:,"><title>Skrumpey Slide</title>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#111;font-family:system-ui,-apple-system,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;touch-action:none}
@@ -126,6 +126,22 @@ h1{font-size:66px;line-height:66px;letter-spacing:0}
  #calc{grid-template-columns:1fr 1fr}#htpClose{top:8px;right:8px}#htp .wrap{padding-top:48px}#hPowBarW{width:56px}#hMeter{width:40px}#hud{gap:2px 10px}#squadImgs img{width:48px;height:48px}#squad{margin:8px 4px}
  #oStats .big{font-size:32px;line-height:40px}
 }
+/* Responsive controls remain clear of safe areas and the music toggle. */
+#diveBtn,#jumpBtn{position:fixed;bottom:max(14px,env(safe-area-inset-bottom));width:76px;height:76px;border:3px solid var(--ink);border-radius:6px;background:#ffd84ae8;color:var(--ink);font:700 16px 'Silkscreen',monospace;box-shadow:0 4px 0 var(--ink);touch-action:none;display:none;z-index:8}
+#diveBtn{left:max(14px,env(safe-area-inset-left));background:#8fd3ffe8}
+#diveBtn small{font-size:10px}#jumpBtn{right:max(14px,env(safe-area-inset-right))}
+#laneHint{display:none;position:fixed;bottom:max(24px,env(safe-area-inset-bottom));left:max(12px,env(safe-area-inset-left));right:104px;font-size:14px;text-align:center;text-shadow:2px 2px var(--ink);pointer-events:none}
+body.playing #musicBtn{right:calc(max(14px,env(safe-area-inset-right)) + 88px);bottom:max(14px,env(safe-area-inset-bottom))}
+@media (any-pointer:coarse),(max-width:900px){body.playing #diveBtn,body.playing #jumpBtn{display:block}body.playing.in-lane #diveBtn{display:none}body.playing.in-lane #laneHint{display:block}body.playing.in-lane #musicBtn{bottom:104px}}
+.ov{overflow-y:auto;justify-content:safe center;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));touch-action:pan-y}
+.ov>*{flex-shrink:0}
+@media (max-height:500px) and (orientation:landscape){
+ #menu h1{font-size:32px;line-height:34px}#menu .sub,#tagline{font-size:16px;line-height:19px;margin:3px 0!important}
+ #grid{grid-template-columns:repeat(12,minmax(28px,44px));gap:4px;margin:4px 0}#menu .btn{font-size:12px;padding:8px 12px}
+ #hud{font-size:16px;line-height:18px;padding:10px max(12px,env(safe-area-inset-right)) 0 max(12px,env(safe-area-inset-left))}#hScore{font-size:18px}#hTrain,#hPow{font-size:16px}
+ #sunbar{top:0}#launchUI{bottom:100px;font-size:12px;width:44vw}#announce.big{font-size:24px}
+}
+@media (max-width:600px){#launchUI{bottom:112px;font-size:12px}#hud{font-size:16px;line-height:18px}#hScore{font-size:20px}#hTrain,#hPow{font-size:16px}#grid{grid-template-columns:repeat(4,minmax(40px,60px))}}
 </style></head><body>
 <canvas id="c"></canvas>
 <div id="hud" class="hid"><span id="hScore">0</span><span id="hPow" style="display:none"><span id="hPowIcon"></span><span id="hPowName"></span><span id="hPowBarW"><span id="hPowBar" style="display:block"></span></span></span><span id="hNuts"><img id="hNutImg" alt="" style="image-rendering:pixelated"><span id="hNutN">0</span><span id="hMeter"><span id="hMeterFill" style="display:block"></span></span></span><span id="hJump"></span><span id="hTrain"><i class="ico train"></i><b id="hTrainN">0</b><span id="hTrainM"></span></span><span id="hCombo">x1</span><span id="hDist">0 m</span></div>
@@ -161,8 +177,8 @@ h1{font-size:66px;line-height:66px;letter-spacing:0}
 <li><span class="k">←</span><span class="k">→</span> / <span class="k">A</span><span class="k">D</span> = switch lanes in sprints</li>
 <li><span class="k">N</span> = music on/off</li></ul></div>
 <div><p><b>Mobile</b></p><ul>
-<li><b>Touch &amp; hold</b> anywhere = dive</li>
-<li><b>JUMP</b> button (bottom right) = jump</li>
+<li>Hold <b>DIVE</b> or the playfield to dive; release to fly</li>
+<li><b>JUMP</b> (bottom right) = jump. In runner sections, swipe the playfield to change lanes; tap to hop. DIVE is hidden during these sections.</li>
 <li><b>Swipe</b> left/right = switch lanes in sprints</li>
 <li>button = music</li></ul></div></div>
 <p><b>Slingshot:</b> hold to pull back. The power meter swings up and down (one full swing every 1.5 s), so let go near the top. <b>90%+ is a PERFECT launch</b> and gives +8 extra launch speed. If you don't pull, it auto-fires at 30% after 10 s.</p>
@@ -229,8 +245,8 @@ h1{font-size:66px;line-height:66px;letter-spacing:0}
  <h1 id="oTitle">Nightfall</h1><div id="oStats"></div><div id="squad"><div style="font-weight:900">SKRUMPEY SQUAD</div><div id="squadImgs"></div><textarea id="shareTxt" rows="3" readonly></textarea><button class="btn sm" id="bCopy">Copy</button></div><div id="oBoard"></div><div class="stub" id="oStub"></div>
  <div><button class="btn" id="bAgain">Again</button><button class="btn alt" id="bMenu">Menu</button><button class="btn alt" id="bHow2">How to Play</button></div>
 </div>
-<div id="loading"></div><button id="musicBtn" title="Music on/off (N)" aria-label="Music on/off"></button><div id="launchUI" class="hid"><div id="lmTxt">Hold to pull back, let go to launch</div><div id="lmW"><div id="lm"></div><div id="lmSweet"></div></div></div><button id="jumpBtn">JUMP</button>
-<script src="/sdk/hosts.js"></script><script src="/sdk/bridge.js"></script><script src="sim.js"></script>
+<div id="loading"></div><button id="musicBtn" title="Music on/off (N)" aria-label="Music on/off"></button><div id="launchUI" class="hid"><div id="lmTxt">Hold to pull back, let go to launch</div><div id="lmW"><div id="lm"></div><div id="lmSweet"></div></div></div><button id="diveBtn" aria-label="Hold to dive">DIVE<br><small>HOLD</small></button><button id="jumpBtn" aria-label="Jump">JUMP</button><div id="laneHint">SWIPE LEFT / RIGHT · TAP TO HOP</div>
+<script src="touch-input.js"></script><script src="/sdk/hosts.js"></script><script src="/sdk/bridge.js"></script><script src="sim.js"></script>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -282,8 +298,14 @@ const sunL=new THREE.DirectionalLight(0xfff2dd,2.6);sunL.castShadow=true;sunL.sh
 Object.assign(sunL.shadow.camera,{left:-70,right:70,top:50,bottom:-50,near:1,far:260});sunL.shadow.bias=-0.0006;sunL.shadow.normalBias=0.04;sunL.shadow.radius=4;
 scene.add(sunL);scene.add(sunL.target);
 scene.fog=new THREE.Fog(0xcfe9f5,90,380);
-function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}
-addEventListener('resize',resize);resize();
+function resize(){
+ const w=Math.max(1,document.documentElement.clientWidth),h=Math.max(1,document.documentElement.clientHeight);
+ renderer.setSize(w,h,false);camera.aspect=w/h;
+ // Preserve horizontal visibility in portrait without enlarging the character.
+ camera.fov=THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(20))*Math.max(1,1.25/camera.aspect)));
+ camera.updateProjectionMatrix();
+}
+addEventListener('resize',resize);window.visualViewport?.addEventListener('resize',resize);resize();
 
 // ---------- sky dome (gradient), stars, sun disc ----------
 const skyU={top:{value:C('#4fa8ff')},bottom:{value:C('#cdeeff')}};
@@ -567,23 +589,21 @@ for(const ch of CONFIG.characters){const b=document.createElement('button');b.ti
 document.querySelector(`#grid button[data-id="${selected}"]`).classList.add('sel');const characterReady=loadChar(selected); characterReady.catch(error=>hosted&&TA.error(error.message));
 
 // ---------- input ----------
-let laneQ=0,swipeX=null,swiped=false;let held=false,jumpQueued=false,bot=params.get('bot')==='1';
-const down=e=>{ac();if(state==='play'){held=true;e.preventDefault?.();}},up=()=>{held=false;};
-$('c').addEventListener('pointerdown',down);addEventListener('pointerup',up);addEventListener('pointercancel',up);
+let laneQ=0;let held=false,jumpQueued=false,bot=params.get('bot')==='1';
+const touchInput=SkrumpeyTouchInput.create({canvas:$('c'),dive:$('diveBtn'),jump:$('jumpBtn'),eventTarget:window,
+ isPlaying:()=>state==='play',isLane:()=>Boolean(S.inLane),onActivate:()=>ac(),onJump:()=>{jumpQueued=true;},onLane:bits=>{laneQ|=bits;}});
+function resetInput(){held=false;jumpQueued=false;laneQ=0;touchInput.reset();}
+addEventListener('blur',resetInput);document.addEventListener('visibilitychange',()=>{if(document.hidden)resetInput();});
 addEventListener('keydown',e=>{if(state==='play'&&!e.repeat){if(e.code==='ArrowLeft'||e.code==='KeyA')laneQ|=4;if(e.code==='ArrowRight'||e.code==='KeyD')laneQ|=8;}if(e.code==='KeyN')toggleMusic();if(CONFIG.jumpKeys.includes(e.code)){ac();if(!e.repeat&&state==='play')jumpQueued=true;e.preventDefault();}if(e.code==='Space'){ac();held=true;e.preventDefault();}if(e.code==='KeyM')muted=!muted;});addEventListener('keyup',e=>{if(e.code==='Space')held=false;});
 document.addEventListener('click',()=>ac(),{once:true});
-$('c').addEventListener('pointerdown',e=>{swipeX=e.clientX;swiped=false;});
-addEventListener('pointermove',e=>{if(swipeX===null||swiped||state!=='play'||!S.inLane)return;const dx=e.clientX-swipeX;if(Math.abs(dx)>40){laneQ|=dx<0?4:8;swiped=true;held=false;}});
-addEventListener('pointerup',()=>{swipeX=null;});
 $('musicBtn').addEventListener('pointerdown',e=>{e.stopPropagation();toggleMusic();});
-$('jumpBtn').addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();ac();if(state==='play')jumpQueued=true;});
 
 // ---------- game state ----------
 let annDummy=0,lastJH='';let state='menu',mode='free',acc=0,last=0,popT=0,bannerT=0,shake=0,curBiome=-1,trailT=0;
 const _d=new Date(),today=`${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
 function newWorld(seed){S=SIM.create(seed);W=S.W;worldSeed=seed;sling.position.y=W.h(-2)-0.3;clearChunks();for(const [,m] of entMeshes)disposeGroup(m);entMeshes.clear();curBiome=-1;}
 function start(m){if(hosted){if(!TA.active||arcadePaused||arcadeDestroyed||!TA.beginRun())return;m='free';}ac();try{if(!localStorage.getItem('skr_hint')){localStorage.setItem('skr_hint','1');setTimeout(()=>say('HOLD TO DIVE · LET GO TO FLY','#ffffff',2,2.2),1800);}}catch{}mode=m;const seed=hosted&&TA.config.mode!=='free'?SIM.dailySeed(String(TA.config.seed)):params.get('seed')?+params.get('seed'):m==='ranked'?SIM.dailySeed(today):(Math.random()*2**32)>>>0;
- newWorld(seed);state='play';held=false;$('menu').classList.add('hid');$('over').classList.add('hid');$('hud').classList.remove('hid');$('sunbar').classList.remove('hid');document.body.classList.add('playing');}
+ newWorld(seed);state='play';resetInput();$('menu').classList.add('hid');$('over').classList.add('hid');$('hud').classList.remove('hid');$('sunbar').classList.remove('hid');document.body.classList.add('playing');}
 $('bCopy').onclick=()=>{const t=$('shareTxt');t.select();(navigator.clipboard?navigator.clipboard.writeText(t.value):Promise.reject()).then(()=>$('bCopy').textContent='Copied!').catch(()=>{try{document.execCommand('copy');$('bCopy').textContent='Copied!';}catch{}});};
 $('bFree').onclick=()=>start('free');$('bRanked').onclick=()=>start('ranked');$('bAgain').onclick=()=>start(mode);
 // ---------- How to Play ----------
@@ -691,7 +711,7 @@ function updateLaunch(x,y){const L=S.phase==='launch';$('launchUI').classList.to
 function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame);if(arcadePaused){last=t;acc=0;return;}const dtR=Math.min(0.05,(t-last)/1000);last=t;
  const playing=state==='play'||state==='menu';
  if(playing&&window.PAUSED){acc=0;} else if(playing){acc+=dtR*SPEED*(state==='menu'?1:1);let ev=[];
-  while(acc>=SIM.DT&&!S.over){prevX=S.x;prevY=S.y;const inp=(state==='menu'||bot)?SIM.botInput(S):((held?1:0)|(jumpQueued?2:0)|laneQ);jumpQueued=false;laneQ=0;
+  while(acc>=SIM.DT&&!S.over){prevX=S.x;prevY=S.y;const inp=(state==='menu'||bot)?SIM.botInput(S):(((held||touchInput.isHeld())?1:0)|(jumpQueued?2:0)|laneQ);jumpQueued=false;laneQ=0;
    SIM.step(S,inp);if(state==='play')for(const e of S.ev)ev.push(e);acc-=SIM.DT;}
   handleEvents(ev);checkPause(ev);if(S.over){if(state==='play')end();else newWorld(12345+Math.floor(t));}}
  // render interpolation between the last two fixed sim steps (alpha = leftover accumulator)
@@ -704,7 +724,7 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
  const bi=W.biomeAt(x)%4;if(bi!==curBiome&&S.phase!=='launch'){curBiome=bi;if(state==='play')banner(BIO[bi].name);}
  // player
  const ang=S.ground?Math.atan(W.dh(x)):Math.atan2(S.vy,S.vx)*0.7;tilt+=(ang-tilt)*fk;player.position.set(x,y-0.1,2.2+(S.laneZ-2.2)*eLane);player.rotation.z=tilt*(1-eLane);yawG.rotation.y=CONFIG.characterYaw+(Math.PI/2-CONFIG.characterYaw)*eLane;
- const pressing=state==='play'?(bot?(SIM.botInput(S)&1):held):(SIM.botInput(S)&1);squash+=((pressing?0.82:1)-squash)*fk;yawG.scale.set(1/Math.sqrt(squash),squash,1/Math.sqrt(squash));
+ const pressing=state==='play'?(bot?(SIM.botInput(S)&1):(held||touchInput.isHeld())):(SIM.botInput(S)&1);squash+=((pressing?0.82:1)-squash)*fk;yawG.scale.set(1/Math.sqrt(squash),squash,1/Math.sqrt(squash));
  player.visible=!(S.invuln>0&&Math.floor(t/70)%2===0);
  for(const k in overlays)overlays[k].visible=S.power===k&&eLane<0.5;
  const star=S.power==='star',beamP=S.power==='beam';const hue=(t*0.0006)%1;
@@ -746,6 +766,7 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
  sunDisc.material.color.setHSL(0.12,1,0.6+0.25*f);sunDisc.visible=sunGlow.visible=!crystal;
  cloudLayer.position.set(camera.position.x*0.75-450+((t*0.002)%70),camY+40,-160);cloudLayer.visible=night<0.8;
  // HUD
+ document.body.classList.toggle('in-lane',Boolean(S.inLane));
  if(state==='play'){$('hScore').textContent=S.score;$('hCombo').textContent='x'+S.combo;$('hDist').textContent=Math.floor(S.x)+' m';$('hTrainN').textContent=S.train.length;$('hTrainM').textContent='x'+SIM.TM(S).toFixed(1);$('hNutN').textContent=S.gems+' '+COL.plural;$('hMeterFill').style.width=(S.frenzyT>0?100*S.frenzyT/SIM.P.frenzyTicks:100*S.nutMeter/SIM.P.frenzyNeed)+'%';{const jh=S.jumps+'/'+SIM.P.jumpMax;if(jh!==lastJH){lastJH=jh;$('hJump').innerHTML='<i class="ico jump"></i>'+'<i class="pip"></i>'.repeat(S.jumps)+'<i class="pip off"></i>'.repeat(SIM.P.jumpMax-S.jumps);}}$('jumpBtn').classList.toggle('empty',S.jumps<=0);$('sunfill').style.width=(f*100)+'%';
   const hp=$('hPow');if(S.power){hp.style.display='';hp.style.setProperty('--pc',S.power==='star'?'#ffd84a':'#5af0ff');$('hPowIcon').className='ico '+(S.power==='star'?'star':'beam');$('hPowName').textContent=(S.power==='star'?'Star ':'Beam ')+(S.powerT/60).toFixed(1)+'s';
    $('hPowBar').style.width=(100*S.powerT/(S.power==='star'?SIM.P.starTicks:SIM.P.beamTicks))+'%';}else hp.style.display='none';}
@@ -766,11 +787,11 @@ if(hosted){
       await Promise.all([buddiesReady,characterReady]);
     },
     start(){},
-    pause(){arcadePaused=true;held=false;jumpQueued=false;laneQ=0;swipeX=null;acc=0;AC?.suspend();},
-    resume(){arcadePaused=false;held=false;jumpQueued=false;laneQ=0;acc=0;last=performance.now();if(!muted)AC?.resume();},
+    pause(){arcadePaused=true;resetInput();acc=0;AC?.suspend();},
+    resume(){arcadePaused=false;resetInput();acc=0;last=performance.now();if(!muted)AC?.resume();},
     restart(){start('free');},
     audio(value){muted=value;if(value)AC?.suspend();else if(!arcadePaused)AC?.resume();},
-    destroy(){arcadeDestroyed=true;held=false;cancelAnimationFrame(frameId);clearInterval(musicTimer);AC?.close();draco.dispose();scene.traverse(o=>{o.geometry?.dispose();for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m)continue;for(const v of Object.values(m))if(v?.isTexture)v.dispose();m.dispose();}});renderer.dispose();renderer.forceContextLoss();}
+    destroy(){arcadeDestroyed=true;resetInput();cancelAnimationFrame(frameId);clearInterval(musicTimer);AC?.close();draco.dispose();scene.traverse(o=>{o.geometry?.dispose();for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m)continue;for(const v of Object.values(m))if(v?.isTexture)v.dispose();m.dispose();}});renderer.dispose();renderer.forceContextLoss();}
   });
 }
 </script></body></html>
