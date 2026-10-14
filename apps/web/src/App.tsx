@@ -123,8 +123,7 @@ function Header({ health }: { health: Health | null }) {
         <Link href="/" className="nav-link">Arcade</Link>
         <Link href="/raids" className="nav-link">Community raids</Link>
         <Link href="/passport" className="nav-link">Passport</Link>
-        <Link href="/guide" className="nav-link">Take a tour</Link>
-        <Link href="/demo" className="nav-link">Demo flow</Link>
+        <Link href="/guide" className="nav-link">Help & FAQ</Link>
         <Link href="/launch" className="nav-link nav-launch">Launch Console</Link>
       </nav>
       <div className="header-actions">
@@ -137,7 +136,7 @@ function Header({ health }: { health: Health | null }) {
 }
 
 function Footer() {
-  return <footer className="site-footer"><div className="footer-inner"><div className="footer-stamp">T<span>✦</span></div><p>Token Arcade <span>v0 / Metropolis</span><br /><strong>{brandLine}</strong></p><div className="footer-links"><Link href="/">Games</Link><Link href="/raids">Raids</Link><Link href="/passport">Passport</Link><Link href="/guide">Tour</Link></div><span className="footer-small">Built for play. Made for Monad.</span></div></footer>;
+  return <footer className="site-footer"><div className="footer-inner"><div className="footer-stamp">T<span>✦</span></div><p>Token Arcade <span>v0 / Metropolis</span><br /><strong>{brandLine}</strong></p><div className="footer-links"><Link href="/">Games</Link><Link href="/raids">Raids</Link><Link href="/passport">Passport</Link><Link href="/guide">Help & FAQ</Link></div><span className="footer-small">Built for play. Made for Monad.</span></div></footer>;
 }
 
 function GameArt({ game, size = "card" }: { game: ArcadeGame; size?: "card" | "hero" | "detail" }) {
@@ -490,7 +489,7 @@ function PassportPage({ health, records }: { health: Health | null; records: Gam
     finally { setWalletBusy(false); }
   };
   return <main className="page-width passport-page">
-    <div className="page-intro"><div className="intro-icon"><UserRound size={30} /></div><span className="section-kicker">PLAYER PASSPORT</span><h1>Keep the good runs.</h1><p>Your little record of time spent in the arcade.</p><GuideLink topic="passport">How Passport works</GuideLink><Link href="/demo" className="guide-context-link">Follow the founder demo <ArrowUpRight size={15} /></Link></div>
+    <div className="page-intro"><div className="intro-icon"><UserRound size={30} /></div><span className="section-kicker">PLAYER PASSPORT</span><h1>Keep the good runs.</h1><p>Your little record of time spent in the arcade.</p><GuideLink topic="passport">How Passport works</GuideLink></div>
     {!auth.ready ? <div className="loading-slab">Checking your player account…</div> : !auth.authenticated ? <AccountPrompt health={health} /> : <>
       {auth.demoRole && <div className="setup-note"><Settings2 size={19} /><span>Local demo Passport. This test identity is separate from Privy and has no embedded wallet.</span></div>}
       {error && <ErrorNote error={error} />}{walletNotice && <div className="success-note" role="status"><BadgeCheck size={18} />{walletNotice}</div>}
@@ -835,9 +834,19 @@ function NotFound() { return <main className="page-width centered-state"><span c
 function GuideHub() {
   return <main className="page-width guide-page">
     <div className="guide-heading">
-      <div><span className="section-kicker">THE ARCADE FIELD GUIDE</span><h1>Find your way around.</h1><p>Five short walkthroughs. Pick the part you need and come back anytime.</p></div>
+      <div><span className="section-kicker">HELP & FAQ</span><h1>How can we help?</h1><p>Pick a game and play free—no account needed. Sign in with a Passport to save verified scores, or join Community Raids when events are available.</p></div>
       <span className="guide-heading-stamp" aria-hidden="true">?</span>
     </div>
+    <section className="guide-reference" aria-label="FAQ and definitions">
+      <details className="guide-dropdown" open>
+        <summary><span>FAQ<small>Quick answers about playing and submitting games.</small></span><ChevronDown size={24} aria-hidden="true" /></summary>
+        <div className="guide-dropdown-content">{guideFaq.map((item) => <article key={item.question}><h3>{item.question}</h3><p>{item.answer}</p></article>)}</div>
+      </details>
+      <details className="guide-dropdown">
+        <summary><span>Definitions<small>The arcade’s vocabulary, in plain English.</small></span><ChevronDown size={24} aria-hidden="true" /></summary>
+        <dl className="guide-dropdown-content">{guideDefinitions.map((item) => <div key={item.term}><dt>{item.term}</dt><dd>{item.definition}</dd></div>)}</dl>
+      </details>
+    </section>
     <div className="guide-intro-band">
       <div><span className="section-kicker">FIRST VISIT?</span><strong>Start with a quick lap of the arcade.</strong><p>See the shelf, try guest play, and learn what opens later.</p></div>
       <ActionLink href="/guide/arcade" tone="ink">Start the arcade tour</ActionLink>
@@ -851,16 +860,6 @@ function GuideHub() {
       </Link>)}
     </div>
     <p className="guide-footnote"><CircleHelp size={18} /> Each published cabinet has its own scores, community, and optional economy.</p>
-    <section className="guide-reference" aria-label="FAQ and definitions">
-      <details className="guide-dropdown">
-        <summary><span>FAQ<small>A few things you might be wondering.</small></span><ChevronDown size={24} aria-hidden="true" /></summary>
-        <div className="guide-dropdown-content">{guideFaq.map((item) => <article key={item.question}><h3>{item.question}</h3><p>{item.answer}</p></article>)}</div>
-      </details>
-      <details className="guide-dropdown">
-        <summary><span>Definitions<small>The arcade’s vocabulary, in plain English.</small></span><ChevronDown size={24} aria-hidden="true" /></summary>
-        <dl className="guide-dropdown-content">{guideDefinitions.map((item) => <div key={item.term}><dt>{item.term}</dt><dd>{item.definition}</dd></div>)}</dl>
-      </details>
-    </section>
   </main>;
 }
 
@@ -873,7 +872,7 @@ function GuideChapter({ topic }: { topic: GuideTopic }) {
     window.requestAnimationFrame(() => heading.current?.focus());
   };
   return <main className="page-width guide-page guide-chapter">
-    <Link href="/guide" className="back-link"><ArrowLeft size={17} /> All walkthroughs</Link>
+    <Link href="/guide" className="back-link"><ArrowLeft size={17} /> Help & FAQ</Link>
     <div className={`guide-chapter-head guide-card-${topic.theme}`}>
       <span className="section-kicker">THE ARCADE FIELD GUIDE / {topic.eyebrow}</span>
       <h1>{topic.title}</h1><p>{topic.summary}</p>
