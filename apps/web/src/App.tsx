@@ -7,6 +7,7 @@ import { useArcadeAuth } from "./auth";
 import { createClientCartridge, hasClientCartridge } from "./cartridges";
 import { gameHref, getCatalog, getGame, playHref, type ArcadeGame } from "./catalog";
 import { CreatorPortal } from "./CreatorPortal";
+import { shippedSections } from "./shipped";
 import { getGuideTopic, guideTopics, guideFaq, guideDefinitions, type GuideTopic, type GuideTopicId } from "./guideContent";
 
 const brandLine = "The Internet Is Fun.";
@@ -124,6 +125,7 @@ function Header({ health }: { health: Health | null }) {
         <Link href="/raids" className="nav-link">Community raids</Link>
         <Link href="/passport" className="nav-link">Passport</Link>
         <Link href="/guide" className="nav-link">Help & FAQ</Link>
+        <Link href="/shipped" className="nav-link">Shipped</Link>
         <Link href="/launch" className="nav-link nav-launch">Launch Console</Link>
       </nav>
       <div className="header-actions">
@@ -136,7 +138,7 @@ function Header({ health }: { health: Health | null }) {
 }
 
 function Footer() {
-  return <footer className="site-footer"><div className="footer-inner"><div className="footer-stamp">T<span>✦</span></div><p>Token Arcade <span>v0 / Metropolis</span><br /><strong>{brandLine}</strong></p><div className="footer-links"><Link href="/">Games</Link><Link href="/raids">Raids</Link><Link href="/passport">Passport</Link><Link href="/guide">Help & FAQ</Link></div><span className="footer-small">Built for play. Made for Monad.</span></div></footer>;
+  return <footer className="site-footer"><div className="footer-inner"><div className="footer-stamp">T<span>✦</span></div><p>Token Arcade <span>v0 / Metropolis</span><br /><strong>{brandLine}</strong></p><div className="footer-links"><Link href="/">Games</Link><Link href="/raids">Raids</Link><Link href="/passport">Passport</Link><Link href="/guide">Help & FAQ</Link><Link href="/shipped">Shipped</Link></div><span className="footer-small">Built for play. Made for Monad.</span></div></footer>;
 }
 
 function GameArt({ game, size = "card" }: { game: ArcadeGame; size?: "card" | "hero" | "detail" }) {
@@ -903,6 +905,20 @@ function GuideChapter({ topic }: { topic: GuideTopic }) {
 
 function GuideNotFound() { return <main className="page-width centered-state"><CircleHelp size={42} /><h1>That walkthrough isn’t here.</h1><p>Pick a topic from the arcade field guide.</p><ActionLink href="/guide">See all walkthroughs</ActionLink></main>; }
 
+function ShippedPage() {
+  return <main className="page-width shipped-page">
+    <div className="page-intro"><span className="shipped-kicker">Shipped log</span><h1>What’s live, and when.</h1><p>A plain record of what Token Arcade had running at the Monad Metropolis deadline, what we added afterwards, and what comes next.</p>
+      <nav className="shipped-jump" aria-label="Sections">{shippedSections.map((s) => <a key={s.id} href={`#${s.id}`}>{s.kicker}</a>)}</nav></div>
+    {shippedSections.map((section) => <section key={section.id} id={section.id} className={`shipped-section shipped-${section.id}`}>
+      <header><span className="shipped-kicker">{section.kicker}</span><h2>{section.title}</h2><p>{section.intro}</p></header>
+      {section.items.length === 0 ? <p className="shipped-empty">{section.empty}</p> : <ol className="shipped-list">{section.items.map((item) => <li key={item.title} className="shipped-item">
+        <h3>{item.title}</h3><p>{item.detail}</p>{item.when && <small>{item.when}</small>}
+        {item.links && <div className="shipped-links">{item.links.map((l) => l.href.startsWith("/") ? <Link key={l.href} href={l.href}>{l.label}</Link> : <a key={l.href} href={l.href} target="_blank" rel="noreferrer">{l.label}<ArrowUpRight size={13} /></a>)}</div>}
+      </li>)}</ol>}
+    </section>)}
+  </main>;
+}
+
 export function App() {
   const auth = useArcadeAuth();
   const route = useRoute();
@@ -944,6 +960,7 @@ export function App() {
   else if (path === "/passport") page = <PassportPage health={health} records={records} />;
   else if (path === "/demo") page = <FounderDemo records={records} health={health} loading={loading} registryError={registryError} refresh={refresh} />;
   else if (path === "/launch") page = <CreatorPortal health={health} refresh={refresh} />;
+  else if (path === "/shipped") page = <ShippedPage />;
   else if (path === "/admin-tools") page = <LaunchConsole health={health} refresh={refresh} />;
   else page = <NotFound />;
   return <><Header health={health} />{page}<Footer /></>;
