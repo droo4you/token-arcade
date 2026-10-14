@@ -47,7 +47,7 @@ contracts:
       - event: FeeCollected
 chains:
   - id: 10143
-    start_block: ${ENVIO_START_BLOCK:-0}
+    start_block: 70821881
     contracts:
       - name: EconomyRaidVault
         address: "${ENVIO_RAID_VAULT:-0x2e9497F8f8fc1cb4b51ACd35E5E27A21b389af7D}"
