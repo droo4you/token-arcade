@@ -1,5 +1,7 @@
 # yaml-language-server: $schema=./node_modules/envio/evm.schema.json
 # Token Arcade economy indexer (Monad testnet 10143).
+# Defaults below are the Monad testnet deployment in contracts/deployments/monad-testnet.json
+# (economy v0.2.2, deployed 2026-10-13, first block 70821881). NFT raid vault is not deployed yet.
 # Addresses come from env (see .env.example / `npm run addresses`, which reads
 # ../contracts/deployments/monad-testnet.json). Placeholders (0x…01..05) index nothing.
 name: token-arcade-indexer
@@ -48,12 +50,12 @@ chains:
     start_block: ${ENVIO_START_BLOCK:-0}
     contracts:
       - name: EconomyRaidVault
-        address: "${ENVIO_RAID_VAULT:-0x0000000000000000000000000000000000000001}"
+        address: "${ENVIO_RAID_VAULT:-0x2e9497F8f8fc1cb4b51ACd35E5E27A21b389af7D}"
       - name: CommunityNftRaidVault
         address: "${ENVIO_NFT_RAID_VAULT:-0x0000000000000000000000000000000000000002}"
       - name: EconomyManager
-        address: "${ENVIO_ECONOMY_MANAGER:-0x0000000000000000000000000000000000000003}"
+        address: "${ENVIO_ECONOMY_MANAGER:-0x03254f5046482695614E56269c4849D185fCA727}"
       - name: FeeAccumulator
-        address: "${ENVIO_FEE_ACCUMULATOR:-0x0000000000000000000000000000000000000004}"
+        address: "${ENVIO_FEE_ACCUMULATOR:-0x329D2f485625b19CB6b9299011Db4457A4fea276}"
       - name: MiniCoinHook
-        address: "${ENVIO_MINICOIN_HOOK:-0x0000000000000000000000000000000000000005}"
+        address: "${ENVIO_MINICOIN_HOOK:-0xCdE995A2445EBAA8Ded2d00D4D59DdCC35b060cc}"

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createTestIndexer } from "envio";
 
-const VAULT = "0x0000000000000000000000000000000000000001";
+const VAULT = "0x2e9497f8f8fc1cb4b51acd35e5e27a21b389af7d"; // testnet RaidVault (config default)
 const POOL = "0x" + "aa".repeat(32);
 const RAID = "0x" + "bb".repeat(32);
 const WINNER = "0x00000000000000000000000000000000000000Ee";
