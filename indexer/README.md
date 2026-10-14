@@ -45,7 +45,7 @@ Distributed, RaidOpened, RaidSettled, PrizeClaimed all emitted on chain (blocks 
 
 1. Sign in at https://envio.dev/app with GitHub (droo4you) and install the Envio GitHub app on `droo4you/token-arcade` (private repo access).
 2. Add indexer -> repo `droo4you/token-arcade`, root directory `indexer`, config `config.yaml`, deploy branch `main`.
-3. Environment variables: `ENVIO_START_BLOCK=70821881` (required, otherwise it scans from block 0).
+3. The committed config starts at block `70821881`; no `ENVIO_START_BLOCK` environment variable is required.
    Leave `ENVIO_NFT_RAID_VAULT` unset until that vault is deployed. Address vars are optional (defaults are baked in).
 4. Deploy, wait for sync to pass block ~70822798, then open the GraphQL playground and run:
    `query { Raid { id status } Distribution { id } }` (entity names per `schema.graphql`); expect 1 raid, settled/claimed.
