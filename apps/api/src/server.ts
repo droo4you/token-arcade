@@ -492,9 +492,11 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const body = await readJson(request);
           if (Object.keys(body).some((key) => key !== "displayName" && key !== "avatarUrl")) fail(400, "INVALID_INPUT", "Only displayName and avatarUrl can be edited here");
           const displayName = body.displayName === undefined ? passport.displayName : requiredString(body.displayName, "displayName", 32);
-          const avatarUrl = body.avatarUrl === undefined ? passport.avatarUrl : optionalString(body.avatarUrl, "avatarUrl", 2_000);
+          const avatarUrl = body.avatarUrl === undefined ? passport.avatarUrl
+            : body.avatarUrl === null || body.avatarUrl === "" ? undefined : optionalString(body.avatarUrl, "avatarUrl", 2_000);
           if (avatarUrl && !/^https:\/\//.test(avatarUrl)) fail(400, "INVALID_INPUT", "Avatar URL must use HTTPS");
-          passport = { ...passport, displayName, ...(avatarUrl ? { avatarUrl } : {}) };
+          passport = { ...passport, displayName };
+          if (avatarUrl) passport.avatarUrl = avatarUrl; else delete passport.avatarUrl;
           store.savePassport(passport);
         }
         return respond(response, 200, { passport, ...(walletSync ? { walletSync } : {}) });

@@ -60,8 +60,8 @@ function poolIdOf(key) {
     ["tuple(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks)"], [key]));
 }
 async function connect() {
-  const rpc = process.env.RPC_URL || process.env.MONAD_RPC_URL;
-  const pk = process.env.PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY;
+  const rpc = process.env.RPC_URL || process.env.TESTNET_RPC_URL || process.env.MONAD_RPC_URL;
+  const pk = process.env.PRIVATE_KEY || process.env.TESTNET_DEPLOYER_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY;
   if (!rpc || !pk) throw new Error("Set RPC_URL (or MONAD_RPC_URL) and PRIVATE_KEY (or DEPLOYER_PRIVATE_KEY).");
   if (!/^0x[0-9a-fA-F]{64}$/.test(pk)) throw new Error("PRIVATE_KEY must be a 0x-prefixed 32-byte hex key.");
   const provider = new ethers.JsonRpcProvider(rpc);

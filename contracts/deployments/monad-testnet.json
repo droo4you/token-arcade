@@ -1,0 +1,211 @@
+{
+  "gameId": "skrumpey-slide",
+  "chainId": "10143",
+  "deployer": "0x115ab9287A60718Be04585a3226b223476897d51",
+  "status": "complete",
+  "updatedAt": "2026-10-14T00:20:53.872Z",
+  "external": {
+    "poolManager": "0x451D64ab3b650040d2aE1886602b97ed6eDc643d",
+    "wmon": "0xFb8bf4c1CC7a94c73D209a149eA2AbEa852BC541",
+    "source": "Monad-maintained v4 testnet infra: github.com/monad-developers/uniswap-v4-hooks-example@c3cc78a shared-infrastructure.json"
+  },
+  "contracts": {
+    "miniCoin": "0x85043f5C86Fe1CC5a0dFECf8803Ba2d7C7406760",
+    "economyManager": "0x03254f5046482695614E56269c4849D185fCA727",
+    "feeAccumulator": "0x329D2f485625b19CB6b9299011Db4457A4fea276",
+    "raidVault": "0x2e9497F8f8fc1cb4b51ACd35E5E27A21b389af7D",
+    "create2Deployer": "0x7737c7065BCDb9604cb7c94c5f3b47BDb372FA8c",
+    "miniCoinHook": "0xCdE995A2445EBAA8Ded2d00D4D59DdCC35b060cc",
+    "testRouter": "0xAb39d99DC5cb3D14ae4471CAA9A691CB24D6d635"
+  },
+  "txs": {
+    "deploy.miniCoin": "0x6e6f991ac5f577a0f9f78414e0e58399f5d4bae6689f9768b51e903d06311250",
+    "deploy.economyManager": "0x4cc3cd4f91c630f810bdad1404f7599b07dd08b680c521abd5d406cffe726a96",
+    "deploy.feeAccumulator": "0xc1775eec5ca8add4f43bbd26ba454aced18785b6ddde0588a4e524673af0ffe4",
+    "deploy.raidVault": "0xee2af8745c0f4905fa6ec595bcb9acc59b9a890a5dfa268c966a3381cd1d292d",
+    "deploy.create2Deployer": "0x10eb7a174e06220b27df3f72cc5c31f7778fe6be0a2aa2783d91b1cf84809040",
+    "deployHook": "0x5c87673e8871c5d40901ac3cf07b972e698d9ef435fa9da356c82e08bc57c1aa",
+    "accumulator.setHook": "0x6680803cf058bb2b85f1d62dd4d628e3ace9e5615840debe14df40743d7741b9",
+    "economy.setFeeSource": "0x0d05651cf961d7040a8d772e7585fe4dba3e7fa6f4bc465bb6db4383016ecf1b",
+    "economy.configurePool": "0x620cd25872c0acc832a5008dc3c3c7765ab8a6b9d53cff86fd934d1201a8cc5d",
+    "poolManager.initialize": "0x8f3e5e8327431a95a6fe4fe3a19d383e3da65d3cac314971b66bcc5fa70471c4",
+    "deploy.testRouter": "0x29cfe703603754558f0958378ac6dafc0eb511a3febda4decef1b4c2c22a2276",
+    "miniCoin.approve(router)": "0xe321e26b478c22b61b18f3f1c29572e4f1a4aa54611df2a0240fd597318fd599",
+    "router.addLiquidity(seed)": "0xe00366883e23f6b96c7d6378dc20611f71464e980566c108d6c11f3a7296e2ab"
+  },
+  "miniCoinSource": "deployed ExperimentalMinicoin (testnet only)",
+  "hookSalt": "0x0000000000000000000000000000000000000000000000000000000000001c2f",
+  "pool": {
+    "key": {
+      "currency0": "0x85043f5C86Fe1CC5a0dFECf8803Ba2d7C7406760",
+      "currency1": "0xFb8bf4c1CC7a94c73D209a149eA2AbEa852BC541",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "hooks": "0xCdE995A2445EBAA8Ded2d00D4D59DdCC35b060cc"
+    },
+    "poolId": "0xa68eab9c2bfe14e31fe8e97598182dcb919b6949baa2d2c433a63fd50232e1ed",
+    "lpFee": 3000,
+    "tickSpacing": 60,
+    "hookFeeBps": 100
+  },
+  "split": {
+    "prizeBps": 6500,
+    "communityBps": 2000,
+    "treasuryBps": 1500
+  },
+  "poolInitialized": true,
+  "seededLiquidity": {
+    "ticks": [
+      60,
+      120
+    ],
+    "liquidity": "100000000000000000000000"
+  },
+  "owner": "0x115ab9287A60718Be04585a3226b223476897d51",
+  "lastRaidLoopTransactions": {
+    "wmon.deposit": "0xd0b858902c1c2e4b756ebbbc00436a72533a6824a34d0899d7e38695290b393f",
+    "wmon.approve(router)": "0xb69deb2faf3baf81f414808cc79813732e82fce08279513d22b31d44abbbcb02",
+    "router.swap(buy MiniCoin)": "0xea166673cc0226c211b248218737853a4deb461bda9a0a2eae746616acd6256a",
+    "economy.distribute": "0xf6185edf3d1de5e6bbd6d29a3a433602df93306b802b01c63ca1c6d14b5cbd9e",
+    "vault.openEconomyRaid": "0x7ee70090474beba0126703ad6dce9210c5d0fe3d66eb703084ebe6313b079ca5",
+    "vault.settleRaid": "0x219dd71671e7ca18d7d96e9351eb82606db95a4f39e42483ad50e333077797c7",
+    "vault.claimPrize": "0x061ff1bb51c4b4396eea2d59c9a3d3d1a56f4ce14318b8aa2aad7188e1580d1a"
+  },
+  "raids": [
+    {
+      "raidId": "0xaba5553e1c686447f285c7c9f3547961b44a3c5667178b2a7af59bb473a87593",
+      "prizeWei": "81250000000000",
+      "winner": "0x115ab9287A60718Be04585a3226b223476897d51",
+      "swapTx": "0xea166673cc0226c211b248218737853a4deb461bda9a0a2eae746616acd6256a",
+      "claimTx": "0x061ff1bb51c4b4396eea2d59c9a3d3d1a56f4ce14318b8aa2aad7188e1580d1a",
+      "transactions": {
+        "wmon.deposit": "0xd0b858902c1c2e4b756ebbbc00436a72533a6824a34d0899d7e38695290b393f",
+        "wmon.approve(router)": "0xb69deb2faf3baf81f414808cc79813732e82fce08279513d22b31d44abbbcb02",
+        "router.swap(buy MiniCoin)": "0xea166673cc0226c211b248218737853a4deb461bda9a0a2eae746616acd6256a",
+        "economy.distribute": "0xf6185edf3d1de5e6bbd6d29a3a433602df93306b802b01c63ca1c6d14b5cbd9e",
+        "vault.openEconomyRaid": "0x7ee70090474beba0126703ad6dce9210c5d0fe3d66eb703084ebe6313b079ca5",
+        "vault.settleRaid": "0x219dd71671e7ca18d7d96e9351eb82606db95a4f39e42483ad50e333077797c7",
+        "vault.claimPrize": "0x061ff1bb51c4b4396eea2d59c9a3d3d1a56f4ce14318b8aa2aad7188e1580d1a"
+      },
+      "at": "2026-10-14T00:24:21.999Z"
+    }
+  ],
+  "startBlock": 70821881,
+  "verification": {
+    "at": "2026-10-14T00:25:07.750Z",
+    "codeHashes": {
+      "miniCoin": "0x3d8fbdc1660a6c30db47b813dea9cea316cb11266978e7656c858d6d601ea742",
+      "economyManager": "0x61a9bb4e17716b90474bf035711b7f9a63a0b1a7db6119832d8163d4807ad677",
+      "feeAccumulator": "0x8ba5762971edbf6afa6727fefaf63994a61aeafe611842e3645fe7185c6a9409",
+      "raidVault": "0x79dd1b9ac57431f2d5afddce7179f8abc492951b4aeda36bdb774aaf4954e30a",
+      "create2Deployer": "0x5566302ba18edb6363923e6bd80e29dd32daa8692e2147ceee0dac8973d0ceb0",
+      "miniCoinHook": "0xbb0ebee305ee15ff85ed47073e06e653ed4952acab748c291006ba0426e9ae44",
+      "testRouter": "0x78848a04644566d04f552d1e89d7ccac48776aa75e2bc21132e29db622335a6e"
+    },
+    "receipts": {
+      "deploy.miniCoin": {
+        "hash": "0x6e6f991ac5f577a0f9f78414e0e58399f5d4bae6689f9768b51e903d06311250",
+        "blockNumber": 70821881,
+        "gasUsed": "702086"
+      },
+      "deploy.economyManager": {
+        "hash": "0x4cc3cd4f91c630f810bdad1404f7599b07dd08b680c521abd5d406cffe726a96",
+        "blockNumber": 70821900,
+        "gasUsed": "1016207"
+      },
+      "deploy.feeAccumulator": {
+        "hash": "0xc1775eec5ca8add4f43bbd26ba454aced18785b6ddde0588a4e524673af0ffe4",
+        "blockNumber": 70821919,
+        "gasUsed": "777682"
+      },
+      "deploy.raidVault": {
+        "hash": "0xee2af8745c0f4905fa6ec595bcb9acc59b9a890a5dfa268c966a3381cd1d292d",
+        "blockNumber": 70821938,
+        "gasUsed": "1474591"
+      },
+      "deploy.create2Deployer": {
+        "hash": "0x10eb7a174e06220b27df3f72cc5c31f7778fe6be0a2aa2783d91b1cf84809040",
+        "blockNumber": 70821956,
+        "gasUsed": "165198"
+      },
+      "deployHook": {
+        "hash": "0x5c87673e8871c5d40901ac3cf07b972e698d9ef435fa9da356c82e08bc57c1aa",
+        "blockNumber": 70821977,
+        "gasUsed": "6000000"
+      },
+      "accumulator.setHook": {
+        "hash": "0x6680803cf058bb2b85f1d62dd4d628e3ace9e5615840debe14df40743d7741b9",
+        "blockNumber": 70821997,
+        "gasUsed": "64519"
+      },
+      "economy.setFeeSource": {
+        "hash": "0x0d05651cf961d7040a8d772e7585fe4dba3e7fa6f4bc465bb6db4383016ecf1b",
+        "blockNumber": 70822003,
+        "gasUsed": "63849"
+      },
+      "economy.configurePool": {
+        "hash": "0x620cd25872c0acc832a5008dc3c3c7765ab8a6b9d53cff86fd934d1201a8cc5d",
+        "blockNumber": 70822021,
+        "gasUsed": "101071"
+      },
+      "poolManager.initialize": {
+        "hash": "0x8f3e5e8327431a95a6fe4fe3a19d383e3da65d3cac314971b66bcc5fa70471c4",
+        "blockNumber": 70822039,
+        "gasUsed": "94908"
+      },
+      "deploy.testRouter": {
+        "hash": "0x29cfe703603754558f0958378ac6dafc0eb511a3febda4decef1b4c2c22a2276",
+        "blockNumber": 70822059,
+        "gasUsed": "908680"
+      },
+      "miniCoin.approve(router)": {
+        "hash": "0xe321e26b478c22b61b18f3f1c29572e4f1a4aa54611df2a0240fd597318fd599",
+        "blockNumber": 70822077,
+        "gasUsed": "53324"
+      },
+      "router.addLiquidity(seed)": {
+        "hash": "0xe00366883e23f6b96c7d6378dc20611f71464e980566c108d6c11f3a7296e2ab",
+        "blockNumber": 70822095,
+        "gasUsed": "3000000"
+      },
+      "wmon.deposit": {
+        "hash": "0xd0b858902c1c2e4b756ebbbc00436a72533a6824a34d0899d7e38695290b393f",
+        "blockNumber": 70822325,
+        "gasUsed": "51221"
+      },
+      "wmon.approve(router)": {
+        "hash": "0xb69deb2faf3baf81f414808cc79813732e82fce08279513d22b31d44abbbcb02",
+        "blockNumber": 70822330,
+        "gasUsed": "53012"
+      },
+      "router.swap(buy MiniCoin)": {
+        "hash": "0xea166673cc0226c211b248218737853a4deb461bda9a0a2eae746616acd6256a",
+        "blockNumber": 70822348,
+        "gasUsed": "3000000"
+      },
+      "economy.distribute": {
+        "hash": "0xf6185edf3d1de5e6bbd6d29a3a433602df93306b802b01c63ca1c6d14b5cbd9e",
+        "blockNumber": 70822366,
+        "gasUsed": "1000000"
+      },
+      "vault.openEconomyRaid": {
+        "hash": "0x7ee70090474beba0126703ad6dce9210c5d0fe3d66eb703084ebe6313b079ca5",
+        "blockNumber": 70822372,
+        "gasUsed": "1000000"
+      },
+      "vault.settleRaid": {
+        "hash": "0x219dd71671e7ca18d7d96e9351eb82606db95a4f39e42483ad50e333077797c7",
+        "blockNumber": 70822781,
+        "gasUsed": "500000"
+      },
+      "vault.claimPrize": {
+        "hash": "0x061ff1bb51c4b4396eea2d59c9a3d3d1a56f4ce14318b8aa2aad7188e1580d1a",
+        "blockNumber": 70822798,
+        "gasUsed": "500000"
+      }
+    },
+    "claimed": true,
+    "vaultFreeWei": "243750000000000",
+    "remainingTestMon": "2.67995634"
+  }
+}

@@ -47,6 +47,11 @@ async function main() {
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   const state = fs.existsSync(outPath) ? JSON.parse(fs.readFileSync(outPath, "utf8")) : {};
   if (state.chainId && state.chainId !== chainId.toString()) throw new Error(`${outPath} is for chain ${state.chainId}`);
+  if (state.deployer && state.deployer !== deployer) throw new Error("Deployment record belongs to a different deployer");
+  if (state.external && (state.external.poolManager !== poolManager || state.external.wmon !== wmon)) throw new Error("Deployment infrastructure changed; use a separate deployment record");
+  const requestedGame = process.env.GAME_ID || "skrumpey-slide";
+  if (state.gameId && state.gameId !== requestedGame) throw new Error("Deployment record belongs to another game");
+  state.gameId = requestedGame;
   Object.assign(state, { chainId: chainId.toString(), deployer, status: "incomplete", updatedAt: new Date().toISOString() });
   state.external = { poolManager, wmon, source: known.poolManager ? "Monad-maintained v4 testnet infra: github.com/monad-developers/uniswap-v4-hooks-example@c3cc78a shared-infrastructure.json" : "env/local" };
   state.contracts ??= {};
@@ -62,7 +67,10 @@ async function main() {
   async function deployOnce(key, name, ...args) {
     const existing = await reuse(key);
     if (existing) { log(`${key}: reuse ${existing}`); return C.at(name, existing, signer); }
+    if (state.txs?.[`deploy.${key}`]) throw new Error(`Recover the recorded ${key} deployment receipt before retrying`);
     const c = await C.factoryFor(name, signer).deploy(...args);
+    state.contracts[key] = await c.getAddress();
+    state.txs ??= {}; state.txs[`deploy.${key}`] = c.deploymentTransaction().hash; save();
     await c.waitForDeployment();
     state.contracts[key] = await c.getAddress(); save();
     log(`${key}: ${state.contracts[key]}`);
@@ -76,7 +84,11 @@ async function main() {
 
   // 1. MiniCoin
   let miniCoinAddr = process.env.MINICOIN_ADDRESS;
-  if (miniCoinAddr) { state.contracts.miniCoin = miniCoinAddr; state.miniCoinSource = "MINICOIN_ADDRESS"; save(); }
+  if (miniCoinAddr) {
+    if (state.contracts.miniCoin && state.contracts.miniCoin.toLowerCase() !== miniCoinAddr.toLowerCase()) throw new Error("Cannot replace a recorded MiniCoin");
+    if ((await provider.getCode(miniCoinAddr)) === "0x" || (await C.at("ExperimentalMinicoin", miniCoinAddr, signer).gameId()) !== gameId) throw new Error("Existing MiniCoin has no code or belongs to a different game");
+    state.contracts.miniCoin = miniCoinAddr; state.miniCoinSource = "MINICOIN_ADDRESS"; save();
+  }
   else {
     const mc = await deployOnce("miniCoin", "ExperimentalMinicoin", {
       gameId, name: process.env.MINICOIN_NAME || "Skrumpey Slide MiniCoin", symbol: process.env.MINICOIN_SYMBOL || "SLIDE",

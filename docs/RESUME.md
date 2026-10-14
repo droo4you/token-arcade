@@ -2,6 +2,14 @@
 
 Checkpoint: 2026-10-13. Private GitHub backup: `droo4you/token-arcade`.
 
+## Latest release work (supersedes the original checkpoint below)
+
+The nine creator testnet launch files were committed as `23c7c0e`; Grok's final-stretch branch was merged as `e23a8e1`. Avatar removal is repaired. The merged application suite passes 67 tests; the 20 contract tests and new router liquidity-authorization regression pass. Full production build and creator launch local-chain test pass.
+
+Real testnet deployment evidence lives in `contracts/deployments/monad-testnet.json`. This includes all deployment and raid transaction hashes. See `docs/TESTNET_DEPLOYMENT.md` for the human-readable receipt summary and `docs/RELEASE_TASKS.md` for next owners and tasks. Do not repeat the raid loop unless another run is intentional.
+
+The testnet wallet's key exists only in ignored `.env.testnet` on this machine. The earlier setup script deployed a factory only; the economy script deployed its own test token. Mainnet remains undeployed. Production uses Privy and has demo login disabled.
+
 ## Branches
 
 - `main`: latest committed arcade integration baseline (`20a4043`), with this handoff note.

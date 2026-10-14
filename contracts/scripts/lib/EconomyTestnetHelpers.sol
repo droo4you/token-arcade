@@ -33,9 +33,14 @@ contract EconomyCreate2Deployer {
 contract EconomyTestRouter is IUnlockCallback {
     using BalanceDeltaLibrary for BalanceDelta;
     IPoolManager public immutable manager;
+    address public immutable liquidityOwner;
     struct Call { bool liquidity; address payer; PoolKey key; ModifyLiquidityParams liq; SwapParams swapParams; }
-    constructor(IPoolManager manager_) { manager = manager_; }
+    constructor(IPoolManager manager_) {
+        require(block.chainid == 10143 || block.chainid == 31337, "test chains only");
+        manager = manager_; liquidityOwner = msg.sender;
+    }
     function addLiquidity(PoolKey calldata key, int24 tickLower, int24 tickUpper, int256 liquidityDelta) external returns (BalanceDelta delta) {
+        require(msg.sender == liquidityOwner, "liquidity owner only");
         Call memory c = Call(true, msg.sender, key, ModifyLiquidityParams(tickLower, tickUpper, liquidityDelta, bytes32(0)), SwapParams(false, 0, 0));
         delta = abi.decode(manager.unlock(abi.encode(c)), (BalanceDelta));
     }

@@ -1,10 +1,12 @@
 // Writes indexer/.env from ../contracts/deployments/monad-testnet.json (created by deploy-economy-testnet.cjs).
 // Usage: npm run addresses [-- path/to/deployment.json] [-- --nft-vault 0x...]
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 const args = process.argv.slice(2);
-const file = args.find((a) => a.endsWith(".json")) ?? new URL("../../contracts/deployments/monad-testnet.json", import.meta.url).pathname;
+const file = args.find((a) => a.endsWith(".json")) ?? fileURLToPath(new URL("../../contracts/deployments/monad-testnet.json", import.meta.url));
 if (!existsSync(file)) { console.error(`No deployment at ${file}. Run contracts/scripts/deploy-economy-testnet.cjs first.`); process.exit(1); }
 const d = JSON.parse(readFileSync(file, "utf8"));
+if (String(d.chainId) !== "10143" || d.status !== "complete") throw new Error("A complete Monad testnet deployment is required");
 const c = d.contracts ?? {};
 const nft = args[args.indexOf("--nft-vault") + 1];
 const env = {

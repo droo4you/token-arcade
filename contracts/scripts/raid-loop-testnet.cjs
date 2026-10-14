@@ -17,9 +17,18 @@ async function main() {
   const { provider, signer, chainId, address: me } = await C.connect();
   const file = C.deploymentPath(chainId);
   const d = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (d.chainId !== chainId.toString()) throw new Error("Deployment record chain mismatch");
   if (d.status !== "complete" || !d.contracts.testRouter) throw new Error(`${file} incomplete or no testRouter`);
+  if (d.raids?.length && process.env.REPEAT_RAID !== "1") throw new Error("Raid loop already completed; set REPEAT_RAID=1 for another explicit run");
   const log = (...a) => console.log("[raid]", ...a);
-  const send = async (label, p) => { const r = await (await p).wait(); log(`${label}: ${r.hash}`); return r; };
+  const runTxs = {};
+  const send = async (label, p) => {
+    const tx = await p;
+    runTxs[label] = tx.hash; d.lastRaidLoopTransactions = runTxs;
+    fs.writeFileSync(file, JSON.stringify(d, null, 2) + "\n");
+    const r = await tx.wait(); if (!r || r.status !== 1) throw new Error(`${label} did not confirm`);
+    log(`${label}: ${r.hash}`); return r;
+  };
   const wmonAddr = d.external.wmon;
   const wmon = new ethers.Contract(wmonAddr, ["function deposit() payable", "function approve(address,uint256) returns (bool)", "function balanceOf(address) view returns (uint256)"], signer);
   const router = C.at("EconomyTestRouter", d.contracts.testRouter, signer);
@@ -28,6 +37,8 @@ async function main() {
   const vault = C.at("EconomyRaidVault", d.contracts.raidVault, signer);
   const key = d.pool.key, poolId = d.pool.poolId;
   const buy = ethers.parseEther(process.env.BUY_WMON || "0.05");
+  if (buy <= 0n || buy > ethers.parseEther("0.1")) throw new Error("Demo buy must be between 0 and 0.1 test WMON");
+  if ((await vault.owner()) !== me) throw new Error("Raid loop signer must be the vault owner");
 
   if ((await wmon.balanceOf(me)) < buy) await send("wmon.deposit", wmon.deposit({ value: buy }));
   await send("wmon.approve(router)", wmon.approve(d.contracts.testRouter, ethers.MaxUint256));
@@ -49,7 +60,7 @@ async function main() {
   let claimTx;
   if (ethers.getAddress(winner) === me) claimTx = (await send("vault.claimPrize", vault.claimPrize(raidId, me, { gasLimit: 500_000n }))).hash;
   else log(`winner ${winner} must call claimPrize(${raidId}, <to>) themselves`);
-  const out = { raidId, prizeWei: raid.prize.toString(), winner, swapTx: swapR.hash, claimTx, at: new Date().toISOString() };
+  const out = { raidId, prizeWei: raid.prize.toString(), winner, swapTx: swapR.hash, claimTx, transactions: runTxs, at: new Date().toISOString() };
   d.raids ??= []; d.raids.push(out); fs.writeFileSync(file, JSON.stringify(d, null, 2) + "\n");
   log("done", JSON.stringify(out));
 }

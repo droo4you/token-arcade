@@ -63,6 +63,21 @@ test("published catalog contains exactly four Cabinet imports while the fixture 
   assert.equal(adminGames.body.games.some((game: any) => game.manifest.id === "skrumpey-slide" || game.manifest.id === "buy-bounce"), false);
 });
 
+test("profile avatar can be removed without losing the display name, and omission preserves it", async () => {
+  const edit = (body: unknown) => api("/api/me", { method: "PATCH", auth: "avatar-test", body });
+  for (const clear of [null, ""]) {
+    assert.equal((await edit({ avatarUrl: "https://example.com/avatar.png", displayName: "Avatar test" })).status, 200);
+    const unchanged = await edit({ displayName: "Kept name" });
+    assert.equal(unchanged.body.passport.avatarUrl, "https://example.com/avatar.png");
+    const removed = await edit({ avatarUrl: clear });
+    assert.equal(removed.status, 200);
+    assert.equal(removed.body.passport.avatarUrl, undefined);
+    assert.equal(removed.body.passport.displayName, "Kept name");
+    assert.equal((await api("/api/me", { auth: "avatar-test" })).body.passport.avatarUrl, undefined);
+  }
+  assert.equal((await edit({ avatarUrl: "http://example.com/avatar.png" })).status, 400);
+});
+
 test("admin allowlist cannot bypass the creator Deploy action", async () => {
   assert.equal((await api("/api/admin/games")).status, 401);
   assert.equal((await api("/api/admin/games", { auth: "player" })).status, 403);
