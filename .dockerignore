@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+.env
+.env.*
+!.env.example
+**/*.sqlite*
+apps/api/data
+dist
+contracts/.data
+contracts/deployments/local-*.json
+.git
+indexer

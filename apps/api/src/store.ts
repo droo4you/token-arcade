@@ -92,11 +92,20 @@ export class ArcadeStore {
       const prior = this.getGame(game.manifest.id);
       // One narrow correction for v1 imports created during integration. Admin
       // edits clear this review marker; future starts never overwrite them.
-      if (prior && game.legacyImportRevision === 2 && prior.legacyImportRevision === undefined &&
+      if (prior && (game.legacyImportRevision ?? 0) >= 2 && prior.legacyImportRevision === undefined &&
           prior.review?.approvedBy === "platform:legacy-import" && prior.manifest.version === "1.0.0" &&
           prior.manifest.adapterId === game.manifest.adapterId && prior.manifest.entry?.kind === "iframe" &&
           new URL(prior.manifest.entry.url).pathname === `/${game.manifest.id}/v/1.0.0/`) {
-        this.saveGame({ ...prior, manifest: { ...game.manifest, entry: prior.manifest.entry }, legacyImportRevision: 2 });
+        this.saveGame({ ...prior, manifest: { ...game.manifest, entry: prior.manifest.entry }, legacyImportRevision: game.legacyImportRevision });
+      } else if (prior && (game.legacyImportRevision ?? 0) > 2 && (prior.legacyImportRevision ?? 0) < (game.legacyImportRevision ?? 0) &&
+          prior.review?.approvedBy === "platform:legacy-import" && prior.manifest.version === game.manifest.version &&
+          prior.manifest.adapterId === game.manifest.adapterId) {
+        // Reviewed platform upgrade of an untouched legacy import (e.g. Passport Play enabled): new modes and
+        // verifier declaration; keep the stored entry origin and everything else.
+        // Revision 3 also carries reviewed public display copy (e.g. eMONAD cabinet -> "Uppers"); id is unchanged.
+        this.saveGame({ ...prior, manifest: { ...prior.manifest, name: game.manifest.name, description: game.manifest.description, supportedModes: game.manifest.supportedModes,
+          supportedObjectives: game.manifest.supportedObjectives, ...(game.manifest.verifier ? { verifier: game.manifest.verifier } : {}) },
+          legacyImportRevision: game.legacyImportRevision });
       } else this.db.prepare("INSERT OR IGNORE INTO games (id,json) VALUES (?,?)").run(game.manifest.id, JSON.stringify(game));
     }
 

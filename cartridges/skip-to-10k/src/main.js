@@ -178,6 +178,7 @@ function doThrow() {
   const a = G8.aim, run = G8.run;
   SIM.throwRock(run, a.angle, throwPower(a.power), HAND_X);
   run.alt = HAND_ALT;
+  if (G8.rec && !G8.tut) { G8.rec.angle = a.angle; G8.rec.power = throwPower(a.power); }
   const inZone = a.angle >= SKIP_ZONE[0] && a.angle <= SKIP_ZONE[1];
   if (a.power > 0.95 && inZone) { run.counts.line = 1; addText('PERFECT THROW', HAND_X, 70, '#ffe066'); Audio8.sfx('line'); }
   G8.screen = 'fly'; G8.hintT = 0; G8.thrownT = G8.time;
@@ -301,7 +302,10 @@ function drawTut() {
 function toAim() {
   if (window.TokenArcade?.active && !window.TokenArcade.beginRun()) return;
   G8.screen = 'aim';
-  G8.run = SIM.newRun(save.up, (Math.random() * 2 ** 31) >>> 0);
+  // Passport Play (ranked/raid): issued seed + locked standard loadout; record the throw and every sim tick for server replay.
+  const graded = window.TokenArcade?.embedded && window.TokenArcade.config && window.TokenArcade.config.mode !== 'free';
+  G8.run = graded ? SIM.newRun(SIM.STANDARD_LOADOUT, SIM.issuedSeed(window.TokenArcade.config.seed)) : SIM.newRun(save.up, (Math.random() * 2 ** 31) >>> 0);
+  G8.rec = graded ? { angle: null, power: null, input: '' } : null;
   G8.aim = newAim();
   G8.camX = HAND_X - 150; G8.camAlt = 0; G8.texts = []; G8.parts = []; G8.banner = null; G8.paused = false;
   G8.news = null; G8.newsI = 0; G8.bubble = null; G8.bubbleCd = 5; G8.slow = 0;
@@ -337,7 +341,8 @@ function finishRun() {
   r.at = G8.time;
   G8.res = r; G8.screen = 'results';
   window.TokenArcade?.complete({ result: 'completed', primaryMetric: r.days,
-    secondaryMetrics: { peak: r.peak, skips: r.skips, perfects: r.perfects, bestStreak: r.bestStreak, gems: r.gems, elapsedMs: Math.round(run.t * 1000) } });
+    secondaryMetrics: { peak: r.peak, skips: r.skips, perfects: r.perfects, bestStreak: r.bestStreak, gems: r.gems, elapsedMs: Math.round(run.t * 1000) },
+    ...(G8.rec && G8.rec.angle !== null ? { proof: { v: 1, seed: run.seed, loadout: 'standard-v1', angle: G8.rec.angle, power: G8.rec.power, input: G8.rec.input } } : {}) });
   if (r.done.length) setTimeout(() => Audio8.sfx('mission'), 500);
 }
 function quipFor(r) {
@@ -435,6 +440,7 @@ function update(dt) {
     const input = { tilt: G8.tut ? SIM.botInput(run).tilt : tiltInput(), skip: edge.skip, bounce: edge.bounce, rc: edge.rc };
     edge.skip = edge.bounce = edge.rc = false;
     while (acc >= SIM.DT) {
+      if (G8.rec && !G8.tut) G8.rec.input += String.fromCharCode(48 + ((input.tilt | 0) + 1 | (input.skip ? 4 : 0) | (input.bounce ? 8 : 0) | (input.rc ? 16 : 0)));
       SIM.step(run, G8.tut ? SIM.botInput(run) : input);
       input.skip = input.bounce = input.rc = false;
       acc -= SIM.DT;
@@ -1072,7 +1078,7 @@ arcadeFrame = requestAnimationFrame(frame);
 window.TokenArcade?.register({
   capabilities: { pause: true, touch: true, keyboard: true, orientation: 'landscape' },
   mount(config) {
-    if (config.mode !== 'free') throw new Error('This build supports Free Play. Competitive replay review is pending.');
+    if (config.mode !== 'free' && !config.seed) throw new Error('Passport Play needs a server-issued seed.');
     SAVE_KEY = 'ta.' + config.gameId + '.skip10k.v1';
     Object.assign(save, loadSave()); Audio8.setMuted(save.muted);
   },

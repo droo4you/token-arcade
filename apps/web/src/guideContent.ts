@@ -42,7 +42,7 @@ export const guideTopics: GuideTopic[] = [
       },
       {
         title: "Choose a path when you are ready",
-        body: "Ranked Runs use a player account and server-verified results. Community Raids add a shared challenge with its own rules and attempt limit. Only ready modes can be started.",
+        body: "Passport Play uses a player account and server-verified results. Community Raids add a shared challenge with its own rules and attempt limit. Only ready modes can be started.",
         href: "/raids",
         actionLabel: "See community raids",
       },
@@ -64,7 +64,7 @@ export const guideTopics: GuideTopic[] = [
     steps: [
       {
         title: "Check the cabinet page",
-        body: "Each game page describes the game, its play modes, and its ranked board. An unavailable mode is labeled until the game and its checks are ready.",
+        body: "Each game page describes the game, its play modes, and its Passport Play leaderboard. An unavailable mode is labeled until the game and its checks are ready.",
         href: "/",
         actionLabel: "Open a cabinet",
       },
@@ -76,7 +76,7 @@ export const guideTopics: GuideTopic[] = [
       },
       {
         title: "Go for a verified score",
-        body: "A Ranked Run needs a player account and a game-specific verifier. The arcade checks the run before it enters the leaderboard and your Passport.",
+        body: "Passport Play needs a player account and a game-specific verifier. The arcade checks the run before it enters the leaderboard and your Passport.",
         tip: "A score reported by the browser alone does not qualify for the board.",
         href: "/passport",
         actionLabel: "See Player Passport",
@@ -126,13 +126,13 @@ export const guideTopics: GuideTopic[] = [
     steps: [
       {
         title: "Create a player account",
-        body: "Browse and Free Play as a guest, then sign in when you want to try available Ranked Runs or Community Raids. Your Passport is your player record.",
+        body: "Browse and Free Play as a guest, then sign in when you want to try available Passport Play or Community Raids. Your Passport is your player record.",
         href: "/passport",
         actionLabel: "Open Passport",
       },
       {
         title: "Make it yours",
-        body: "Choose a display name and optional avatar. The Passport collects verified best scores, ranked runs, raid entries, and wins.",
+        body: "Choose a display name and optional avatar. The Passport collects verified best scores, Passport Play runs, raid entries, and wins.",
         href: "/passport",
         actionLabel: "View your record",
       },
@@ -185,3 +185,24 @@ export const guideTopics: GuideTopic[] = [
 export function getGuideTopic(id: string): GuideTopic | undefined {
   return guideTopics.find((topic) => topic.id === id);
 }
+
+export const guideFaq = [
+  { question: "Do I need an account or wallet to play?", answer: "No. Free Play is open to guests. Sign in for Passport Play to keep verified scores, or to enter an available Community Raid." },
+  { question: "What is Passport Play?", answer: "Free, account-linked play where accepted scores enter the cabinet’s leaderboard and your Passport. Cosmetic progression is planned; cosmetic claiming is coming later." },
+  { question: "Does every game need a MiniCoin?", answer: "No. A cabinet can launch with gameplay first and add an approved economy later. Its identity, scores and history stay with it." },
+  { question: "How does a MiniCoin support its community?", answer: "The planned economy captures fees from MiniCoin pool activity and allocates them to prize funding, community support and Token Arcade’s treasury. The cabinet connects the game, its optional MiniCoin and its associated Community Asset. Economy features are still being built." },
+  { question: "How do Community Raid prizes work?", answer: "Raids are time-limited competitions for eligible Passport players. Entry is free in v0, and prizes must be funded before they are offered. Check each lobby’s rules, attempts and reward details. The current test raids have no prizes." },
+  { question: "How are scores checked?", answer: "Passport Play and raids use game-specific server checks before accepting scores. Supported games can replay your inputs against an issued session to recompute the result. These checks reject invalid runs, but cannot guarantee that a player is human." },
+];
+
+export const guideDefinitions = [
+  { term: "Cabinet", definition: "A published game in the arcade, with its own scores, leaderboard, raid history, community association and optional economy." },
+  { term: "MiniCoin", definition: "An optional game economy: a game-specific ERC-20 token plus its pool and configuration. Playing does not mint MiniCoins as rewards." },
+  { term: "Community Asset", definition: "The existing asset or community a cabinet supports, such as an NFT collection or established token. Association alone does not put that asset in a prize vault." },
+  { term: "Passport", definition: "Your persistent player identity and record of verified scores, games and raid participation." },
+  { term: "Free Play", definition: "Guest play for fun, without an account. Results do not enter verified standings." },
+  { term: "Passport Play", definition: "Free play linked to your account, with verified scores and persistent progress. Cosmetic claiming is planned for later." },
+  { term: "Community Raid", definition: "A competition for Passport players with a start and end time, eligibility rules, attempt limits, a leaderboard and defined rewards, if funded." },
+  { term: "Prize Vault", definition: "The planned economy’s store of funded rewards. Prizes come from assets already collected or deposited." },
+  { term: "Hook and Strategies", definition: "In the planned economy, the hook captures configured pool fees. The economy router allocates that value, and strategies determine how each allocation supports prizes, the community or the treasury." },
+];

@@ -16,7 +16,7 @@
     "event.lev": "POWER 2X", "event.bid": "SURGE", "event.dump": "DROP",
     "event.tick": "ORB"
   },
-  "communityDisplay": { "name": "eMONAD cabinet", "official": false },
+  "communityDisplay": { "name": "Uppers", "official": false },
   "assets": [],
   "rights": []
 }

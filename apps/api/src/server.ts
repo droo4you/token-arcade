@@ -19,6 +19,7 @@ import { TestnetMinicoinService } from "./testnet-minicoin.ts";
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses"]);
 const MODES = new Set(["free", "ranked", "raid"]);
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+const LOCAL_EMONAD_METADATA_URI = "http://127.0.0.1:5173/minicoin-rehearsal/emonad.json";
 
 class HttpError extends Error {
   readonly status: number;
@@ -335,10 +336,20 @@ export interface ApiOptions {
   authSettings?: AuthSettings;
   minicoinSettings?: MinicoinSettings;
   testnetMinicoinSettings?: MinicoinSettings;
+  /** Explicit local-chain rehearsal override for isolated tests. */
+  localMinicoinRehearsal?: boolean;
 }
 
 function requireAdmin(identity: Identity): void {
   if (!identity.isAdmin) fail(403, "FORBIDDEN", "This action requires an allowlisted administrator");
+}
+
+function isLoopbackRpc(url?: string): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
+  } catch { return false; }
 }
 
 function serveStatic(request: IncomingMessage, response: ServerResponse, pathname: string, staticRoot: string): void {
@@ -354,19 +365,30 @@ function serveStatic(request: IncomingMessage, response: ServerResponse, pathnam
 }
 
 export function createArcadeServer(options: ApiOptions = {}): Server {
+  const localMinicoinRehearsalRequested = options.localMinicoinRehearsal ?? process.env.LOCAL_MINICOIN_REHEARSAL === "true";
   const auth = options.auth ?? new ArcadeAuth(options.authSettings ?? {
     appId: process.env.PRIVY_APP_ID, appSecret: process.env.PRIVY_APP_SECRET,
     adminPrivyIds: process.env.ADMIN_PRIVY_IDS, localDemoMode: process.env.LOCAL_DEMO_MODE === "true",
+    localDemoAdminDisabled: process.env.LOCAL_DEMO_ADMIN_DISABLED === "true" || localMinicoinRehearsalRequested,
   });
   const store = options.store ?? new ArcadeStore(process.env.ARCADE_DB_PATH || undefined, auth.localDemoMode);
   const adapters = options.adapters ?? new AdapterRegistry();
   const ownership = new DirectWalletOwnershipResolver(process.env.MONAD_RPC_URL);
-  const minicoin = new MinicoinDeployer(options.minicoinSettings ?? {
+  const minicoinSettings = options.minicoinSettings ?? {
     enabled: process.env.ENABLE_ONCHAIN_WRITES === "true", rpcUrl: process.env.MONAD_RPC_URL,
     chainId: process.env.MONAD_CHAIN_ID, privateKey: process.env.DEPLOYER_PRIVATE_KEY,
     factoryAddress: process.env.MINICOIN_FACTORY_ADDRESS, treasuryAddress: process.env.TREASURY_ADDRESS,
     supplyRecipient: process.env.MINICOIN_SUPPLY_RECIPIENT,
-  });
+  };
+  const minicoin = new MinicoinDeployer(minicoinSettings);
+  // This allows a token-only rehearsal on an isolated local EVM. It never
+  // enables the production MiniCoin economy or bypasses the live launch gate.
+  const rehearsalEnabled = localMinicoinRehearsalRequested &&
+    auth.localDemoMode && minicoinSettings.chainId === "31337" &&
+    (!!minicoinSettings.transport || isLoopbackRpc(minicoinSettings.rpcUrl));
+  const rehearsalReady = rehearsalEnabled && minicoin.ready;
+  const rehearsalReconcileReady = rehearsalEnabled && minicoin.reconcileReady;
+  const localDemoAdmin = auth.localDemoAdmin && !localMinicoinRehearsalRequested;
   const staticRoot = options.staticRoot ?? resolve(process.cwd(), "dist/web");
   const coindle = createCoindleHandler();
   const testnet = new TestnetMinicoinService(store, options.testnetMinicoinSettings ?? {
@@ -405,8 +427,8 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
 
       if (method === "GET" && path === "/api/health") {
         return respond(response, 200, {
-          ok: true, auth: { privy: auth.privyReady, localDemo: auth.localDemoMode },
-          settlement: { ready: false, reason: "Paid entry and prize settlement are not configured", minicoin: { ready: minicoin.ready, ...(!minicoin.ready ? { reason: minicoin.reason } : {}), reconcileReady: minicoin.reconcileReady } },
+          ok: true, auth: { privy: auth.privyReady, localDemo: auth.localDemoMode, localDemoAdmin },
+          settlement: { ready: false, reason: "Paid entry and prize settlement are not configured", minicoin: { ready: minicoin.ready, ...(!minicoin.ready ? { reason: minicoin.reason } : {}), reconcileReady: minicoin.reconcileReady, rehearsalReady, rehearsalReconcileReady } },
           cartridge: { installed: store.listGames(true).filter((game) => game.manifest.id !== WARMUP_GAME_ID).map((game) => game.manifest.id), verifierAdapters: adapters.keys() },
         });
       }
@@ -459,8 +481,11 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
               store.savePassport(passport);
             }
             walletSync = { ready: true };
-          } catch {
-            walletSync = { ready: false, reason: "Privy wallet lookup is temporarily unavailable" };
+          } catch (reason) {
+            const status = typeof reason === "object" && reason !== null && "status" in reason ? reason.status : undefined;
+            walletSync = { ready: false, reason: status === 401
+              ? "Privy rejected the server credentials. Check the App Secret for this app."
+              : "Privy wallet lookup is temporarily unavailable" };
           }
         }
         if (method === "PATCH") {
@@ -629,7 +654,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (game?.manifest.version !== session.config.gameVersion) fail(409, "GAME_VERSION_CHANGED", "Game version changed during this run");
         const verifier = game && adapters.get(game.manifest.adapterId)?.verifier;
         if (result.mode === "ranked" && JSON.stringify(session.config.rules ?? {}) !== JSON.stringify(adapters.get(game!.manifest.adapterId)?.rankedRules ?? {})) {
-          fail(409, "RULES_CHANGED", "Ranked rules changed during this run");
+          fail(409, "RULES_CHANGED", "Passport Play rules changed during this run");
         }
         if (!verifier) fail(409, "VERIFIER_UNAVAILABLE", "Game-specific verifier is not installed");
         // The verifier must see the server-issued rules, never a browser-authored copy.
@@ -647,6 +672,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
 
       if (path.startsWith("/api/admin/")) {
         const identity = await auth.authenticate(request);
+        if (localMinicoinRehearsalRequested && identity.source === "local-demo") fail(403, "FORBIDDEN", "Local demo identities cannot curate the founder rehearsal");
         requireAdmin(identity);
         if (method === "GET" && path === "/api/admin/games") {
           return respond(response, 200, { games: store.listGames().map((game) => ({ ...game, readiness: { ready: gameBlockers(game, adapters).length === 0, blockers: gameBlockers(game, adapters) } })) });
@@ -689,32 +715,47 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           store.saveGame(game);
           return respond(response, 200, { game: { ...game, readiness: { ready: gameBlockers(game, adapters).length === 0, blockers: gameBlockers(game, adapters) } } });
         }
-        if (method === "POST" && /^\/api\/admin\/games\/[^/]+\/minicoin$/.test(path)) {
+        if (method === "POST" && /^\/api\/admin\/games\/[^/]+\/minicoin(?:\/rehearse)?$/.test(path)) {
+          const rehearsal = path.endsWith("/rehearse");
           const game = store.getGame(decodeURIComponent(path.split("/")[4]));
           if (!game) fail(404, "NOT_FOUND", "Game not found");
           if (game.manifest.id === WARMUP_GAME_ID) fail(409, "INVALID_GAME", "Internal test cartridge cannot deploy a Minicoin");
           if (game.minicoin) fail(409, "MINICOIN_EXISTS", "Game already has an associated Minicoin");
-          if ((game.legacyImportRevision && game.economy?.status !== "enabled") || game.communityConcept?.verification === "unverified" || (game.economy && game.economy.status !== "enabled")) fail(409, "ECONOMY_PENDING", "This Cabinet's economy awaits supported asset and strategy approval in the protocol pass");
-          if (!game.manifest.communityOptional && !game.community) fail(409, "COMMUNITY_REQUIRED", "Configure the required Community Asset before deploying a Minicoin");
-          if (game.community && !game.communityStrategy) fail(409, "STRATEGY_REQUIRED", "Configure the Community Strategy before deploying a Minicoin");
+          if (rehearsal) {
+            if (!rehearsalReady) fail(503, "REHEARSAL_NOT_READY", "Local-chain rehearsal is not configured");
+            if (game.status !== "published") fail(409, "INVALID_STATE", "Rehearsal requires a published playable Cabinet");
+            if (game.community) fail(409, "REHEARSAL_ASSET_UNSUPPORTED", "Local token rehearsal cannot encode a Community Asset");
+          } else {
+            if ((game.legacyImportRevision && game.economy?.status !== "enabled") || game.communityConcept?.verification === "unverified" || (game.economy && game.economy.status !== "enabled")) fail(409, "ECONOMY_PENDING", "This Cabinet's economy awaits supported asset and strategy approval in the protocol pass");
+            if (!game.manifest.communityOptional && !game.community) fail(409, "COMMUNITY_REQUIRED", "Configure the required Community Asset before deploying a Minicoin");
+            if (game.community && !game.communityStrategy) fail(409, "STRATEGY_REQUIRED", "Configure the Community Strategy before deploying a Minicoin");
+          }
           const body = await readJson(request);
           const name = requiredString(body.name, "name", 80);
           const symbol = requiredString(body.symbol, "symbol", 20);
           const metadataURI = requiredString(body.metadataURI, "metadataURI", 2_000);
-          if (!/^https:\/\//.test(metadataURI) && !/^ipfs:\/\//.test(metadataURI)) fail(400, "INVALID_INPUT", "metadataURI must use HTTPS or IPFS");
+          const localRehearsalMetadata = rehearsal && rehearsalReady && game.manifest.id === "emonad-cabinet" && metadataURI === LOCAL_EMONAD_METADATA_URI;
+          if (!localRehearsalMetadata && !/^https:\/\//.test(metadataURI) && !/^ipfs:\/\//.test(metadataURI)) fail(400, "INVALID_INPUT", "metadataURI must use HTTPS or IPFS, except for the eMONAD local rehearsal file");
           const supply = requiredString(body.initialSupply, "initialSupply", 78);
           if (!/^\d+$/.test(supply) || BigInt(supply) <= 0n || BigInt(supply) >= 2n ** 256n) fail(400, "INVALID_INPUT", "initialSupply must be a positive uint256 integer in base units");
           game.minicoin = await minicoin.deploy(game, { name, symbol, metadataURI, initialSupply: BigInt(supply) });
           store.saveGame(game);
           return respond(response, 201, { game, minicoin: game.minicoin });
         }
-        if (method === "POST" && /^\/api\/admin\/games\/[^/]+\/minicoin\/reconcile$/.test(path)) {
+        if (method === "POST" && /^\/api\/admin\/games\/[^/]+\/minicoin(?:\/rehearse)?\/reconcile$/.test(path)) {
+          const rehearsal = path.includes("/minicoin/rehearse/");
           const game = store.getGame(decodeURIComponent(path.split("/")[4]));
           if (!game) fail(404, "NOT_FOUND", "Game not found");
           if (game.minicoin) fail(409, "MINICOIN_EXISTS", "Game already has an associated Minicoin");
-          if ((game.legacyImportRevision && game.economy?.status !== "enabled") || game.communityConcept?.verification === "unverified" || (game.economy && game.economy.status !== "enabled")) fail(409, "ECONOMY_PENDING", "This Cabinet's economy awaits supported asset and strategy approval in the protocol pass");
-          if (!game.manifest.communityOptional && !game.community) fail(409, "COMMUNITY_REQUIRED", "Configure the required Community Asset before reconciling a Minicoin");
-          if (game.community && !game.communityStrategy) fail(409, "STRATEGY_REQUIRED", "Configure the Community Strategy before reconciling a Minicoin");
+          if (rehearsal) {
+            if (!rehearsalReconcileReady) fail(503, "REHEARSAL_NOT_READY", "Local-chain rehearsal receipt checks are not configured");
+            if (game.status !== "published") fail(409, "INVALID_STATE", "Rehearsal requires a published playable Cabinet");
+            if (game.community) fail(409, "REHEARSAL_ASSET_UNSUPPORTED", "Local token rehearsal cannot encode a Community Asset");
+          } else {
+            if ((game.legacyImportRevision && game.economy?.status !== "enabled") || game.communityConcept?.verification === "unverified" || (game.economy && game.economy.status !== "enabled")) fail(409, "ECONOMY_PENDING", "This Cabinet's economy awaits supported asset and strategy approval in the protocol pass");
+            if (!game.manifest.communityOptional && !game.community) fail(409, "COMMUNITY_REQUIRED", "Configure the required Community Asset before reconciling a Minicoin");
+            if (game.community && !game.communityStrategy) fail(409, "STRATEGY_REQUIRED", "Configure the Community Strategy before reconciling a Minicoin");
+          }
           const body = await readJson(request);
           const transactionHash = requiredString(body.transactionHash, "transactionHash", 66);
           if (!/^0x[0-9a-fA-F]{64}$/.test(transactionHash)) fail(400, "INVALID_INPUT", "transactionHash must be a 32-byte hex value");
@@ -814,7 +855,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
   const port = Number(process.env.PORT ?? 8787);
   const host = process.env.HOST ?? "127.0.0.1";
-  if (process.env.LOCAL_DEMO_MODE === "true" && !["127.0.0.1", "::1", "localhost"].includes(host)) {
+  if (process.env.LOCAL_DEMO_MODE === "true" && process.env.NODE_ENV !== "production" && !["127.0.0.1", "::1", "localhost"].includes(host)) {
     throw new Error("LOCAL_DEMO_MODE is only available when the API binds to loopback");
   }
   const server = createArcadeServer();

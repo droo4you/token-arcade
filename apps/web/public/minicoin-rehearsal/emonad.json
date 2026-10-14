@@ -1,0 +1,8 @@
+{
+  "name": "eMONAD Rehearsal Coin",
+  "symbol": "EMDEMO",
+  "description": "Experimental local-chain token association for the eMONAD Cabinet. This rehearsal does not activate a MiniCoin economy, rewards, or a live asset.",
+  "gameId": "emonad-cabinet",
+  "chainId": 31337,
+  "experimental": true
+}

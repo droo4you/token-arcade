@@ -1,0 +1,90 @@
+enum RaidKind { ECONOMY NFT }
+enum RaidStatus { OPEN SETTLED CLAIMED CANCELLED TIMED_OUT EXPIRED REFUND_AVAILABLE REFUNDED }
+
+type Raid {
+  id: ID!                 # <vault>-<raidId>
+  kind: RaidKind!
+  vault: String!
+  raidId: String!
+  gameId: String!
+  rulesHash: String!
+  status: RaidStatus!
+  prize: BigInt!          # WMON wei (0 for NFT raids)
+  minicoin: String
+  collection: String      # NFT raids
+  tokenId: BigInt
+  depositor: String
+  startsAt: BigInt!
+  endsAt: BigInt!
+  settleBy: BigInt
+  winner: String
+  resultHash: String
+  claimDeadline: BigInt
+  openedTx: String!
+  openedAt: Int!
+  updatedAt: Int!
+  claims: [RaidClaim!]! @derivedFrom(field: "raid")
+}
+
+type RaidClaim {
+  id: ID!                 # <tx>-<logIndex>
+  raid: Raid!
+  winner: String!
+  to: String!
+  amount: BigInt!         # 0 for NFT claims
+  txHash: String!
+  timestamp: Int!
+}
+
+type VaultBalance {
+  id: ID!                 # vault address
+  freeBalance: BigInt!    # derived from events: + distributed prize share + returned, - opened prizes
+  lockedBalance: BigInt!
+  totalDistributedIn: BigInt!
+  totalPrizesPaid: BigInt!
+  raidsOpened: Int!
+  updatedAt: Int!
+}
+
+type Pool {
+  id: ID!                 # v4 poolId
+  prizeVault: String!
+  communityRecipient: String!
+  treasuryRecipient: String!
+  prizeBps: Int!
+  communityBps: Int!
+  treasuryBps: Int!
+  totalFeesAccrued: BigInt!
+  totalDistributed: BigInt!
+  swapCount: Int!
+}
+
+type FeeAccrual {
+  id: ID!                 # <tx>-<logIndex>; one per hooked swap
+  poolId: String!
+  amount: BigInt!         # WMON fee
+  txHash: String!
+  trader: String
+  blockNumber: Int!
+  timestamp: Int!
+}
+
+type Distribution {
+  id: ID!
+  poolId: String!
+  total: BigInt!
+  prize: BigInt!
+  community: BigInt!
+  treasury: BigInt!
+  txHash: String!
+  timestamp: Int!
+}
+
+type PlayerStats {
+  id: ID!                 # player wallet address
+  raidsWon: Int!
+  nftRaidsWon: Int!
+  prizesClaimed: Int!
+  totalPrizeWei: BigInt!
+  lastWinAt: Int
+}

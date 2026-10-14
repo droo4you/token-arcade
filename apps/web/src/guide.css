@@ -201,6 +201,20 @@
 
 .guide-footnote svg { flex: none; }
 
+.guide-reference { display: grid; gap: 18px; margin-top: 30px; }
+.guide-dropdown { border: 3px solid var(--ink); border-radius: 17px; background: #fffbf7; box-shadow: 4px 4px 0 var(--ink); overflow: hidden; }
+.guide-dropdown summary { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px; cursor: pointer; list-style: none; background: var(--cyan); font-family: "Space Grotesk", Arial, sans-serif; font-size: 27px; font-weight: 700; }
+.guide-dropdown:nth-child(2) summary { background: var(--lime); }
+.guide-dropdown summary::-webkit-details-marker { display: none; }
+.guide-dropdown summary small { display: block; margin-top: 5px; font-family: inherit; font-size: 14px; font-weight: 400; }
+.guide-dropdown summary svg { flex: none; }
+.guide-dropdown[open] summary { border-bottom: 3px solid var(--ink); }
+.guide-dropdown[open] summary svg { transform: rotate(180deg); }
+.guide-dropdown summary:focus-visible { outline: 3px solid var(--violet); outline-offset: -7px; }
+.guide-dropdown-content { display: grid; gap: 24px; margin: 0; padding: 24px; }
+.guide-dropdown-content h3, .guide-dropdown-content dt { margin: 0 0 8px; font-size: 18px; font-weight: 700; }
+.guide-dropdown-content p, .guide-dropdown-content dd { max-width: 80ch; margin: 0; color: var(--muted); line-height: 1.65; }
+
 .guide-chapter .back-link { margin: 0 0 30px; }
 
 .guide-chapter-head {

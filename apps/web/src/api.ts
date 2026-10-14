@@ -2,8 +2,8 @@ import type { GameRecord, GameRunConfig, GameRunResult, Passport, Raid } from ".
 
 export interface Health {
   ok: boolean;
-  auth: { privy: boolean; localDemo: boolean };
-  settlement: { ready: boolean; reason?: string; minicoin?: { ready: boolean; reason?: string; reconcileReady?: boolean } };
+  auth: { privy: boolean; localDemo: boolean; localDemoAdmin: boolean };
+  settlement: { ready: boolean; reason?: string; minicoin?: { ready: boolean; reason?: string; reconcileReady?: boolean; rehearsalReady?: boolean; rehearsalReconcileReady?: boolean } };
 }
 
 export interface LeaderboardEntry {
@@ -64,7 +64,7 @@ export type GameResponse = { game: GameRecord };
 export type RaidsResponse = { raids: Raid[] };
 export type RaidResponse = { raid: Raid; leaderboard: LeaderboardEntry[]; attemptsUsed?: number; attemptsRemaining?: number };
 export type LeaderboardResponse = { entries: LeaderboardEntry[] };
-export type PassportResponse = { passport: Passport };
+export type PassportResponse = { passport: Passport; walletSync?: { ready: boolean; reason?: string } };
 export type RunResponse = { run: GameRunConfig };
 export type CompleteResponse = { verified: boolean; result: GameRunResult; passport: Passport; leaderboardEntry: LeaderboardEntry };
 

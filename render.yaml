@@ -1,0 +1,39 @@
+# Render Blueprint: two web services from one Dockerfile. Fill the two *.onrender.com
+# origins after first deploy (Render shows them), then redeploy both.
+services:
+  - type: web
+    name: token-arcade
+    runtime: docker
+    plan: free
+    envVars:
+      - key: ROLE
+        value: api
+      - key: PORT
+        value: "8787"
+      - key: CARTRIDGE_ORIGIN          # e.g. https://token-arcade-cartridges.onrender.com
+        sync: false
+      - key: ARCADE_HOST_ORIGINS       # e.g. https://token-arcade.onrender.com
+        sync: false
+      - key: VITE_PRIVY_APP_ID         # build-time; also set as Docker build arg if Render does not pass it
+        sync: false
+      - key: PRIVY_APP_ID
+        sync: false
+      - key: PRIVY_APP_SECRET
+        sync: false
+      - key: ADMIN_PRIVY_IDS
+        sync: false
+      - key: ARCADE_DB_PATH
+        value: /app/apps/api/data/arcade.sqlite   # ephemeral on free plan: re-publish after restarts
+  - type: web
+    name: token-arcade-cartridges
+    runtime: docker
+    plan: free
+    envVars:
+      - key: ROLE
+        value: cartridges
+      - key: PORT
+        value: "8788"
+      - key: ARCADE_HOST_ORIGINS       # same value as above
+        sync: false
+      - key: ARCADE_API_ORIGIN         # e.g. https://token-arcade.onrender.com (Coindle price proxy)
+        sync: false
