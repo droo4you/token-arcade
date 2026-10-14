@@ -14,6 +14,7 @@ import { DirectWalletOwnershipResolver } from "./ownership.ts";
 import { AdapterRegistry, normalizeRunRules } from "./verifiers.ts";
 import { MinicoinDeployer, MinicoinError, type MinicoinSettings } from "./minicoin.ts";
 import { createCoindleHandler } from "./coindle.ts";
+import { TestnetMinicoinService } from "./testnet-minicoin.ts";
 
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses"]);
 const MODES = new Set(["free", "ranked", "raid"]);
@@ -333,6 +334,7 @@ export interface ApiOptions {
   staticRoot?: string;
   authSettings?: AuthSettings;
   minicoinSettings?: MinicoinSettings;
+  testnetMinicoinSettings?: MinicoinSettings;
 }
 
 function requireAdmin(identity: Identity): void {
@@ -367,6 +369,12 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   });
   const staticRoot = options.staticRoot ?? resolve(process.cwd(), "dist/web");
   const coindle = createCoindleHandler();
+  const testnet = new TestnetMinicoinService(store, options.testnetMinicoinSettings ?? {
+    enabled: process.env.TESTNET_ENABLE_WRITES === "true", chainId: "10143",
+    rpcUrl: process.env.TESTNET_RPC_URL, privateKey: process.env.TESTNET_DEPLOYER_PRIVATE_KEY,
+    factoryAddress: process.env.TESTNET_FACTORY_ADDRESS, treasuryAddress: process.env.TESTNET_TREASURY_ADDRESS,
+    supplyRecipient: process.env.TESTNET_SUPPLY_RECIPIENT,
+  }, auth.localDemoMode);
 
   return createServer(async (request, response) => {
     try {
@@ -376,6 +384,24 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       if (!path.startsWith("/api/")) return serveStatic(request, response, path, staticRoot);
       const coindleReply = await coindle(request, url);
       if (coindleReply) return respond(response, coindleReply.status, coindleReply.body);
+
+      const testnetRoute = path.match(/^\/api\/(creator|admin)\/games\/([^/]+)\/testnet-minicoin(?:\/(approve|reject|deploy|reconcile))?$/);
+      if (testnetRoute) {
+        const identity = await auth.authenticate(request);
+        const [, role, encodedId, action] = testnetRoute;
+        if (role === "admin") requireAdmin(identity);
+        const game = store.getGame(decodeURIComponent(encodedId));
+        if (!game || (role === "creator" && game.creatorId !== identity.id)) fail(404, "NOT_FOUND", "Game not found");
+        if (method === "GET" && !action) return respond(response, 200, { config: testnet.config, launch: testnet.get(game.manifest.id) ?? null });
+        if (method !== "POST") fail(405, "METHOD_NOT_ALLOWED", "Use POST for launch actions");
+        const body = await readJson(request);
+        const launch = role === "creator" && !action ? testnet.submit(game, identity, body)
+          : role === "admin" && (action === "approve" || action === "reject") ? testnet.review(game, identity, body, action === "approve")
+          : role === "creator" && action === "deploy" ? await testnet.deploy(game, identity, body)
+          : action === "reconcile" ? await testnet.reconcile(game, identity, body)
+          : fail(404, "NOT_FOUND", "Launch action not found");
+        return respond(response, 200, { config: testnet.config, launch });
+      }
 
       if (method === "GET" && path === "/api/health") {
         return respond(response, 200, {

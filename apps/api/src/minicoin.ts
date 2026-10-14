@@ -25,6 +25,9 @@ const factoryAbi = [
 ] as const;
 
 const tokenAbi = [
+  { type: "function", name: "name", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
+  { type: "function", name: "metadataURI", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
+  { type: "function", name: "totalSupply", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "symbol", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
   { type: "function", name: "gameId", stateMutability: "view", inputs: [], outputs: [{ type: "bytes32" }] },
   { type: "function", name: "factory", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
@@ -92,7 +95,7 @@ export class MinicoinDeployer {
     if (missing.length) this.reason = `Minicoin deployment requires ${missing.join(", ")}`;
   }
 
-  async deploy(game: GameRecord, input: MinicoinInput): Promise<MinicoinAssociation> {
+  async deploy(game: GameRecord, input: MinicoinInput, onSubmitted?: (hash: `0x${string}`) => void): Promise<MinicoinAssociation> {
     if (!this.ready) throw new MinicoinError("SETTLEMENT_NOT_READY", this.reason ?? "Minicoin deployment is not configured", 503);
     const settings = this.settings;
     const transport = settings.transport ?? http(settings.rpcUrl!);
@@ -122,15 +125,16 @@ export class MinicoinDeployer {
     const { request } = await client.simulateContract({ address: factory, abi: factoryAbi, functionName: "deploy", args: [config], account });
     const wallet = createWalletClient({ account, transport });
     const hash = await wallet.writeContract(request);
+    onSubmitted?.(hash);
     try {
-      return await this.reconcile(game, hash);
+      return await this.reconcile(game, hash, input);
     } catch (error) {
       if (error instanceof MinicoinError && error.code !== "DEPLOY_UNCONFIRMED") throw error;
       throw new MinicoinError("DEPLOY_UNCONFIRMED", `Factory transaction ${hash} was submitted but confirmation was not verified. Reconcile this hash before considering another deployment`, 503);
     }
   }
 
-  async reconcile(game: GameRecord, hash: `0x${string}`): Promise<MinicoinAssociation> {
+  async reconcile(game: GameRecord, hash: `0x${string}`, expectedInput?: MinicoinInput): Promise<MinicoinAssociation> {
     if (!this.reconcileReady) throw new MinicoinError("SETTLEMENT_NOT_READY", this.reconcileReason ?? "Minicoin reconciliation is not configured", 503);
     const settings = this.settings;
     const client = createPublicClient({ transport: settings.transport ?? http(settings.rpcUrl!) });
@@ -147,6 +151,18 @@ export class MinicoinDeployer {
       getAddress(log.address) === factory && log.args.gameId === gameId);
     if (events.length !== 1) throw new MinicoinError("DEPLOY_UNVERIFIED", "Confirmed transaction lacked the expected Minicoin deployment event");
     const minicoin = getAddress(events[0].args.minicoin);
+    if (expectedInput) {
+      const [name, symbol, uri, supply] = await Promise.all([
+        client.readContract({ address: minicoin, abi: tokenAbi, functionName: "name" }),
+        client.readContract({ address: minicoin, abi: tokenAbi, functionName: "symbol" }),
+        client.readContract({ address: minicoin, abi: tokenAbi, functionName: "metadataURI" }),
+        client.readContract({ address: minicoin, abi: tokenAbi, functionName: "totalSupply" }),
+      ]);
+      if (name !== expectedInput.name || symbol !== expectedInput.symbol || uri !== expectedInput.metadataURI ||
+          supply !== expectedInput.initialSupply || events[0].args.initialSupply !== expectedInput.initialSupply) {
+        throw new MinicoinError("DEPLOY_MISMATCH", "Confirmed token does not match the approved token settings");
+      }
+    }
     const mapped = await client.readContract({ address: factory, abi: factoryAbi, functionName: "minicoinByGame", args: [gameId] });
     if (getAddress(mapped) !== minicoin) throw new MinicoinError("DEPLOY_UNVERIFIED", "Factory mapping does not match the deployment event");
     const expectedType = game.community ? { erc20: 1, erc721: 2, erc1155: 3 }[game.community.type] : 0;

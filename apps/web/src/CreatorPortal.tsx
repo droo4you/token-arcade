@@ -3,6 +3,7 @@ import { ArrowUpRight, BadgeCheck, Code2, Plus, ShieldCheck, Upload, X } from "l
 import type { GameManifest, GameMode, GameObjective, GameRecord } from "../../../packages/sdk/src/index";
 import { api, ApiError, messageFor, type GameResponse, type Health } from "./api";
 import { useArcadeAuth } from "./auth";
+import { TestnetTokenPanel } from "./TestnetTokenPanel";
 
 type Submission = GameRecord & { readiness?: { ready: boolean; blockers: string[] } };
 const objectives: GameObjective[] = ["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses"];
@@ -89,6 +90,7 @@ export function CreatorPortal({ refresh, health }: { refresh: () => void; health
   const token = useRef(auth.getToken); token.current = auth.getToken;
   const [owned, setOwned] = useState<Submission[]>([]);
   const [reviewQueue, setReviewQueue] = useState<Submission[]>([]);
+  const [tokenReviewGames, setTokenReviewGames] = useState<Submission[]>([]);
   const [admin, setAdmin] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -103,8 +105,8 @@ export function CreatorPortal({ refresh, health }: { refresh: () => void; health
       api<{ games: Submission[] }>("/api/admin/games", token.current),
     ]);
     if (creator.status === "fulfilled") setOwned(creator.value.games); else setError(messageFor(creator.reason));
-    if (reviewer.status === "fulfilled") { setAdmin(true); setReviewQueue(reviewer.value.games.filter((game) => game.creatorId && game.status !== "published")); }
-    else { setAdmin(false); setReviewQueue([]); }
+    if (reviewer.status === "fulfilled") { setAdmin(true); setReviewQueue(reviewer.value.games.filter((game) => game.creatorId && game.status !== "published")); setTokenReviewGames(reviewer.value.games.filter((game) => game.creatorId)); }
+    else { setAdmin(false); setReviewQueue([]); setTokenReviewGames([]); }
   }, [auth.authenticated, auth.demoRole]);
   useEffect(() => { setEditing(null); setReviewing(null); setError(""); setNotice(""); void load(); }, [load]);
   const handleError = (reason: unknown) => { setError(messageFor(reason)); setDetails(reason instanceof ApiError ? reason.details : []); };
@@ -133,6 +135,8 @@ export function CreatorPortal({ refresh, health }: { refresh: () => void; health
       <div className="console-grid creator-grid"><section className="console-panel"><div className="console-panel-heading"><div><span className="section-kicker">YOUR CABINETS</span><h2>Submissions</h2></div><span>{owned.length}</span></div>{!owned.length ? <p className="console-hint">Your first cabinet starts with a playable Cartridge build. Submit it here when it is ready for review.</p> : <div className="admin-game-list">{owned.map((game) => <article className="admin-game creator-game" key={game.manifest.id}><div><span className={`status-badge ${game.status === "published" ? "status-good" : "status-wait"}`}>{game.status}</span><strong>{game.manifest.name}</strong><small>{game.manifest.id} · v{game.manifest.version}</small>{game.review?.note && <p>{game.review.note}</p>}{game.status === "approved" && <p>Approved and ready for your Deploy action.</p>}</div><div className="admin-game-actions">{game.status === "approved" && <button disabled={busy} onClick={() => void action(`/api/creator/games/${encodeURIComponent(game.manifest.id)}/deploy`, undefined, `${game.manifest.name} is published in the arcade.`)}>Deploy <ArrowUpRight size={16} /></button>}{game.status !== "published" && <button disabled={busy} onClick={() => { setEditing(game.manifest.id); setReviewing(null); }}>Revise</button>}{game.status === "published" && <a href={`/games/${encodeURIComponent(game.manifest.id)}`}>Open cabinet <ArrowUpRight size={16} /></a>}</div></article>)}</div>}</section>
         {admin && <section className="console-panel"><div className="console-panel-heading"><div><span className="section-kicker">ADMIN REVIEW CONSOLE</span><h2>Review queue</h2></div><ShieldCheck size={24} /></div>{!reviewQueue.length ? <p className="console-hint">No creator submissions need review.</p> : <div className="admin-game-list">{reviewQueue.map((game) => <article className="admin-game" key={game.manifest.id}><div><span className="status-badge status-wait">{game.status}</span><strong>{game.manifest.name}</strong><small>v{game.manifest.version} · {game.manifest.developer}</small></div><button disabled={busy} onClick={() => { setReviewing(game.manifest.id); setEditing(null); }}>Review</button></article>)}</div>}</section>}
         {editing && (editing === "new" || editedGame) && <SubmissionForm key={editing} game={editedGame} busy={busy} onSubmit={submit} onCancel={() => setEditing(null)} />}
+        {owned.filter((game) => ["approved", "published"].includes(game.status)).map((game) => <TestnetTokenPanel key={`token:${game.manifest.id}:${auth.demoRole}`} game={game} />)}
+        {admin && tokenReviewGames.map((game) => <TestnetTokenPanel key={`review-token:${game.manifest.id}:${auth.demoRole}`} game={game} review />)}
         {admin && reviewedGame && <ReviewPanel key={`${reviewedGame.manifest.id}:${reviewedGame.review?.validation?.reviewedAt ?? "new"}:${reviewedGame.status}`} game={reviewedGame} busy={busy} action={action} />}
       </div>
     </>}
