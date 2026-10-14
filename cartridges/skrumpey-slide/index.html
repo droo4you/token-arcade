@@ -142,6 +142,7 @@ body.playing #musicBtn{right:calc(max(14px,env(safe-area-inset-right)) + 88px);b
  #sunbar{top:0}#launchUI{bottom:100px;font-size:12px;width:44vw}#announce.big{font-size:24px}
 }
 @media (max-width:600px){#launchUI{bottom:112px;font-size:12px}#hud{font-size:16px;line-height:18px}#hScore{font-size:20px}#hTrain,#hPow{font-size:16px}#grid{grid-template-columns:repeat(4,minmax(40px,60px))}}
+#musicBtn,#musicBtn.off{width:68px;height:42px;background:var(--panel);font:700 10px/14px 'Silkscreen',monospace;color:#fff;padding:3px;z-index:9}
 </style></head><body>
 <canvas id="c"></canvas>
 <div id="hud" class="hid"><span id="hScore">0</span><span id="hPow" style="display:none"><span id="hPowIcon"></span><span id="hPowName"></span><span id="hPowBarW"><span id="hPowBar" style="display:block"></span></span></span><span id="hNuts"><img id="hNutImg" alt="" style="image-rendering:pixelated"><span id="hNutN">0</span><span id="hMeter"><span id="hMeterFill" style="display:block"></span></span></span><span id="hJump"></span><span id="hTrain"><i class="ico train"></i><b id="hTrainN">0</b><span id="hTrainM"></span></span><span id="hCombo">x1</span><span id="hDist">0 m</span></div>
@@ -496,7 +497,12 @@ function fireBeam(x,y,tx,ty,hit=true,rear=false){const len=Math.hypot(tx-x,ty-y)
 
 // ---------- audio (WebAudio synth, no files) ----------
 let AC=null,muted=params.get('mute')==='1';
-function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch{}if(AC)setTimeout(startMusic,0);}if(AC&&AC.state==='suspended')AC.resume();return AC;}
+function ac(){
+ try{if(!muted&&navigator.audioSession)navigator.audioSession.type='playback';}catch{}
+ if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();AC.addEventListener('statechange',updateAudioButton);}catch{}if(AC)setTimeout(startMusic,0);}
+ if(AC&&!muted&&AC.state!=='running'&&AC.state!=='closed')AC.resume().then(updateAudioButton).catch(updateAudioButton);
+ updateAudioButton();return AC;
+}
 function tone(f,d,type='square',v=0.08,f2,delay=0){const a=AC;if(!a||muted)return;const t=a.currentTime+delay;const o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);
  g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g).connect(a.destination);o.start(t);o.stop(t+d+0.02);}
 function noise(d,v=0.15,fq=800){const a=AC;if(!a||muted)return;const b=a.createBuffer(1,a.sampleRate*d,a.sampleRate),ch=b.getChannelData(0);for(let i=0;i<ch.length;i++)ch[i]=(Math.random()*2-1)*(1-i/ch.length);
@@ -517,8 +523,9 @@ function musicTick(){if(!AC||!musicOn||muted||state!=='play'){mNext=AC?AC.curren
   musicStep(AC,mGain,mNext,mStep,bi,fr,lane);
   mNext+=spb;mStep++;}}
 function startMusic(){if(!AC||musicTimer)return;mGain=musicChain(AC);musicTimer=setInterval(musicTick,60);}
-setTimeout(()=>$('musicBtn').classList.toggle('off',!musicOn||muted),0);
-function toggleMusic(){musicOn=!musicOn;$('musicBtn').classList.toggle('off',!musicOn);if(musicOn){ac();startMusic();}}
+function updateAudioButton(){const on=Boolean(musicOn&&!muted&&AC?.state==='running'),b=$('musicBtn');b.classList.toggle('off',!on);b.textContent=on?'SOUND ON':'SOUND OFF';b.setAttribute('aria-label',on?'Mute sound':'Enable sound');b.setAttribute('aria-pressed',String(on));b.title=on?'Mute music and effects (N)':'Enable music and effects (N)';}
+setTimeout(updateAudioButton,0);
+function toggleMusic(){const enable=muted||!musicOn||AC?.state!=='running';muted=!enable;musicOn=enable;if(enable){ac();startMusic();}else AC?.suspend().catch(()=>{});updateAudioButton();}
 const SFX={land:()=>noise(0.12,0.18,500),perfect:()=>{tone(880,0.12,'triangle',0.1);tone(1320,0.18,'triangle',0.1,null,0.07);},bad:()=>{noise(0.2,0.25,300);tone(160,0.2,'sawtooth',0.05,90);},
  gem:c=>tone(990+Math.min(8,c)*60,0.09,'square',0.05,1500),power:()=>[523,659,784,1047].forEach((f,i)=>tone(f,0.14,'triangle',0.09,null,i*0.06)),
  kill:()=>{tone(520,0.12,'square',0.08,1040);noise(0.08,0.12,2000);},beam:()=>tone(1800,0.18,'sawtooth',0.05,300),hit:()=>{tone(220,0.25,'sawtooth',0.1,70);noise(0.2,0.2,900);},
@@ -590,9 +597,9 @@ const touchInput=SkrumpeyTouchInput.create({canvas:$('c'),dive:$('diveBtn'),jump
  isPlaying:()=>state==='play',isLane:()=>Boolean(S.inLane),onActivate:()=>ac(),onJump:()=>{jumpQueued=true;},onLane:bits=>{laneQ|=bits;}});
 function resetInput(){held=false;jumpQueued=false;laneQ=0;touchInput.reset();}
 addEventListener('blur',resetInput);document.addEventListener('visibilitychange',()=>{if(document.hidden)resetInput();});
-addEventListener('keydown',e=>{if(state==='play'&&!e.repeat){if(e.code==='ArrowLeft'||e.code==='KeyA')laneQ|=4;if(e.code==='ArrowRight'||e.code==='KeyD')laneQ|=8;}if(e.code==='KeyN')toggleMusic();if(CONFIG.jumpKeys.includes(e.code)){ac();if(!e.repeat&&state==='play')jumpQueued=true;e.preventDefault();}if(e.code==='Space'){ac();held=true;e.preventDefault();}if(e.code==='KeyM')muted=!muted;});addEventListener('keyup',e=>{if(e.code==='Space')held=false;});
+addEventListener('keydown',e=>{if(state==='play'&&!e.repeat){if(e.code==='ArrowLeft'||e.code==='KeyA')laneQ|=4;if(e.code==='ArrowRight'||e.code==='KeyD')laneQ|=8;}if(e.code==='KeyN')toggleMusic();if(CONFIG.jumpKeys.includes(e.code)){ac();if(!e.repeat&&state==='play')jumpQueued=true;e.preventDefault();}if(e.code==='Space'){ac();held=true;e.preventDefault();}if(e.code==='KeyM'&&!e.repeat)toggleMusic();});addEventListener('keyup',e=>{if(e.code==='Space')held=false;});
 document.addEventListener('click',()=>ac(),{once:true});
-$('musicBtn').addEventListener('pointerdown',e=>{e.stopPropagation();toggleMusic();});
+$('musicBtn').addEventListener('click',e=>{e.stopPropagation();toggleMusic();});
 
 // ---------- game state ----------
 let annDummy=0,lastJH='';let state='menu',mode='free',acc=0,last=0,popT=0,bannerT=0,shake=0,curBiome=-1,trailT=0;

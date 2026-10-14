@@ -25,20 +25,22 @@ replace('function frame(t){requestAnimationFrame(frame);', 'function frame(t){if
 replace('requestAnimationFrame(t=>{last=t;frame(t);});', 'frameId=requestAnimationFrame(t=>{last=t;frame(t);});');
 replace('window.GAME={CONFIG,start,', 'if(!hosted) window.GAME={CONFIG,start,');
 replace('</script></body></html>', `
-if(hosted){
+// The arcade chooses the mode; direct cartridge previews use casual play.
+  $('bFree').textContent='Play';
   $('bRanked').hidden=true;
   $('bRanked').disabled=true;
+if(hosted){
   TA.register({version:'1.0.0',capabilities:{touch:true},
     async mount(config){
       if(config.mode!=='free'&&!config.seed)throw new Error('Passport Play needs a server-issued seed.');
-      muted=Boolean(config.muted ?? true);
+      muted=Boolean(config.muted ?? true);updateAudioButton();
       await Promise.all([buddiesReady,characterReady]);
     },
     start(){},
     pause(){arcadePaused=true;resetInput();acc=0;AC?.suspend();},
     resume(){arcadePaused=false;resetInput();acc=0;last=performance.now();if(!muted)AC?.resume();},
     restart(){start('free');},
-    audio(value){muted=value;if(value)AC?.suspend();else if(!arcadePaused)AC?.resume();},
+    audio(value){muted=value;if(value)AC?.suspend();else if(!arcadePaused){musicOn=true;ac();startMusic();}updateAudioButton();},
     destroy(){arcadeDestroyed=true;resetInput();cancelAnimationFrame(frameId);clearInterval(musicTimer);AC?.close();draco.dispose();scene.traverse(o=>{o.geometry?.dispose();for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m)continue;for(const v of Object.values(m))if(v?.isTexture)v.dispose();m.dispose();}});renderer.dispose();renderer.forceContextLoss();}
   });
 }
