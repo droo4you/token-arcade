@@ -106,7 +106,7 @@ const LEVELS = [
     b.fill(16, 1, 16, 8); b.door(16, 9, 3, 'A');
     b.crate(19, 11);
     b.sign(21, 11, 'CARRYING? ONLY ONE JUMP. SET IT DOWN AND CLIMB ON IT.');
-    b.fill(26, 7, 27, 11);                         // 5 tiles: needs the crate
+    b.fill(26, 8, 27, 11);                         // 4 tiles: still needs the crate
     b.apple(9, 5); b.apple(21, 4); b.apple(39, 8);
     b.exit(37, 11);
   }),
@@ -163,9 +163,10 @@ const LEVELS = [
     b.sign(9, 15, 'HOLD E AT A CRANK TO TURN IT. RC IS TOO SQUISHY TO CRANK.');
     b.mover(12, 15, { w: 3, dy: -3, crank: 'k1', speed: 0.7 });       // lift: rises 3 tiles
     b.fill(15, 8, 22, 15);                                           // upper ledge, 8 tiles up
+    b.clear(15, 8, 16, 8);                                           // 1-tile step down at the lip: lift -> ledge climb is 3 tiles, not 4
     b.apple(9, 9);
     b.plate(18, 7, 'Z');
-    b.sign(16, 7, 'THE ZAP STOPS WHILE THIS PLATE IS HELD.');
+    b.sign(16, 8, 'THE ZAP STOPS WHILE THIS PLATE IS HELD.');
     b.crank(21, 7, 'k2');
     b.mover(23, 8, { w: 3, dx: 11, crank: 'k2', speed: 0.7 });        // bridge over the pit
     b.spikes(23, 36, 16);

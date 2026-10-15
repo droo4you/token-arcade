@@ -238,27 +238,55 @@ function drawFan(ctx, w, f) {
   if (f.on) px(ctx, C.white, ax, ay, 3, 3);
 }
 function drawShadow(ctx, w, s) {
-  // sight band (readable, faint)
+  // Skrumpey sentry (eMONAD community critter). Same 14x26 hitbox and sight band as the old shadow figure:
+  // the sight band is drawn as the eye beam it shoots ahead of itself.
+  const x = s.x, y = s.y, f = s.facing > 0 ? 1 : -1, alert = s.alert > 0;
+  const bob = Math.round(Math.sin(w.frame * 0.12 + x) * 1);
+  const eyeY = y + 12 + bob;
+  // beam
   if (s.sight && s.sight.w > 0) {
-    ctx.fillStyle = s.alert ? 'rgba(224,44,44,0.16)' : 'rgba(18,10,31,0.10)';
-    ctx.fillRect(s.sight.x, s.sight.y, s.sight.w, s.sight.h);
-    ctx.fillStyle = s.alert ? 'rgba(224,44,44,0.5)' : 'rgba(18,10,31,0.25)';
-    for (let x = 0; x < s.sight.w; x += 4) ctx.fillRect(s.sight.x + x, s.sight.y, 2, 1);
+    const sx = s.sight.x, sw = s.sight.w;
+    ctx.fillStyle = alert ? 'rgba(224,44,44,0.12)' : 'rgba(176,150,232,0.12)';
+    ctx.fillRect(sx, s.sight.y, sw, s.sight.h);                       // faint full band = what it can see
+    const core = alert ? C.red : C.lav, glow = alert ? 'rgba(224,44,44,0.35)' : 'rgba(176,150,232,0.40)';
+    ctx.fillStyle = glow; ctx.fillRect(sx, eyeY - 2, sw, 5);
+    ctx.fillStyle = core; ctx.fillRect(sx, eyeY - 1, sw, 3);
+    ctx.fillStyle = C.white; ctx.fillRect(sx, eyeY, sw, 1);
+    for (let i = 0; i < sw; i += 6) {                                   // travelling sparkles
+      const o = (i + w.frame * 2 * f) % sw, bx = sx + ((o + sw) % sw);
+      px(ctx, C.white, Math.round(bx), eyeY - 2 + ((i >> 1) % 2) * 4, 1, 1);
+    }
+    const tip = f > 0 ? sx + sw : sx;                                   // splash where it hits
+    px(ctx, core, tip - 1, eyeY - 3, 3, 7); px(ctx, C.white, tip, eyeY - 1, 1, 3);
   }
-  const x = s.x, y = s.y;
-  ctx.fillStyle = '#120a1f';
-  for (let r = 0; r < s.h; r++) {
-    const t = r / s.h, half = Math.round(7 * Math.sin(Math.min(1, t * 1.6) * Math.PI / 2) + (t > 0.85 ? -1 : 0));
-    const jit = Math.round((hash(r, w.frame >> 2) - 0.5) * 2);
-    ctx.fillRect(x + 7 - half + jit, y + r, half * 2, 1);
+  // body: round purple blob filling the lower part of the hitbox
+  const cx = x + 7, by = y + 26, top = y + 4 + bob;
+  const body = alert ? '#9a54d8' : C.purple, dark = C.purpleD;
+  for (let r = top; r < by; r++) {
+    const t = (r - top) / (by - top), half = Math.round(8 * Math.sin(Math.min(1, 0.25 + t * 1.1) * Math.PI / 2));
+    px(ctx, C.ink, cx - half - 1, r, half * 2 + 2, 1);
+    px(ctx, body, cx - half, r, half * 2, 1);
+    px(ctx, dark, cx - half, r, 2, 1);                                  // shade on the left edge
+    if (t > 0.75) px(ctx, dark, cx - half, r, half * 2, 1);
   }
-  // fuzz
-  for (let i = 0; i < 8; i++) px(ctx, '#120a1f', x + Math.floor(hash(i, w.frame >> 2) * 18) - 2, y + Math.floor(hash(w.frame >> 2, i) * s.h), 1, 1);
-  // wispy feet
-  for (let i = 0; i < 3; i++) px(ctx, '#120a1f', x + 2 + i * 4 + Math.round(Math.sin(w.frame * 0.2 + i) * 1), y + s.h, 2, 2);
-  const eye = s.alert ? C.red : '#f4ecd4', ex = s.facing > 0 ? x + 8 : x + 2;
-  px(ctx, eye, ex, y + 7, 2, 2); px(ctx, eye, ex + 4, y + 7, 2, 2);
-  if (s.alert) { drawText(ctx, '!', x + 5, y - 10, C.red); }
+  px(ctx, C.ink, cx - 6, top - 1, 12, 1);
+  // ears / tufts
+  px(ctx, C.ink, cx - 6, top - 4, 3, 4); px(ctx, body, cx - 5, top - 3, 1, 3);
+  px(ctx, C.ink, cx + 3, top - 4, 3, 4); px(ctx, body, cx + 4, top - 3, 1, 3);
+  // belly + highlight
+  px(ctx, C.lav, cx - 3, y + 17 + bob, 7, 5); px(ctx, '#d6c6f6', cx - 2, y + 18 + bob, 4, 2);
+  px(ctx, C.white, cx - 5, top + 2, 2, 2);
+  // big eye, looking the way it faces (the beam comes out of it)
+  const ex = cx - 3 + f * 2;
+  px(ctx, C.ink, ex - 1, eyeY - 4, 8, 8);
+  px(ctx, C.white, ex, eyeY - 3, 6, 6);
+  px(ctx, alert ? C.red : C.ink, ex + (f > 0 ? 3 : 1), eyeY - 2, 2, 4);
+  px(ctx, C.white, ex + (f > 0 ? 3 : 1), eyeY - 2, 1, 1);
+  // little cheek + feet
+  px(ctx, C.pink, cx + (f > 0 ? -5 : 3), eyeY + 4, 2, 1);
+  const step = Math.round(Math.sin(w.frame * 0.25) * 1);
+  px(ctx, C.ink, cx - 6, by - 1 + step, 4, 2); px(ctx, C.ink, cx + 2, by - 1 - step, 4, 2);
+  if (alert) drawText(ctx, '!', x + 5, y - 10, C.red);
 }
 function drawSmoke(ctx, w) {
   for (const sm of w.smokes) {
