@@ -105,8 +105,8 @@ const LEVELS = [
     b.sign(11, 11, 'BIG PLATES NEED REAL WEIGHT. RC IS TOO LIGHT.');
     b.fill(16, 1, 16, 8); b.door(16, 9, 3, 'A');
     b.crate(19, 11);
-    b.sign(21, 11, 'CARRYING? ONLY ONE JUMP. SET IT DOWN AND CLIMB ON IT.');
-    b.fill(26, 8, 27, 11);                         // 4 tiles: still needs the crate
+    b.sign(21, 11, 'SET IT RIGHT AGAINST THE WALL, THEN HOLD JUMP AND DOUBLE JUMP.');
+    b.fill(26, 7, 27, 11);                         // 5 tiles: needs the crate
     b.apple(9, 5); b.apple(21, 4); b.apple(39, 8);
     b.exit(37, 11);
   }),
