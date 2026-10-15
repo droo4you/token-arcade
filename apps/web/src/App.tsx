@@ -83,6 +83,7 @@ function isRaidOpen(raid: Raid, now: number) {
 }
 
 function raidDisplayStatus(raid: Raid, now: number) {
+  if (raid.finalResult) return "final";
   if (raid.status !== "open") return raid.status;
   if (now < Date.parse(raid.startsAt)) return "upcoming";
   if (now >= Date.parse(raid.endsAt)) return "closed";
@@ -335,12 +336,22 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
     try {
       const response = await api<CompleteResponse>(`/api/runs/${encodeURIComponent(runResult.runId)}/complete`, token.current, { method: "POST", body: runResult });
       if (completionGeneration.current === generation) setVerified(response.verified);
-    } catch (reason) { if (completionGeneration.current === generation) setError(messageFor(reason)); }
+    } catch (reason) {
+      try {
+        const saved = await api<{ verified: boolean }>(`/api/runs/${encodeURIComponent(runResult.runId)}/result`, token.current);
+        if (completionGeneration.current === generation) {
+          setVerified(saved.verified);
+          if (!saved.verified) setError(messageFor(reason));
+        }
+      } catch { if (completionGeneration.current === generation) setError(messageFor(reason)); }
+    }
     finally { if (completionGeneration.current === generation) setLoading(false); }
   };
   return <main className="page-width player-page"><div className="player-top"><Link href={gameHref(game.id)} className="back-link"><ArrowLeft size={17} /> Leave cabinet</Link><div className="player-mode"><span className="live-dot" />{mode === "free" ? "Free Play" : mode === "ranked" ? "Passport Play" : "Community Raid"}</div></div><div className="player-heading"><div><span className="section-kicker">{game.fixture ? "INTERNAL TEST CARTRIDGE" : "ARCADE CARTRIDGE"}</span><h1>{game.name}</h1><p>{game.fixture ? "Match the big symbol using the four pads. Twelve rounds. Twenty seconds." : game.description}</p></div>{game.fixture && <div className="player-rule"><Clock3 size={21} /><span>12 rounds<br /><strong>20 seconds</strong></span></div>}</div>
     {loading && !result && <div className="loading-slab">Issuing your {mode === "raid" ? "raid attempt" : "run"}…</div>}
     {error && <ErrorNote error={error} />}
+    {mode !== "free" && result?.result === "completed" && !verified && !loading && <button className="action action-light" onClick={() => void complete(result)}>Retry result submission</button>}
+    {mode === "raid" && raidId && <Link className="back-link" href={`/raids/${encodeURIComponent(raidId)}`}>Return to raid standings</Link>}
     {config && (!result || mode === "free") && <CartridgeView key={config.runId} config={config} manifest={game.record!.manifest} onComplete={complete} />}
     {result && <div className="result-panel"><div className="result-medal"><Trophy size={31} /></div><div>
       <span>{result.result === "failed" ? "RUN FINISHED" : mode === "free" ? "LOCAL RESULT" : loading ? "VERIFYING RESULT" : verified ? "VERIFIED RESULT" : "RESULT NOT VERIFIED"}</span>
@@ -368,20 +379,27 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
   const now = useNow(1000);
   useEffect(() => {
     const controller = new AbortController();
-    api<RaidResponse>(`/api/raids/${encodeURIComponent(id)}`, auth.getToken, { signal: controller.signal })
-      .then(setData)
-      .catch((reason) => { if (!(reason instanceof DOMException && reason.name === "AbortError")) setError(messageFor(reason)); });
-    return () => controller.abort();
-  }, [id, auth.authenticated, auth.demoRole]);
-  if (error) return <main className="page-width list-page"><Link href="/raids" className="back-link"><ArrowLeft size={17} /> All raids</Link><ErrorNote error={error} /></main>;
-  if (!data) return <main className="page-width list-page"><div className="loading-slab">Opening raid lobby…</div></main>;
+    setData(null); setError("");
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        const next = await api<RaidResponse>(`/api/raids/${encodeURIComponent(id)}`, auth.getToken, { signal: controller.signal });
+        if (!controller.signal.aborted) { setData(next); setError(""); }
+      } catch (reason) { if (!controller.signal.aborted) setError(messageFor(reason)); }
+      finally { if (!controller.signal.aborted) timer = setTimeout(refresh, 5000); }
+    };
+    void refresh();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [id, auth.identityKey]);
+  if (!data) return <main className="page-width list-page"><div className="loading-slab">Opening raid lobby…</div>{error && <ErrorNote error={error} />}</main>;
   const { raid, leaderboard } = data;
+  const ownEntry = leaderboard.find(entry => entry.playerId === data.playerId);
   const game = getGame(raid.gameId, records);
   const running = now >= Date.parse(raid.startsAt) && now < Date.parse(raid.endsAt);
   const attemptsLeft = data.attemptsRemaining;
   const playable = isRaidOpen(raid, now) && game?.playable && game.record?.status === "published" && game.record.manifest.supportedModes.includes("raid") && (attemptsLeft === undefined || attemptsLeft > 0);
   const reward = raid.reward as Raid["reward"] & { type: string; asset?: string; tokenId?: string; amount?: string };
-  const prizeLabel = !reward || reward.type === "none" ? "No prize · test raid" : reward.type === "erc721" ? "NFT prize" : `${reward.type.toUpperCase()} prize`;
+  const prizeLabel = !reward || reward.type === "none" ? "No prize · community challenge" : reward.type === "erc721" ? "NFT prize" : `${reward.type.toUpperCase()} prize`;
   const entryLabel = raid.entry ? `${raid.entry.amount} ${raid.entry.asset}` : "Free entry";
   const countdown = now < Date.parse(raid.startsAt) ? `Opens in ${timeLeft(raid.startsAt, now).replace(" left", "")}` : timeLeft(raid.endsAt, now);
   let unavailable = "The game adapter is not ready for play.";
@@ -390,6 +408,8 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
   return <main className="page-width raid-page">
     <Link href="/raids" className="back-link"><ArrowLeft size={17} /> All raids</Link>
     <GuideLink topic="raids">How raids work</GuideLink>
+    {error && <ErrorNote error={`Standings could not refresh. Showing the last received results. ${error}`} />}
+    {raid.finalResult && <section className="result-panel" aria-live="polite"><Trophy size={31} /><div><span>FINAL RESULT</span><h2>{leaderboard[0] ? `${leaderboard[0].displayName} wins!` : "No qualifying runs"}</h2><p>{leaderboard[0] ? `Winning result: ${metricText(leaderboard[0].primaryMetric, raid.objective)}. Final standings are saved below.` : "This raid ended without an accepted result."} This community challenge has no prize.</p></div></section>}
     <div className="raid-hero">
       <div><StatusBadge tone={isRaidOpen(raid, now) ? "good" : "wait"}>Raid {raidDisplayStatus(raid, now)}</StatusBadge><h1>{raid.name}</h1><p>Same course. Same rules. Put your best run on the board.</p>
         <div className="raid-quickfacts"><div><Clock3 size={19} /><span>{countdown}</span></div><div><Ticket size={19} /><span>{entryLabel}</span></div><div><Trophy size={19} /><span>{prizeLabel}</span></div></div>
@@ -398,6 +418,7 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
     </div>
     <div className="raid-content">
       <section className="rules-panel"><h2>The rules</h2>
+        <p>Each issued attempt counts, including abandoned runs. Finish and submit before the closing time. Your best verified attempt counts; equal results are ordered by acceptance time, then run ID.</p>
         <div className="rule-row"><span>Game</span><strong>{game?.name ?? raid.gameId}</strong></div>
         <div className="rule-row"><span>Objective</span><strong>{raid.objective.replaceAll("_", " ")}</strong></div>
         <div className="rule-row"><span>Attempts</span><strong>{attemptsLeft !== undefined ? `${attemptsLeft} remaining of ${raid.maxAttempts}` : `${raid.maxAttempts} per player`}</strong></div>
@@ -411,7 +432,7 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
           <div className="rule-row"><span>Fee routing</span><strong>{raid.entry ? `${raid.feeSplitBps.prize / 100}% prize / ${raid.feeSplitBps.community / 100}% community / ${raid.feeSplitBps.treasury / 100}% treasury` : "No entry fee / no fee routing"}</strong></div>
         </details>
       </section>
-      <section className="raid-board"><div className="board-heading"><div><h2>Raid standings</h2><p>Verified attempts only.</p></div><Trophy size={26} /></div><Leaderboard entries={leaderboard} objective={raid.objective} /></section>
+      <section className="raid-board"><div className="board-heading"><div><h2>{raid.finalResult ? "Final standings" : "Raid standings"}</h2><p>{ownEntry ? `Your place: #${ownEntry.rank} · ${metricText(ownEntry.primaryMetric, raid.objective)}` : "Verified attempts only."}</p>{raid.status === "closed" && !raid.finalResult && <p>Checking final results…</p>}</div><Trophy size={26} /></div><Leaderboard entries={leaderboard} objective={raid.objective} /></section>
     </div>
   </main>;
 }
