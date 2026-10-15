@@ -147,6 +147,7 @@ class World {
     }
     for (const s of this.solids()) {
       if (s === b || s.ghost || s === b.carry) continue;
+      if (overlaps(b, s)) continue;   // already inside it (e.g. crate dropped on RC): let b move out
       if (rectHit(x, y, b.w, b.h, s)) return true;
     }
     if (b.carry) {
