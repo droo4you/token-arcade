@@ -291,10 +291,10 @@ function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid"
       if (apples) return apples;
       const aTime = a.result.objective === "completion_time" ? a.result.primaryMetric : (a.result.secondaryMetrics?.ticks ?? Infinity) * 1000 / 60;
       const bTime = b.result.objective === "completion_time" ? b.result.primaryMetric : (b.result.secondaryMetrics?.ticks ?? Infinity) * 1000 / 60;
-      return aTime - bTime || a.acceptedAt.localeCompare(b.acceptedAt);
+      return aTime - bTime || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
     }
     const lowerIsBetter = a.result.objective === "completion_time" || a.result.objective === "guesses";
-    return (lowerIsBetter ? a.result.primaryMetric - b.result.primaryMetric : b.result.primaryMetric - a.result.primaryMetric) || a.acceptedAt.localeCompare(b.acceptedAt);
+    return (lowerIsBetter ? a.result.primaryMetric - b.result.primaryMetric : b.result.primaryMetric - a.result.primaryMetric) || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
   };
   for (const item of results) {
     const prior = best.get(item.playerId);
@@ -374,6 +374,13 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   });
   const store = options.store ?? new ArcadeStore(process.env.ARCADE_DB_PATH || undefined, auth.localDemoMode);
   const adapters = options.adapters ?? new AdapterRegistry();
+  const verifyingRaids = new Map<string, number>();
+  const publicRaid = (raid: Raid): Raid => {
+    if (!verifyingRaids.get(raid.id)) {
+      raid = store.finalizeFreeRaid(raid.id, () => leaderboard(store, raid.gameId, "raid", raid.id, raid.objective, undefined, raid.rules)) ?? raid;
+    }
+    return currentRaid(raid);
+  };
   const ownership = new DirectWalletOwnershipResolver(process.env.MONAD_RPC_URL);
   const minicoinSettings = options.minicoinSettings ?? {
     enabled: process.env.ENABLE_ONCHAIN_WRITES === "true", rpcUrl: process.env.MONAD_RPC_URL,
@@ -441,20 +448,20 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const { submission, ...publicGame } = game;
         return respond(response, 200, { game: publicGame });
       }
-      if (method === "GET" && path === "/api/raids") return respond(response, 200, { raids: store.listRaids().filter((raid) => raid.status !== "draft" && raid.gameId !== WARMUP_GAME_ID).map((raid) => currentRaid(raid)) });
+      if (method === "GET" && path === "/api/raids") return respond(response, 200, { raids: store.listRaids().filter((raid) => raid.status !== "draft" && raid.gameId !== WARMUP_GAME_ID).map(publicRaid) });
       if (method === "GET" && /^\/api\/raids\/[^/]+$/.test(path)) {
         const id = decodeURIComponent(path.split("/")[3]);
         const savedRaid = store.getRaid(id);
-        const raid = savedRaid && currentRaid(savedRaid);
+        const raid = savedRaid && publicRaid(savedRaid);
         if (!raid || raid.status === "draft") fail(404, "NOT_FOUND", "Public raid not found");
-        let attempts: { attemptsUsed: number; attemptsRemaining: number } | undefined;
+        let attempts: { playerId: string; attemptsUsed: number; attemptsRemaining: number } | undefined;
         if (request.headers.authorization) {
           const identity = await auth.authenticate(request);
           const passport = store.getOrCreatePassport(identity.id);
           const attemptsUsed = store.countRaidAttempts(passport.playerId, raid.id);
-          attempts = { attemptsUsed, attemptsRemaining: Math.max(0, raid.maxAttempts - attemptsUsed) };
+          attempts = { playerId: passport.playerId, attemptsUsed, attemptsRemaining: Math.max(0, raid.maxAttempts - attemptsUsed) };
         }
-        return respond(response, 200, { raid, leaderboard: leaderboard(store, raid.gameId, "raid", raid.id, raid.objective, undefined, raid.rules), ...attempts });
+        return respond(response, 200, { raid, leaderboard: raid.finalResult?.entries ?? leaderboard(store, raid.gameId, "raid", raid.id, raid.objective, undefined, raid.rules), ...attempts });
       }
       if (method === "GET" && /^\/api\/leaderboards\/[^/]+$/.test(path)) {
         const gameId = decodeURIComponent(path.split("/")[3]);
@@ -462,12 +469,12 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (!game || game.status !== "published") fail(404, "NOT_FOUND", "Published game not found");
         const mode = url.searchParams.get("mode") ?? "ranked";
         if (mode !== "ranked" && mode !== "raid") fail(400, "INVALID_MODE", "Leaderboard mode must be ranked or raid");
-        const raidId = url.searchParams.get("raidId") ?? undefined;
+        const raidId = mode === "raid" ? url.searchParams.get("raidId") ?? undefined : undefined;
         const raid = raidId ? store.getRaid(raidId) : undefined;
         if (mode === "raid" && (!raid || raid.gameId !== gameId || raid.status === "draft")) fail(400, "INVALID_RAID", "A matching raidId is required");
         const objective = mode === "raid" ? raid!.objective : game.manifest.supportedObjectives[0];
         const rules = mode === "raid" ? raid?.rules : adapters.get(game.manifest.adapterId)?.rankedRules;
-        return respond(response, 200, { gameId, mode, objective, ...(raidId ? { raidId } : {}), entries: leaderboard(store, gameId, mode, raidId, objective, mode === "ranked" ? game.manifest.version : undefined, rules) });
+        return respond(response, 200, { gameId, mode, objective, ...(raidId ? { raidId } : {}), entries: (raid && publicRaid(raid).finalResult?.entries) ?? leaderboard(store, gameId, mode, raidId, objective, mode === "ranked" ? game.manifest.version : undefined, rules) });
       }
 
       if (path === "/api/me" && (method === "GET" || method === "PATCH")) {
@@ -665,6 +672,16 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         return respond(response, 201, { run: config });
       }
 
+      if (method === "GET" && /^\/api\/runs\/[^/]+\/result$/.test(path)) {
+        const identity = await auth.authenticate(request);
+        const passport = store.getOrCreatePassport(identity.id);
+        const runId = decodeURIComponent(path.split("/")[3]);
+        const session = store.getSession(runId);
+        if (!session || session.playerId !== passport.playerId) fail(404, "NOT_FOUND", "Run session not found");
+        const result = store.getAcceptedResult(runId);
+        return respond(response, 200, { verified: !!result, result: result ?? null });
+      }
+
       if (method === "POST" && /^\/api\/runs\/[^/]+\/complete$/.test(path)) {
         const identity = await auth.authenticate(request);
         const passport = store.getOrCreatePassport(identity.id);
@@ -674,6 +691,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (session.consumedAt) fail(409, "RUN_CONSUMED", "Run result was already accepted");
         if (Date.now() > Date.parse(session.config.expiresAt ?? "")) fail(409, "RUN_EXPIRED", "Run session expired");
         const body = await readJson(request);
+        if (Date.now() >= Date.parse(session.config.expiresAt ?? "")) fail(409, "RUN_EXPIRED", "Run submission must arrive before its deadline");
         const checked = validateRunResultShape(session.config, isRecord(body.result) ? body.result : body);
         if (!checked.valid) fail(400, "INVALID_RESULT", checked.reason);
         const result = checked.result;
@@ -690,14 +708,24 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         // The verifier must see the server-issued rules, never a browser-authored copy.
         const { rules: _untrustedRules, ...claimedResult } = result;
         const verifiedResult: GameRunResult = { ...claimedResult, ...(session.config.rules ? { rules: session.config.rules } : {}) };
-        const verdict = await verifier.verify(session.config, verifiedResult);
-        if (!verdict.valid) fail(400, "UNVERIFIED_RESULT", verdict.reason ?? "Verifier rejected the result");
-        const raid = result.raidId ? store.getRaid(result.raidId) : undefined;
-        if (raid && Date.parse(result.finishedAt) >= Date.parse(raid.endsAt)) fail(409, "RAID_CLOSED", "Run finished after the raid ended");
-        const updated = store.acceptResult(session, verifiedResult, (current) => updatePassport(store, current, verifiedResult, raid));
-        if (!updated) fail(409, "RUN_CONSUMED", "Run result was already accepted");
-        const entries = leaderboard(store, result.gameId, result.mode as "ranked" | "raid", result.raidId, result.objective, result.mode === "ranked" ? game?.manifest.version : undefined, session.config.rules);
-        return respond(response, 200, { verified: true, result: verifiedResult, passport: updated, leaderboardEntry: entries.find((entry) => entry.playerId === passport.playerId) });
+        const pendingRaidId = session.config.raidId;
+        if (pendingRaidId) verifyingRaids.set(pendingRaidId, (verifyingRaids.get(pendingRaidId) ?? 0) + 1);
+        try {
+          const verdict = await verifier.verify(session.config, verifiedResult);
+          if (!verdict.valid) fail(400, "UNVERIFIED_RESULT", verdict.reason ?? "Verifier rejected the result");
+          const raid = result.raidId ? store.getRaid(result.raidId) : undefined;
+          if (raid && Date.parse(result.finishedAt) >= Date.parse(raid.endsAt)) fail(409, "RAID_CLOSED", "Run finished after the raid ended");
+          const updated = store.acceptResult(session, verifiedResult, (current) => updatePassport(store, current, verifiedResult, raid));
+          if (!updated) fail(409, "RUN_CONSUMED", "Run result was already accepted or the raid is final");
+          const entries = leaderboard(store, result.gameId, result.mode as "ranked" | "raid", result.raidId, result.objective, result.mode === "ranked" ? game?.manifest.version : undefined, session.config.rules);
+          return respond(response, 200, { verified: true, result: verifiedResult, passport: updated, leaderboardEntry: entries.find((entry) => entry.playerId === passport.playerId) });
+        } finally {
+          if (pendingRaidId) {
+            const remaining = (verifyingRaids.get(pendingRaidId) ?? 1) - 1;
+            if (remaining) verifyingRaids.set(pendingRaidId, remaining);
+            else verifyingRaids.delete(pendingRaidId);
+          }
+        }
       }
 
       if (path.startsWith("/api/admin/")) {

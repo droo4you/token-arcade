@@ -124,6 +124,100 @@ test("raid attempt cap counts issued sessions, including abandoned ones", async 
   assert.equal(guestDetail.body.attemptsRemaining, undefined);
 });
 
+test("three players receive a durable final raid result and recover accepted submissions", async () => {
+  const now = Date.now();
+  const created = await api("/api/admin/raids", { method: "POST", auth: "admin", body: {
+    name: "Three player final", gameId: WARMUP_GAME_ID, communityId: "internal-test", objective: "score",
+    startsAt: new Date(now - 1000).toISOString(), endsAt: new Date(now + 60_000).toISOString(), maxAttempts: 3,
+  } });
+  const raidId = created.body.raid.id;
+  const players = ["final-alice", "final-bob", "final-carol"];
+  const runs: GameRunConfig[] = [];
+  for (const player of players) {
+    const issued = await api("/api/runs", { method: "POST", auth: player, body: { gameId: WARMUP_GAME_ID, mode: "raid", raidId } });
+    assert.equal(issued.status, 201);
+    runs.push(issued.body.run);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1020));
+  for (let i = 0; i < players.length; i++) {
+    const accepted = await api(`/api/runs/${runs[i].runId}/complete`, { method: "POST", auth: players[i], body: resultFor(runs[i]) });
+    assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
+  }
+  const recovery = await api(`/api/runs/${runs[0].runId}/result`, { auth: players[0] });
+  assert.equal(recovery.body.verified, true);
+  assert.equal(recovery.body.result.runId, runs[0].runId);
+  assert.equal((await api(`/api/runs/${runs[0].runId}/result`, { auth: players[1] })).status, 404);
+  const raid = store.getRaid(raidId)!;
+  store.saveRaid({ ...raid, endsAt: new Date(Date.now() - 1).toISOString() });
+  const final = (await api(`/api/raids/${raidId}`)).body;
+  assert.equal(final.raid.status, "closed");
+  assert.deepEqual(final.raid.finalResult.entries.map((entry: any) => entry.runId), runs.map(run => run.runId));
+  const winnerId = final.leaderboard[0].playerId;
+  assert.equal(store.getPassport(winnerId)!.wins, 1);
+  const winner = store.getPassport(winnerId)!;
+  store.savePassport({ ...winner, displayName: "Changed after final" });
+  const again = (await api(`/api/raids/${raidId}`)).body;
+  assert.deepEqual(again.raid.finalResult, final.raid.finalResult);
+  assert.equal(store.getPassport(winnerId)!.wins, 1);
+  assert.equal((await api(`/api/runs/${runs[0].runId}/result`, { auth: players[0] })).body.verified, true);
+  assert.equal((await api("/api/runs", { method: "POST", auth: players[0], body: { gameId: WARMUP_GAME_ID, mode: "raid", raidId } })).status, 409);
+});
+
+test("final result and winner count survive reopening SQLite; empty raids finish without a winner", () => {
+  const directory = mkdtempSync(join(tmpdir(), "raid-final-"));
+  const filename = join(directory, "arcade.sqlite");
+  let saved = new ArcadeStore(filename, true);
+  try {
+    const passport = saved.getOrCreatePassport("persistence-winner");
+    const raid = saved.getRaid("warmup-test-raid")!;
+    saved.saveRaid({ ...raid, endsAt: new Date(Date.now() - 1).toISOString() });
+    const finalized = saved.finalizeFreeRaid(raid.id, () => [{ rank: 1, playerId: passport.playerId, displayName: passport.displayName,
+      primaryMetric: 1200, objective: "score", finishedAt: raid.endsAt, runId: "persisted-winner" }])!;
+    saved.close();
+    saved = new ArcadeStore(filename, true);
+    assert.deepEqual(saved.getRaid(raid.id)!.finalResult, finalized.finalResult);
+    saved.finalizeFreeRaid(raid.id, () => { throw new Error("must not finalize twice"); });
+    assert.equal(saved.getPassport(passport.playerId)!.wins, 1);
+    saved.saveRaid({ ...raid, id: "empty-final", endsAt: new Date(Date.now() - 1).toISOString() });
+    assert.deepEqual(saved.finalizeFreeRaid("empty-final", () => [])!.finalResult!.entries, []);
+  } finally { saved.close(); unlinkSync(filename); rmdirSync(directory); }
+});
+
+test("closing waits for an admitted verification before freezing standings", async () => {
+  const isolated = new ArcadeStore(":memory:", true);
+  const adapters = new AdapterRegistry();
+  const original = adapters.get(WARMUP_GAME_ID)!;
+  let release!: () => void;
+  let entered!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  adapters.register({ ...original, verifier: { gameId: WARMUP_GAME_ID, async verify(config, result) {
+    entered(); await gate; return original.verifier!.verify(config, result);
+  } } });
+  const local = createArcadeServer({ store: isolated, adapters, authSettings: { localDemoMode: true }, staticRoot: "nonexistent-build" });
+  await new Promise<void>(resolve => local.listen(0, "127.0.0.1", resolve));
+  const address = `http://127.0.0.1:${(local.address() as AddressInfo).port}`;
+  const call = async (path: string, body?: unknown) => {
+    const response = await fetch(address + path, { method: body ? "POST" : "GET", headers: { authorization: "Bearer local-demo:boundary", "content-type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    return { status: response.status, body: await response.json() as any };
+  };
+  try {
+    const run = (await call("/api/runs", { gameId: WARMUP_GAME_ID, mode: "raid", raidId: "warmup-test-raid" })).body.run;
+    await new Promise(resolve => setTimeout(resolve, 1050));
+    const pending = call(`/api/runs/${run.runId}/complete`, resultFor(run));
+    await started;
+    const raid = isolated.getRaid("warmup-test-raid")!;
+    isolated.saveRaid({ ...raid, endsAt: new Date().toISOString() });
+    const closing = await call("/api/raids/warmup-test-raid");
+    assert.equal(closing.body.raid.status, "closed");
+    assert.equal(closing.body.raid.finalResult, undefined);
+    release();
+    assert.equal((await pending).status, 200);
+    const final = await call("/api/raids/warmup-test-raid");
+    assert.equal(final.body.raid.finalResult.entries[0].runId, run.runId);
+  } finally { release(); await new Promise<void>(resolve => local.close(() => resolve())); isolated.close(); }
+});
+
 test("economic raids remain drafts with explicit custody and collection blockers", async () => {
   const now = Date.now();
   const created = await api("/api/admin/raids", {

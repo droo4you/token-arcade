@@ -267,6 +267,9 @@ export class ArcadeStore {
     const acceptedAt = new Date().toISOString();
     this.db.exec("BEGIN IMMEDIATE");
     try {
+      if (result.raidId && this.getRaid(result.raidId)?.finalResult) {
+        this.db.exec("ROLLBACK"); return undefined;
+      }
       const update = this.db.prepare("UPDATE run_sessions SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL")
         .run(acceptedAt, session.config.runId);
       if (update.changes !== 1) { this.db.exec("ROLLBACK"); return undefined; }
@@ -286,6 +289,29 @@ export class ArcadeStore {
       ? this.db.prepare("SELECT player_id,json,accepted_at FROM accepted_results WHERE game_id = ? AND mode = ? AND raid_id = ?").all(gameId, mode, raidId)
       : this.db.prepare("SELECT player_id,json,accepted_at FROM accepted_results WHERE game_id = ? AND mode = ? AND raid_id IS NULL").all(gameId, mode)) as unknown as { player_id: string; json: string; accepted_at: string }[];
     return rows.map((row) => ({ playerId: row.player_id, result: JSON.parse(row.json) as GameRunResult, acceptedAt: row.accepted_at }));
+  }
+
+  getAcceptedResult(runId: string): GameRunResult | undefined {
+    const row = this.db.prepare("SELECT json FROM accepted_results WHERE run_id = ?").get(runId) as JsonRow | undefined;
+    return row ? JSON.parse(row.json) as GameRunResult : undefined;
+  }
+
+  finalizeFreeRaid(id: string, entries: () => NonNullable<Raid["finalResult"]>["entries"]): Raid | undefined {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const raid = this.getRaid(id);
+      if (raid && !raid.finalResult && ["open", "closed"].includes(raid.status) &&
+          !raid.entry && raid.reward.type === "none" && Date.now() >= Date.parse(raid.endsAt)) {
+        raid.finalResult = { finalizedAt: new Date().toISOString(), entries: entries() };
+        raid.status = "closed";
+        const winner = raid.finalResult.entries[0];
+        const passport = winner && this.getPassport(winner.playerId);
+        if (passport) this.savePassport({ ...passport, wins: passport.wins + 1 });
+        this.saveRaid(raid);
+      }
+      this.db.exec("COMMIT");
+      return raid;
+    } catch (error) { this.db.exec("ROLLBACK"); throw error; }
   }
 
   hasAcceptedGame(playerId: string, gameId: string): boolean {

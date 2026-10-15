@@ -135,6 +135,21 @@ export interface Raid {
     | { type: "erc721" | "erc20" | "native"; asset: string; tokenId?: string; amount?: string; custodyTx?: string };
   feeSplitBps: { prize: number; community: number; treasury: number };
   status: "draft" | "open" | "closed" | "settled" | "cancelled";
+  finalResult?: {
+    finalizedAt: string;
+    entries: RaidStanding[];
+  };
+}
+
+export interface RaidStanding {
+  rank: number;
+  playerId: string;
+  displayName: string;
+  primaryMetric: number;
+  objective: GameObjective;
+  finishedAt: string;
+  runId: string;
+  secondaryMetrics?: Record<string, number>;
 }
 
 export interface Passport {
