@@ -151,10 +151,12 @@
         case 'pad': A.sfx('pad'); G.shake = Math.max(G.shake, 6); G.flash = 0.25; G.flashColor = '#ff4fd8'; G.boostT = 0.6; popup('SPEED PAD', '#ff4fd8', true); break;
         case 'lane': A.sfx('lane'); break;
         case 'near': A.sfx('near'); popup('NEAR MISS', '#fff4e0'); break;
-        case 'launch': A.sfx('launch'); G.shake = 14; G.flash = 0.5; G.flashColor = '#fff1a8'; G.boostT = 1;
-          G.banner = { text: 'CLEARED THE LIP!', sub: `${KMH(ev.v)} km/h  ·  now fly it`, t: G.t, dur: 2.2, color: '#5af0ff' };
+        case 'launch': A.sfx('launch'); G.slowT = 0.9; G.shake = 14; G.flash = 0.5; G.flashColor = '#fff1a8'; G.boostT = 1;
+          G.banner = { text: 'SEND IT!', sub: `${KMH(ev.v)} km/h off the ramp`, t: G.t, dur: 2.2, color: '#5af0ff' };
           burst(cs.x, cs.y, 40, ['#ffd23f', '#ff7a1a', '#fff'], 360, 0.9); break;
         case 'short': A.sfx('short'); G.shake = 8; G.banner = { text: s.launchV && s.launchV < C.CLEAR_V ? 'TOO SLOW' : 'FELL SHORT', sub: 'the canyon wins this one', t: G.t, dur: 2.5, color: '#ff5a78' }; break;
+        case 'rim': A.sfx('landed_trick', 2); G.flash = 0.3; G.flashColor = '#5af0ff'; G.banner = { text: 'CLEARED THE CANYON', sub: 'now ride the momentum', t: G.t, dur: 2.4, color: '#5af0ff' }; break;
+        case 'splash': A.sfx('crash'); G.shake = 16; burst(cs.x, cs.y, 40, ['#2fc4c9', '#7fe8e4', '#fff'], 300, 1); break;
         case 'boost': A.sfx('boost'); G.shake = Math.max(G.shake, 7); G.boostT = 0.8; burst(cs.x, cs.y + 20, 22, ['#5af0ff', '#b9fbff', '#7b55ff'], 260, 0.6, -40); popup('AIR BOOST', '#5af0ff'); break;
         case 'empty': A.sfx('empty'); popup('NO AIR', '#ff5a78'); break;
         case 'trick': A.sfx('trick'); break;
@@ -179,7 +181,8 @@
       // attract mode: cruise the highway forever
       attract.z = (attract.z + 45 * dt) % (C.ROAD_LEN - 300); attract.t += dt; attract.x = Math.sin(G.t * 0.5) * 2; attract.v = 45;
     } else if (G.screen === 'play' && !G.paused) {
-      G.acc += dt;
+      G.slowT = Math.max(0, (G.slowT || 0) - dt);
+      G.acc += G.slowT > 0 ? dt * 0.3 : dt;
       while (G.acc >= C.DT) { G.acc -= C.DT; if (!s.over) S.step(s, readInput()); }
       handleEvents(s);
     }
@@ -187,14 +190,27 @@
     // camera
     const k = 1 - Math.exp(-dt * 8), kz = 1 - Math.exp(-dt * 14);
     const target = { x: s.x * 0.65, y: 2.7, z: s.z - 7.5, f: H * 1.1 / (1 + Math.max(0, (s.phase === 'road' ? s.v : s.m) - 40) / 260) };
+    let hyT = H * 0.44;
+    if (s.phase === 'road') {
+      // Run-up: rise and pull back so the kicker reads head-on from above.
+      const a = Math.max(0, Math.min(1, (s.z - (C.ROAD_LEN - 160)) / 120));
+      target.y = 2.7 + s.y * 0.6 + a * 4.5; target.z = s.z - 7.5 - a * 5; hyT = H * (0.44 - a * 0.08);
+    }
     if (s.phase === 'sky' || (s.over && s.reason !== 'road')) { target.y = s.y + 3.3; target.z = s.z - 9.5; target.x = s.x * 0.75; }
-    if (s.phase === 'fall') { target.y = Math.max(s.y + 9, -CANYON_SAFE); target.z = s.z - 14; }
+    // Over the gorge: pull the camera back and up and look down so the drop, river and far rim are on screen.
+    const overGap = s.z > C.ROAD_LEN - 10 && s.z < C.ROAD_LEN + C.CANYON_W + 30 && (s.phase === 'sky' || s.phase === 'fall' || (s.over && s.reason !== 'road'));
+    if (overGap) {
+      // Launch cam: hang back at the near lip while the car arcs out, then trail it across.
+      target.z = Math.max(s.z - 20, Math.min(s.z - 14, C.ROAD_LEN - 30));
+      target.y = s.y + 8; target.x = s.x * 0.7 + 2; hyT = H * 0.2;
+    }
+    if (s.phase === 'fall') { target.y = Math.max(s.y + 20, -C.CANYON_DEPTH + 20); target.z = s.z - 30; }
     if (s.over && (s.reason === 'road' || s.reason === 'air' || s.reason === 'botched')) target.z = G.cam.z; // freeze on impact
     G.cam.x += (target.x - G.cam.x) * k; G.cam.y += (target.y - G.cam.y) * k * 0.8; G.cam.z += (target.z - G.cam.z) * kz;
-    if (Math.abs(target.z - G.cam.z) > 40) G.cam.z = target.z;
+    if (Math.abs(target.z - G.cam.z) > 60) G.cam.z = target.z;
     G.cam.f += (target.f - G.cam.f) * k;
     const pitch = s.phase === 'sky' ? Math.max(-30, Math.min(30, -s.vy * 1.6)) : 0;
-    G.cam.hy += (H * 0.44 + pitch - G.cam.hy) * k;
+    G.cam.hy += (hyT + (overGap ? 0 : pitch) - G.cam.hy) * k * 0.7;
     G.roll += ((s.rot || 0) - G.roll) * 0.6; if (!s.trick) G.roll = (s.rot || 0);
     G.shake *= Math.exp(-dt * 7); G.flash = Math.max(0, G.flash - dt * 2); G.boostT = Math.max(0, G.boostT - dt);
     for (const p of G.particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= 0.98; }
@@ -222,7 +238,7 @@
     const sh = G.shake, ox = (Math.random() - 0.5) * sh, oy = (Math.random() - 0.5) * sh;
     ctx.save(); ctx.translate(ox, oy);
     const roll = (s.bank || 0) * 0.12;
-    const view = { cam: G.cam, t: G.t, carX: s.x, carY: s.phase === 'road' ? 0 : s.y, carZ: s.z, groundY: s.z > C.ROAD_LEN && s.z < C.ROAD_LEN + C.CANYON_W ? -170 : 0,
+    const view = { cam: G.cam, t: G.t, carX: s.x, carY: s.y, carZ: s.z, groundY: s.z > C.ROAD_LEN && s.z < C.ROAD_LEN + C.CANYON_W ? -C.CANYON_DEPTH : 0,
       roll: G.roll + roll, boostT: G.boostT };
     R.drawWorld(ctx, W, H, s, view);
     if (view.carScreen) G.carScreenLast = view.carScreen;
@@ -300,7 +316,7 @@
     ctx.globalAlpha = 1;
     if (G.banner && G.t - G.banner.t < G.banner.dur && G.screen === 'play') {
       const a = (G.t - G.banner.t) / G.banner.dur, sc = a < 0.1 ? 0.6 + a * 4 : 1;
-      ctx.globalAlpha = a > 0.8 ? (1 - a) * 5 : 1; ctx.save(); ctx.translate(W / 2, H * 0.27); ctx.scale(sc, sc);
+      ctx.globalAlpha = a > 0.8 ? (1 - a) * 5 : 1; ctx.save(); ctx.translate(W / 2, H * 0.17); ctx.scale(sc, sc);
       text(G.banner.text, 0, 0, 44, G.banner.color); text(G.banner.sub, 0, 38, 17, '#fff4e0', 'center', true, 700); ctx.restore(); ctx.globalAlpha = 1;
     }
   }

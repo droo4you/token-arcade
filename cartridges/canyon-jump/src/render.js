@@ -3,7 +3,7 @@
 (function (root) {
   'use strict';
   const S = root.CJSim, C = S.C;
-  const SEG = 6, DRAW_DIST = 720, ROAD_HALF = C.LANE_W * 1.5 + 1.3, CANYON_DEPTH = 170;
+  const SEG = 6, DRAW_DIST = 720, ROAD_HALF = C.LANE_W * 1.5 + 1.3, CANYON_DEPTH = C.CANYON_DEPTH;
   const PAL = {
     skyTop: '#1b0f3b', skyMid: '#5b1f6e', skyLow: '#e0475f', skyHorizon: '#ffa24a', sun1: '#fff1a8', sun2: '#ff5a78',
     mesaFar: '#8a3a6e', mesaMid: '#6a2a5c', mesaNear: '#47204a',
@@ -117,10 +117,12 @@
         const a = cam.p(-BIG, -CANYON_DEPTH, Math.max(za, cam.z + 0.7)), b = cam.p(BIG, -CANYON_DEPTH, Math.max(za, cam.z + 0.7));
         const c = cam.p(BIG, -CANYON_DEPTH, zb), d = cam.p(-BIG, -CANYON_DEPTH, zb);
         if (a && c) {
-          quad(ctx, a, b, c, d, idx % 2 ? '#4a1a24' : '#52202a');
-          const ra = cam.p(-14 + Math.sin(za * 0.02) * 8, -CANYON_DEPTH, Math.max(za, cam.z + 0.7)), rb = cam.p(14 + Math.sin(za * 0.02) * 8, -CANYON_DEPTH, Math.max(za, cam.z + 0.7));
-          const rc = cam.p(14 + Math.sin(zb * 0.02) * 8, -CANYON_DEPTH, zb), rd = cam.p(-14 + Math.sin(zb * 0.02) * 8, -CANYON_DEPTH, zb);
+          quad(ctx, a, b, c, d, idx % 2 ? '#2e1230' : '#341534');
+          const ra = cam.p(-22 + Math.sin(za * 0.02) * 8, -CANYON_DEPTH, Math.max(za, cam.z + 0.7)), rb = cam.p(22 + Math.sin(za * 0.02) * 8, -CANYON_DEPTH, Math.max(za, cam.z + 0.7));
+          const rc = cam.p(22 + Math.sin(zb * 0.02) * 8, -CANYON_DEPTH, zb), rd = cam.p(-22 + Math.sin(zb * 0.02) * 8, -CANYON_DEPTH, zb);
           if (ra && rc) quad(ctx, ra, rb, rc, rd, idx % 3 ? PAL.river : '#7fe8e4');
+          // depth haze so the drop reads as deep
+          ctx.globalAlpha = 0.18; quad(ctx, a, b, c, d, '#1b0f3b'); ctx.globalAlpha = 1;
         }
         continue;
       }
@@ -150,8 +152,13 @@
       const a = cam.p(-BIG, y0, far), b = cam.p(BIG, y0, far), c = cam.p(BIG, y1, far), d = cam.p(-BIG, y1, far);
       if (a) quad(ctx, a, b, c, d, PAL.canyon[i]);
     }
+    canyonNearCliff(ctx, cam);
     // eroded streaks for texture
-    ctx.globalAlpha = 0.25;
+    // shadowed foot of the wall and a sunlit rim line so the drop reads instantly
+    { const a = cam.p(-BIG, -CANYON_DEPTH * 0.7, far), b = cam.p(BIG, -CANYON_DEPTH * 0.7, far), c = cam.p(BIG, -CANYON_DEPTH, far), d = cam.p(-BIG, -CANYON_DEPTH, far);
+      if (a) { ctx.globalAlpha = 0.45; quad(ctx, a, b, c, d, '#1b0f3b'); ctx.globalAlpha = 1; } }
+    { const a = cam.p(-BIG, 0, far), b = cam.p(BIG, 0, far), c = cam.p(BIG, -2.5, far), d = cam.p(-BIG, -2.5, far); if (a) quad(ctx, a, b, c, d, '#ffcf8a'); }
+    ctx.globalAlpha = 0.12;
     for (let i = 0; i < 40; i++) {
       const x = (hash(i * 17) - 0.5) * 900, w = 2 + hash(i * 3) * 10, depth = 30 + hash(i * 5) * 120;
       const a = cam.p(x, 0, far), c = cam.p(x + w, -depth, far);
@@ -160,6 +167,16 @@
     ctx.globalAlpha = 1;
   }
 
+  // Near cliff face (visible from the lip cam and when falling): the drop below the ramp.
+  function canyonNearCliff(ctx, cam) {
+    if (cam.z < C.ROAD_LEN - 2) return;
+    const n = PAL.canyon.length, BIG = 3000, z = C.ROAD_LEN;
+    for (let i = 0; i < n; i++) {
+      const a = cam.p(-BIG, -i * CANYON_DEPTH / n, z + 0.01), b = cam.p(BIG, -i * CANYON_DEPTH / n, z + 0.01);
+      const c = cam.p(BIG, -(i + 1) * CANYON_DEPTH / n, z + 0.01), d = cam.p(-BIG, -(i + 1) * CANYON_DEPTH / n, z + 0.01);
+      if (a) quad(ctx, a, b, c, d, PAL.canyon[n - 1 - i]);
+    }
+  }
   /* ---------- billboards ---------- */
   function shadow(ctx, cx, cy, w, alpha) { ctx.fillStyle = `rgba(40,10,40,${alpha})`; ctx.beginPath(); ctx.ellipse(cx, cy, w, w * 0.22, 0, 0, Math.PI * 2); ctx.fill(); }
   function cactus(ctx, x, y, k, seed) {
@@ -220,19 +237,32 @@
     }
   }
   function ramp(ctx, cam) {
-    const z1 = C.ROAD_LEN, z0 = z1 - 26, h = ROAD_HALF + 0.7;
-    const a = cam.p(-h, 0, z0), b = cam.p(h, 0, z0), c = cam.p(h, 2.4, z1), d = cam.p(-h, 2.4, z1);
-    if (!a || !c) return;
-    // sides
-    const bl = cam.p(-h, 0, z1), br = cam.p(h, 0, z1);
-    quad(ctx, a, d, bl, a, '#5a2a2a'); quad(ctx, b, c, br, b, '#5a2a2a');
-    quad(ctx, a, b, c, d, '#ffd23f');
-    for (let i = 0; i < 7; i++) {
-      const x0 = -h + i * (2 * h / 7), x1 = x0 + h / 7;
-      const p = cam.p(x0, 0, z0), q = cam.p(x1, 0, z0), r = cam.p(x1 + 0.5, 2.4, z1), s = cam.p(x0 + 0.5, 2.4, z1);
-      if (p && r) quad(ctx, p, q, r, s, '#2b1b2b');
+    // A big yellow kicker at the lip: curved deck in slices, solid side walls, chevrons, lip lights.
+    const z1 = C.ROAD_LEN, z0 = z1 - C.RAMP_LEN, h = ROAD_HALF + 0.9, N = 12;
+    for (let i = 0; i < N; i++) {
+      const za = z0 + (i / N) * C.RAMP_LEN, zb = z0 + ((i + 1) / N) * C.RAMP_LEN, ya = S.rampY(za + 0.01), yb = S.rampY(zb);
+      for (const sd of [-1, 1]) { // side wall slice
+        const a = cam.p(sd * h, 0, za), b = cam.p(sd * h, ya, za), c = cam.p(sd * h, yb, zb), d = cam.p(sd * h, 0, zb);
+        if (a && c) quad(ctx, a, b, c, d, i % 2 ? '#6b2f2a' : '#7a3830');
+      }
+      const a = cam.p(-h, ya, za), b = cam.p(h, ya, za), c = cam.p(h, yb, zb), d = cam.p(-h, yb, zb);
+      if (!a || !c) continue;
+      quad(ctx, a, b, c, d, i % 2 ? '#ffd23f' : '#ffc21a');
+      if (i % 3 === 1) { // chevron pointing up the ramp
+        const zm = (za + zb) / 2, ym = S.rampY(zm);
+        const p1 = cam.p(-h * 0.7, ya + 0.02, za), p2 = cam.p(0, yb + 0.02, zb), p3 = cam.p(h * 0.7, ya + 0.02, za), p4 = cam.p(0, ym + 0.02, zm);
+        if (p1 && p2) { ctx.fillStyle = '#2b1b2b'; ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.closePath(); ctx.fill(); }
+      }
     }
-    if (d && c) { ctx.fillStyle = '#fff4e0'; ctx.fillRect(d.x, d.y - 3, c.x - d.x, 3); }
+    // front face of the lip (thickness) and blinking lights
+    const L = cam.p(-h, C.RAMP_H, z1), Rr = cam.p(h, C.RAMP_H, z1), Lb = cam.p(-h, C.RAMP_H - 0.8, z1), Rb = cam.p(h, C.RAMP_H - 0.8, z1);
+    if (L && Rr) {
+      quad(ctx, L, Rr, Rb, Lb, '#fff4e0');
+      const on = Math.floor(performance.now() / 160) % 2;
+      for (let i = 0; i <= 8; i++) { const p = cam.p(-h + i * (2 * h / 8), C.RAMP_H + 0.15, z1); if (p) { ctx.fillStyle = (i + on) % 2 ? '#ff3b5c' : '#fff1a8'; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, p.k * 0.25), 0, 7); ctx.fill(); } }
+      const top = cam.p(0, C.RAMP_H + 4.5, z1);
+      if (top && top.k > 2) { ctx.font = `900 ${Math.round(top.k * 1.6)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#1a0f1f'; ctx.fillText('JUMP', top.x + 2, top.y + 2); ctx.fillStyle = '#ffd23f'; ctx.fillText('JUMP', top.x, top.y); }
+    }
   }
   function sign(ctx, x, y, k, text, color) {
     const w = 4.2 * k, h = 1.5 * k, top = y - 4.2 * k;
@@ -341,7 +371,7 @@
       const p = cam.p(S.laneX(pk.lane), 0, pk.z); if (!p) return;
       pk.type === 'air' ? airCan(ctx, p.x, p.y, p.k, t) : orb(ctx, p.x, p.y, p.k, t);
     } });
-    if (C.ROAD_LEN > zMin - 30 && C.ROAD_LEN - 26 < zMax) items.push({ z: C.ROAD_LEN, f: () => ramp(ctx, cam) });
+    if (C.ROAD_LEN > zMin - 30 && C.ROAD_LEN - C.RAMP_LEN < zMax) items.push({ z: C.ROAD_LEN, f: () => ramp(ctx, cam) });
     // Roadside scenery and signs (cosmetic only).
     const sStart = Math.floor(zMin / 23), sEnd = Math.floor(zMax / 23);
     for (let i = sStart; i <= sEnd; i++) {
@@ -374,9 +404,10 @@
     const carZ = view.carZ;
     items.push({ z: carZ, car: true, f: () => {
       const p = cam.p(view.carX, view.carY, carZ); if (!p) return;
-      if (view.carY < 40 && s.phase !== 'fall') {
-        const g = cam.p(view.carX, view.groundY, carZ);
-        if (g && view.groundY === 0) shadow(ctx, g.x, g.y, p.k * 1.2 * Math.max(0.3, 1 - view.carY / 40), 0.45 * Math.max(0.2, 1 - view.carY / 40));
+      const hgt = view.carY - view.groundY;
+      if (hgt < 160) { // ground shadow, also cast onto the canyon floor so the drop reads
+        const g = cam.p(view.carX, view.groundY, carZ), f = Math.max(0.25, 1 - hgt / 160);
+        if (g) shadow(ctx, g.x, g.y, g.k * 1.3 * f + 2, 0.5 * f);
       }
       car(ctx, p.x, p.y, p.k, view.roll, 1, view.boostT);
       view.carScreen = { x: p.x, y: p.y, k: p.k };

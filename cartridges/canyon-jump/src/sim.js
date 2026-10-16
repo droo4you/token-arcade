@@ -6,6 +6,8 @@
     DT: 1 / 120,
     ROAD_LEN: 2000,      // canyon rim (ramp lip) at this z
     CANYON_W: 300,       // far rim at ROAD_LEN + CANYON_W
+    CANYON_DEPTH: 110,   // river level below the rim
+    RAMP_LEN: 44, RAMP_H: 6, // kicker at the lip
     LANE_W: 3.4,
     V0: 36, ACCEL: 1.25, V_NATURAL: 72, V_MAX: 110,
     PAD_BOOST: 7, PAD_DECAY: 0.6,
@@ -83,6 +85,7 @@
     };
   }
 
+  function rampY(z) { const t = (z - (C.ROAD_LEN - C.RAMP_LEN)) / C.RAMP_LEN; return t <= 0 ? 0 : C.RAMP_H * Math.min(1, t) * Math.min(1, t); }
   function laneX(lane) { return lane * C.LANE_W; }
   function obstacleX(o, t) { return laneX(o.lane) + (o.type === 'tumbleweed' ? Math.sin(t * 1.7 + o.phase) * 1.3 : 0); }
 
@@ -98,7 +101,7 @@
     else if (s.phase === 'fall') {
       s.vy -= C.G * 1.6 * dt; s.y += s.vy * dt; s.z += s.m * dt; s.m = Math.max(0, s.m - 14 * dt);
       s.rot += dt * 2.2;
-      if (s.y < -140) end(s, 'short');
+      if (s.y <= -C.CANYON_DEPTH + 1) { s.y = -C.CANYON_DEPTH + 1; s.events.push({ e: 'splash' }); end(s, 'short'); }
     }
     return s;
   }
@@ -113,6 +116,7 @@
     s.padBoost = Math.max(0, s.padBoost - C.PAD_DECAY * dt);
     s.v = Math.min(C.V_MAX, s.vBase + s.padBoost);
     const z0 = s.z; s.z += s.v * dt;
+    s.y = rampY(s.z);
     for (const o of s.obstacles) {
       if (o.z > s.z + 3) break;
       if (o.hit || o.z < z0 - 3) continue;
@@ -135,10 +139,10 @@
     if (s.z >= C.ROAD_LEN) {
       s.launchV = s.v; s.m = s.v;
       if (s.v >= C.CLEAR_V) {
-        s.phase = 'sky'; s.vy = 9 + (s.v - C.CLEAR_V) * 0.35; s.y = 1.2;
+        s.phase = 'sky'; s.vy = 9 + (s.v - C.CLEAR_V) * 0.35; s.y = C.RAMP_H;
         s.events.push({ e: 'launch', v: s.v });
       } else {
-        s.phase = 'fall'; s.vy = 4; s.y = 1.2;
+        s.phase = 'fall'; s.vy = 4; s.y = C.RAMP_H;
         s.events.push({ e: 'short', v: s.v });
       }
     }
@@ -193,7 +197,9 @@
         s.pts.tricks += pts; s.lastTrickEnd = s.t; s.events.push({ e: 'landed_trick', pts, combo: s.combo });
       }
     }
-    const z0 = s.z; s.z += s.m * dt; s.y = Math.min(C.SKY_CEIL, s.y + s.vy * dt);
+    const z0 = s.z; s.z += s.m * dt;
+    if (z0 < C.ROAD_LEN + C.CANYON_W && s.z >= C.ROAD_LEN + C.CANYON_W) s.events.push({ e: 'rim' });
+    s.y = Math.min(C.SKY_CEIL, s.y + s.vy * dt);
     if (s.y >= C.SKY_CEIL) s.vy = Math.min(0, s.vy);
     s.maxAlt = Math.max(s.maxAlt, s.y);
     while (C.ROAD_LEN + 120 + s.skyChunk * 70 < s.z + 520) spawnSkyChunk(s);
@@ -229,7 +235,7 @@
       launchV: Math.round(s.launchV), maxAlt: Math.round(s.maxAlt), counts: { ...s.counts }, reason: s.reason };
   }
 
-  const api = { C, rng, newRun, step, score, laneX, obstacleX, skyObjPos, clamp };
+  const api = { C, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, clamp };
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CJSim = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
