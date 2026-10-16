@@ -1,6 +1,6 @@
 # Canyon Jump
 
-Original Token Arcade cartridge (Free Play). A generic red electric roadster, chase cam from behind, three phases:
+Original Token Arcade cartridge (Free Play). A generic pearl-white electric roadster, chase cam from behind, three phases:
 
 1. **Straightaway**: 3-lane desert highway. ←/→ (A/D) or swipe/tap to switch lanes. Dodge cacti, rocks, cones and tumbleweeds; grab AIR cans, coins and speed pads. Natural top speed (259 km/h) is under the **clear line** (324 km/h) on the speed meter, so you need pads.
 2. **Launch**: the ramp at the rim launches you with your current speed. Under the line you drop into the canyon.

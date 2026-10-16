@@ -280,7 +280,7 @@
     ctx.globalAlpha = 1;
   }
 
-  /* The roadster: an original low wedge EV seen from behind. No marques, no badges. */
+  /* The roadster: an original pearl-white low wedge EV seen from behind. No marques, no badges. */
   function car(ctx, x, y, k, roll, glow, boostT) {
     const w = 2.0 * k, h = 0.95 * k;
     ctx.save(); ctx.translate(x, y - h * 0.5); ctx.rotate(roll);
@@ -297,16 +297,19 @@
     ctx.beginPath(); ctx.roundRect(w * 0.32, h * 0.05, w * 0.2, h * 0.5, k * 0.08); ctx.fill();
     // body
     const g = ctx.createLinearGradient(0, -h * 0.5, 0, h * 0.45);
-    g.addColorStop(0, '#ff5a63'); g.addColorStop(0.35, '#e8102c'); g.addColorStop(1, '#7a0618');
-    ctx.fillStyle = g; ctx.beginPath();
+    g.addColorStop(0, '#ffe2c4'); g.addColorStop(0.18, '#fbf7f4'); g.addColorStop(0.5, '#e6e9f2'); g.addColorStop(0.8, '#a9b3cc'); g.addColorStop(1, '#5d6782');
+    ctx.fillStyle = g; ctx.strokeStyle = '#1e1530'; ctx.lineWidth = Math.max(1.5, k * 0.07); ctx.lineJoin = 'round'; ctx.beginPath();
     ctx.moveTo(-w * 0.5, h * 0.4); ctx.lineTo(-w * 0.5, -h * 0.02); ctx.quadraticCurveTo(-w * 0.48, -h * 0.22, -w * 0.36, -h * 0.26);
-    ctx.lineTo(w * 0.36, -h * 0.26); ctx.quadraticCurveTo(w * 0.48, -h * 0.22, w * 0.5, -h * 0.02); ctx.lineTo(w * 0.5, h * 0.4); ctx.closePath(); ctx.fill();
+    ctx.lineTo(w * 0.36, -h * 0.26); ctx.quadraticCurveTo(w * 0.48, -h * 0.22, w * 0.5, -h * 0.02); ctx.lineTo(w * 0.5, h * 0.4); ctx.closePath(); ctx.stroke(); ctx.fill();
+    // warm sunset rim light on the shoulders, cool sky bounce low on the flanks
+    ctx.fillStyle = 'rgba(255,170,100,0.55)'; ctx.fillRect(-w * 0.44, -h * 0.25, w * 0.88, Math.max(1, h * 0.05));
+    ctx.fillStyle = 'rgba(120,140,200,0.35)'; ctx.fillRect(-w * 0.5 + 1, h * 0.12, w - 2, h * 0.06);
     // cabin glass reflecting the sunset
     const gl = ctx.createLinearGradient(0, -h * 0.75, 0, -h * 0.25); gl.addColorStop(0, '#2a1440'); gl.addColorStop(0.6, '#a03c6e'); gl.addColorStop(1, '#ffb35a');
     ctx.fillStyle = gl; ctx.beginPath(); ctx.moveTo(-w * 0.3, -h * 0.26); ctx.quadraticCurveTo(-w * 0.24, -h * 0.72, 0, -h * 0.74); ctx.quadraticCurveTo(w * 0.24, -h * 0.72, w * 0.3, -h * 0.26); ctx.closePath(); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.moveTo(-w * 0.18, -h * 0.32); ctx.lineTo(-w * 0.08, -h * 0.66); ctx.lineTo(-w * 0.02, -h * 0.66); ctx.lineTo(-w * 0.1, -h * 0.32); ctx.fill();
     // highlight crease
-    ctx.fillStyle = 'rgba(255,220,220,0.45)'; ctx.fillRect(-w * 0.46, -h * 0.2, w * 0.92, Math.max(1, h * 0.04));
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(-w * 0.46, -h * 0.2, w * 0.92, Math.max(1, h * 0.04));
     // full-width light bar
     ctx.save(); ctx.shadowColor = '#ff2a4a'; ctx.shadowBlur = k * 0.6 * glow;
     ctx.fillStyle = '#ff4d6a'; ctx.fillRect(-w * 0.47, -h * 0.08, w * 0.94, h * 0.1);

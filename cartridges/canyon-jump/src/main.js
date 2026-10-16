@@ -161,7 +161,7 @@
         case 'landed_trick': A.sfx('landed_trick', ev.combo); G.shake = Math.max(G.shake, 4);
           popup(`${ev.combo ? 'COMBO x' + (ev.combo + 1) + ' ' : ''}KICKFLIP +${ev.pts}`, '#ffd23f', true); burst(cs.x, cs.y - 20, 18, ['#ffd23f', '#ff4fd8', '#5af0ff'], 240, 0.7); break;
         case 'crash': A.sfx('crash'); G.shake = 22; G.flash = 0.6; G.flashColor = '#ff3b5c';
-          burst(cs.x, cs.y - 10, 50, ['#ff3b5c', '#ffd23f', '#3a2a3f', '#fff'], 420, 1.1);
+          burst(cs.x, cs.y - 10, 50, ['#f4f1ee', '#a9b3cc', '#ffd23f', '#3a2a3f'], 420, 1.1);
           G.banner = { text: ev.what === 'botched' ? 'BOTCHED LANDING' : 'WIPEOUT', sub: ev.what === 'botched' ? 'finish the flip before you touch down' : `hit a ${ev.what}`, t: G.t, dur: 3, color: '#ff3b5c' }; break;
         case 'land': A.sfx('land'); G.shake = 10; burst(cs.x, cs.y, 40, ['#e3925a', '#ffd9a8', '#fff'], 300, 1); G.landZ = s.z; G.landingRoll = Math.max(10, s.m * 0.6);
           G.banner = { text: 'STUCK THE LANDING', sub: `+${C.LANDING_BONUS} landing bonus`, t: G.t, dur: 3, color: '#5af0ff' }; break;
@@ -278,7 +278,7 @@
       panel(px - 12, 12, pw + 24, 48);
       text(`CANYON IN ${left.toLocaleString('en-US')} m`, W / 2, 27, 15, left < 300 ? '#ffd23f' : '#fff', 'center', true, 800);
       ctx.fillStyle = '#20112a'; ctx.fillRect(px, 42, pw, 8); ctx.fillStyle = '#ffd23f'; ctx.fillRect(px, 42, pw * Math.min(1, s.z / C.ROAD_LEN), 8);
-      ctx.fillStyle = '#ff3b5c'; ctx.fillRect(px + pw * Math.min(1, s.z / C.ROAD_LEN) - 4, 39, 8, 14);
+      ctx.fillStyle = '#1e1530'; ctx.fillRect(px + pw * Math.min(1, s.z / C.ROAD_LEN) - 5, 38, 10, 16); ctx.fillStyle = '#f4f1ee'; ctx.fillRect(px + pw * Math.min(1, s.z / C.ROAD_LEN) - 4, 39, 8, 14);
       const ok = s.v >= C.CLEAR_V, pulse = left < 400 ? 0.6 + 0.4 * Math.sin(G.t * 12) : 1;
       meter(mx, my, mw, 14, s.v, C.V_MAX, C.CLEAR_V, '#ff7a1a', '#5af0ff', `${KMH(s.v)} km/h`,
         { text: ok ? 'WILL CLEAR ✓' : `CLEAR LINE ${KMH(C.CLEAR_V)} km/h`, color: ok ? `rgba(90,240,200,${pulse})` : `rgba(255,210,63,${pulse})` });
