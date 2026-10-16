@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#fff7ed" />
     <meta name="description" content="Token Arcade is a little corner of the internet made for playing." />
+    <script>
+      (function () {
+        var t = null;
+        try { t = localStorage.getItem("ta-theme"); } catch (e) {}
+        if (t !== "dark" && t !== "light") t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = t;
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.setAttribute("content", t === "dark" ? "#150a19" : "#fff7ed");
+      })();
+    </script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
