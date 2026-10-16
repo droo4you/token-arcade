@@ -48,7 +48,7 @@ function resultFor(run: GameRunConfig, score = 1_200): GameRunResult {
   };
 }
 
-test("published catalog contains exactly four Cabinet imports while the fixture stays internal", async () => {
+test("published catalog contains exactly five Cabinet imports while the fixture stays internal", async () => {
   const health = await api("/api/health");
   assert.equal(health.status, 200);
   assert.equal(health.body.auth.privy, false);
@@ -56,10 +56,10 @@ test("published catalog contains exactly four Cabinet imports while the fixture 
   assert.equal(health.body.settlement.ready, false);
 
   const publicGames = await api("/api/games");
-  assert.deepEqual(publicGames.body.games.map((game: any) => game.manifest.id), ["coindle", "emonad-cabinet", "skip-to-10k", "two-places"]);
+  assert.deepEqual(publicGames.body.games.map((game: any) => game.manifest.id), ["canyon-jump", "coindle", "emonad-cabinet", "skip-to-10k", "two-places"]);
   assert.equal((await api("/api/raids")).body.raids.some((raid: any) => raid.gameId === WARMUP_GAME_ID), false);
   const adminGames = await api("/api/admin/games", { auth: "admin" });
-  assert.equal(adminGames.body.games.length, 5);
+  assert.equal(adminGames.body.games.length, 6);
   assert.equal(adminGames.body.games.some((game: any) => game.manifest.id === "skrumpey-slide" || game.manifest.id === "buy-bounce"), false);
 });
 
@@ -429,7 +429,7 @@ test("built web files and SPA routes are served from the API origin", async () =
     const origin = `http://127.0.0.1:${(staticServer.address() as AddressInfo).port}`;
     assert.match(await (await fetch(origin + "/")).text(), /arcade test/);
     assert.match(await (await fetch(origin + "/games/buy-bounce")).text(), /arcade test/);
-    assert.equal((await (await fetch(origin + "/api/games")).json() as any).games.length, 4);
+    assert.equal((await (await fetch(origin + "/api/games")).json() as any).games.length, 5);
   } finally {
     await new Promise<void>((resolve) => staticServer.close(() => resolve()));
     staticStore.close();
