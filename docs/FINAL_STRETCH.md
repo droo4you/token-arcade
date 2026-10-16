@@ -20,7 +20,7 @@ packages/sdk/src/testnet.ts, apps/api/test/testnet-launch.local-chain.ts, script
 ## Verified (Node 22.23, Linux)
 - `npm ci && npm run setup:cartridges && npm run build`: OK
 - `npm test`: 53/53 pass. `cd contracts && npm test`: 20/20 pass. (Node 20 fails: needs >=22.12 flags.)
-- Skrumpey Slide (v3 source, cartridge 1.0.0) is not in the default catalog by design (tests assert it).
+- Skrumpey Slide (v3 source, cartridge 1.0.0) is published through the creator → review → deploy flow; it is not in the seeded default catalog (tests assert it).
   `scripts/publish-skrumpey-local.sh` runs it through creator submit -> admin validate/approve -> deploy
   on a LOCAL_DEMO_MODE API; it then loads at /play/skrumpey-slide and a full Free Play run works in headless Chromium.
   In production, publish it the same way through /launch (Creator Portal) + /admin-tools with a Privy admin.

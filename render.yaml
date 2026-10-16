@@ -23,7 +23,7 @@ services:
       - key: ADMIN_PRIVY_IDS
         sync: false
       - key: ARCADE_DB_PATH
-        value: /app/apps/api/data/arcade.sqlite   # ephemeral on free plan: re-publish after restarts
+        value: /app/apps/api/data/arcade.sqlite   # example only; live service uses a persistent disk (ARCADE_DB_PATH=/var/data/arcade-v2.sqlite)
   - type: web
     name: token-arcade-cartridges
     runtime: docker

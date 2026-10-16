@@ -29,7 +29,7 @@ Monad-maintained infrastructure: PoolManager `0x451D64ab3b650040d2aE1886602b97ed
 | Settle raid | [0x219dd71671e7ca18d7d96e9351eb82606db95a4f39e42483ad50e333077797c7](https://testnet.monadscan.com/tx/0x219dd71671e7ca18d7d96e9351eb82606db95a4f39e42483ad50e333077797c7) |
 | Winner claims | [0x061ff1bb51c4b4396eea2d59c9a3d3d1a56f4ce14318b8aa2aad7188e1580d1a](https://testnet.monadscan.com/tx/0x061ff1bb51c4b4396eea2d59c9a3d3d1a56f4ce14318b8aa2aad7188e1580d1a) |
 
-- 1% hook fee: **0.0005 WMON**; split 65% prize / 20% community / 15% treasury.
+- 1% hook fee: **0.0005 WMON**. The fee split is not final and is not published.
 - Prize vault allocation: **0.000325 WMON**. Raid reserves 25%: **0.00008125 WMON**, successfully claimed.
 - Vault free balance afterward: **0.00024375 WMON**; locked balance and uncollected hook fees both zero.
 - Raid ID: `0xaba5553e1c686447f285c7c9f3547961b44a3c5667178b2a7af59bb473a87593`.

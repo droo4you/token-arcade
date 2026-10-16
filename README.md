@@ -33,7 +33,7 @@ The built app is served at `http://127.0.0.1:8787`. Both dev/start commands laun
 | Coindle | Coindle | COIN / RWA concept | Coming soon |
 | Skip to 10K | Skip to 10K | ETH / WETH concept | Pending |
 
-The eMONAD title is configurable pending final founder naming. Buy Bounce is internal source provenance, not another public cabinet. Two Places, Coindle and Skip retain their original presentation/gameplay. Warmup remains an automated test fixture. Skrumpey Slide is deferred.
+The eMONAD title is configurable pending final founder naming. Buy Bounce is internal source provenance, not another public cabinet. Two Places, Coindle and Skip retain their original presentation/gameplay. Warmup remains an automated test fixture. Skrumpey Slide is published (verified Passport Play). The repository is public.
 
 Coindle plays using its non-price clues without a data key. Configure `PYTH_API_KEY` for its existing Pyth Pro price clues; missing data is visibly unavailable. No fake market data or substitute Community Asset is supplied.
 
