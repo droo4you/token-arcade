@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, Gamepad2, LockKeyhole, Menu, Play, Plus, RotateCcw, Settings2, ShieldCheck, Sparkles, Ticket, Trophy, UserRound, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, Gamepad2, LockKeyhole, Menu, Moon, Play, Plus, RotateCcw, Settings2, ShieldCheck, Sparkles, Sun, Ticket, Trophy, UserRound, X } from "lucide-react";
 import type { CommunityAsset, GameManifest, GameRecord, GameRunConfig, GameRunResult, Passport, Raid } from "../../../packages/sdk/src/index";
 import { CartridgeHost } from "../../../packages/sdk/src/host";
 import { api, ApiError, messageFor, type CompleteResponse, type GameResponse, type GamesResponse, type Health, type LeaderboardEntry, type LeaderboardResponse, type PassportResponse, type RaidResponse, type RaidsResponse, type RunResponse } from "./api";
@@ -129,11 +129,36 @@ function Header({ health }: { health: Health | null }) {
       </nav>
       <div className="header-actions">
         {!auth.ready ? <span className="passport-chip"><UserRound size={17} /><span>Checking account…</span></span> : auth.authenticated ? <Link href="/passport" className="passport-chip"><UserRound size={17} /><span>{profile?.identity === auth.identityKey ? profile.name : "My Passport"}</span></Link> : <button className="passport-chip" onClick={() => navigate("/passport")}><UserRound size={17} /><span>Guest</span></button>}
+        <ThemeToggle />
         {health?.auth.localDemo && <span className="dev-dot" title="Local demo identities are available">demo available</span>}
         <button className="menu-button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={22} /> : <Menu size={22} />}</button>
       </div>
     </div>
   </header>;
+}
+
+type Theme = "light" | "dark";
+function currentTheme(): Theme { return document.documentElement.dataset.theme === "dark" ? "dark" : "light"; }
+function applyTheme(theme: Theme) {
+  document.documentElement.dataset.theme = theme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#150a19" : "#fff7ed");
+}
+function ThemeToggle() {
+  const [theme, setTheme] = useState<Theme>(currentTheme);
+  useEffect(() => {
+    // Follow the system setting until the visitor picks a theme themselves.
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!media) return;
+    const onChange = (event: MediaQueryListEvent) => {
+      let saved: string | null = null;
+      try { saved = localStorage.getItem("ta-theme"); } catch {}
+      if (saved !== "dark" && saved !== "light") { const next: Theme = event.matches ? "dark" : "light"; applyTheme(next); setTheme(next); }
+    };
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+  const next: Theme = theme === "dark" ? "light" : "dark";
+  return <button type="button" className="theme-toggle" aria-label={`Switch to ${next} mode`} title={`Switch to ${next} mode`} onClick={() => { applyTheme(next); setTheme(next); try { localStorage.setItem("ta-theme", next); } catch {} }}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}</button>;
 }
 
 function Footer() {
