@@ -61,7 +61,7 @@ test('a launch above the clear line flies, decays and lands past the rim for a b
   while (!s.over) S.step(s, {});
   const r = S.score(s);
   assert.equal(r.reason, 'landed'); assert.equal(r.landing, C.LANDING_BONUS); assert.ok(r.pastRim > 0);
-  assert.equal(r.total, r.distance + r.pickups + r.tricks + r.landing);
+  assert.equal(r.total, r.distance + r.pickups + r.tricks + r.landing + r.mach);
 });
 
 test('AIR boosts restore momentum and tricks score only when completed upright', () => {
@@ -192,4 +192,23 @@ test('balance: a decent flight lasts ~15-25 s and distance outscores tricks', ()
   }
   const avg = flights.reduce((a, b) => a + b, 0) / flights.length;
   assert.ok(flights.length >= 10 && avg >= 15 && avg <= 26, `avg flight ${avg.toFixed(1)} s over ${flights.length}`);
+});
+
+test('Mach 0.5 (617 km/h) is out of reach on the road and earned in the sky with a 4-boost chain off a top-speed launch, once per run', () => {
+  assert.ok(Math.abs(C.MACH05 * 3.6 - 617) < 1e-9);
+  assert.ok(C.V_MAX < C.MACH05, 'road top speed stays under Mach 0.5');
+  assert.ok(C.M_MAX > C.MACH05, 'sky momentum can exceed it');
+  const chain = (n) => { // launch at the road's top speed (pads kept stacked), then chain n boosts as fast as allowed
+    const s = emptyRoad(30); while (s.phase === 'road') { s.padBoost = 60; S.step(s, {}); }
+    assert.equal(Math.round(s.launchV), C.V_MAX); s.sky.push = () => 0; s.air = n; let used = 0, events = 0;
+    for (let i = 0; i < 120 * 6 && !s.over; i++) { const b = s.boostCd <= 0 && used < n; if (b) used++; S.step(s, { boostEdge: b }); for (const e of s.events) if (e.e === 'mach') events++; s.events.length = 0; }
+    return { s, events };
+  };
+  const three = chain(3); assert.equal(three.s.counts.mach, 0, 'three boosts are not enough');
+  const four = chain(4); assert.equal(four.s.counts.mach, 1); assert.equal(four.events, 1, 'fires once');
+  assert.equal(four.s.pts.mach, C.MACH_BONUS);
+  const r = S.score(four.s); assert.equal(r.mach05, 1); assert.ok(r.topKmh >= 617);
+  assert.equal(r.total, r.distance + r.pickups + r.tricks + r.landing + r.mach);
+  // Determinism holds with the new state.
+  assert.deepEqual(S.score(chain(4).s), S.score(chain(4).s));
 });

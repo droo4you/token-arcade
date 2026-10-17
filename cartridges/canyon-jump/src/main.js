@@ -62,7 +62,7 @@
   addEventListener('keydown', kd); addEventListener('keyup', ku);
 
   // Touch: swipe for lanes on the road; in the sky, drag the left side to steer, buttons on the right.
-  const touches = new Map(); let stick = null;
+  const touches = new Map(); let stick = null; const lanes = window.CJInput.create();
   const BTN = () => { const r = 12 + (G.safe?.r || 0), b = 12 + (G.safe?.b || 0); return { boost: { x: W - r - 62, y: H - b - 110, r: 52 }, trick: { x: W - r - 168, y: H - b - 56, r: 42 } }; };
   function toLogical(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
   function onDown(e) {
@@ -77,25 +77,27 @@
     if (run.phase === 'sky' && G.touch) {
       for (const k of ['boost', 'trick']) if (Math.hypot(p.x - b[k].x, p.y - b[k].y) < b[k].r * 1.3) { edges[k] = true; G.btnFlash = { k, t: G.t }; touches.set(e.pointerId, { btn: k }); return; }
     }
-    // Road: a tap commits ~50 ms after touch-down (not on release) unless it turns into a swipe.
-    touches.set(e.pointerId, { x0: p.x, y0: p.y, x: p.x, y: p.y, t0: G.t, used: false, tap: run.phase === 'road' ? (p.x < W / 2 ? 'left' : 'right') : null });
+    // Road: lane gestures go through CJInput (one gesture = at most one lane change).
+    touches.set(e.pointerId, { x0: p.x, y0: p.y, x: p.x, y: p.y, t0: G.t, used: false });
+    if (run.phase === 'road') lanes.down(e.pointerId, p.x, p.y, G.t, W / 2);
     if (run.phase === 'sky' && p.x < W * 0.6) stick = e.pointerId;
   }
   function onMove(e) {
     const tch = touches.get(e.pointerId); if (!tch || tch.btn) return;
     const p = toLogical(e); tch.x = p.x; tch.y = p.y;
     const run = G.run; if (!run || G.screen !== 'play') return;
-    if (run.phase === 'road' && Math.abs(p.x - tch.x0) > 22) { tch.tap = null; edges[p.x > tch.x0 ? 'right' : 'left'] = true; tch.x0 = p.x; }
+    if (run.phase === 'road') { const d = lanes.move(e.pointerId, p.x, p.y); if (d) edges[d] = true; }
     if (run.phase === 'sky' && stick !== e.pointerId && !tch.used && tch.y0 - p.y > 50) { edges.trick = true; tch.used = true; }
   }
   function onUp(e) {
     const tch = touches.get(e.pointerId); touches.delete(e.pointerId); if (stick === e.pointerId) stick = null;
+    const tapDir = lanes.up(e.pointerId);
     if (!tch || tch.btn || !G.run || G.screen !== 'play') return;
-    if (tch.tap) { edges[tch.tap] = true; tch.tap = null; }
+    if (tapDir && G.run.phase === 'road') edges[tapDir] = true;
     const moved = Math.hypot(tch.x - tch.x0, tch.y - tch.y0);
     if (G.run.phase === 'sky' && moved < 12 && G.t - tch.t0 < 0.25 && tch.x0 >= W * 0.6) edges.boost = true;
   }
-  canvas.addEventListener('pointerdown', onDown); addEventListener('pointermove', onMove); addEventListener('pointerup', onUp); addEventListener('pointercancel', onUp);
+  canvas.addEventListener('pointerdown', onDown); addEventListener('pointermove', onMove); addEventListener('pointerup', onUp); addEventListener('pointercancel', e => { lanes.cancel(e.pointerId); onUp(e); });
   // HUD buttons (logical px), safe-area aware.
   function hudBtns() { const m = 12 + (G.safe?.r || 0), t = 12 + (G.safe?.t || 0); return { pause: { x: W - m - 40, y: t, w: 40, h: 40 }, mute: { x: W - m - 88, y: t, w: 40, h: 40 } }; }
   const hitBtn = (p, k) => { const b = hudBtns()[k]; return p.x > b.x - 6 && p.x < b.x + b.w + 6 && p.y > b.y - 6 && p.y < b.y + b.h + 6; };
@@ -113,7 +115,7 @@
   function readInput() {
     const i = { leftEdge: edges.left, rightEdge: edges.right, boostEdge: edges.boost, trickEdge: edges.trick,
       left: held.has('left'), right: held.has('right'), up: held.has('up'), down: held.has('down') };
-    for (const t of touches.values()) if (t.tap && G.t - t.t0 >= 0.05) { i[t.tap === 'left' ? 'leftEdge' : 'rightEdge'] = true; t.tap = null; }
+    for (const d of lanes.tick(G.t)) if (G.run?.phase === 'road') i[d === 'left' ? 'leftEdge' : 'rightEdge'] = true;
     if (stick !== null && touches.has(stick)) {
       const t = touches.get(stick), dx = t.x - t.x0, dy = t.y - t.y0;
       if (dx < -14) i.left = true; if (dx > 14) i.right = true; if (dy < -14) i.up = true; if (dy > 14) i.down = true;
@@ -135,7 +137,9 @@
     } else if (s.phase === 'sky') {
       const th = S.threats(s).filter(t => t.tt < 1.0)[0];
       if (th) { if (th.x >= s.x) i.left = true; else i.right = true; if (th.y > s.y && s.y > 15) i.down = true; else i.up = true; }
-      if (s.m < C.LIFT_REF - 10 && s.air > 0 && s.tick % 30 === 0) i.boostEdge = true;
+      const machRun = !s.counts.mach && s.t - s.launchT < 2.5 && s.air >= Math.ceil((C.MACH05 + 3 - s.m) / (C.BOOST_M - C.M_DECAY * C.BOOST_CD)) && s.launchV >= C.V_MAX - 1;
+      if (machRun && s.boostCd <= 0) i.boostEdge = true;
+      else if (s.m < C.LIFT_REF - 10 && s.air > 0 && s.tick % 30 === 0) i.boostEdge = true;
       if (s.y > 25 && s.trick <= 0 && s.tick % 300 === 0) i.trickEdge = true;
     }
     return i;
@@ -149,7 +153,7 @@
     const seed = params.has('seed') && !TA?.embedded ? +params.get('seed') : (Math.random() * 2 ** 31) >>> 0;
     G.run = S.newRun(seed); G.screen = 'play'; G.acc = 0; G.result = null; G.paused = false;
     G.particles.length = 0; G.popups.length = 0; G.banner = { text: 'BEAT THE CLEAR LINE', sub: 'grab speed pads, dodge everything', t: G.t, dur: 2.2, color: '#ffd23f' };
-    G.cam = { x: 0, y: 2.6, z: -8, f: 600, hy: HY(0.44), roll: 0 }; G.roll = 0; G.hitStop = 0; G.camDip = 0; G.fovKick = 0; G.newBestShown = false; G.landingRoll = 0;
+    G.cam = { x: 0, y: 2.6, z: -8, f: 600, hy: HY(0.44), roll: 0 }; G.roll = 0; G.hitStop = 0; G.camDip = 0; G.fovKick = 0; G.machT = 0; G.newBestShown = false; G.landingRoll = 0;
   }
   function finish() {
     const r = S.score(G.run); G.result = r; G.endAt = G.t; G.screen = 'end';
@@ -158,13 +162,15 @@
       G.arcadeRunOpen = false;
       TA.complete({ result: r.reason === 'landed' ? 'completed' : 'failed', primaryMetric: r.total,
         secondaryMetrics: { distance: r.distance, pastRim: r.pastRim, pickups: r.pickups, tricks: r.tricks, trickCount: r.counts.tricks,
-          landing: r.landing, launchSpeed: r.launchV, landed: r.reason === 'landed' ? 1 : 0, elapsedMs: Math.round(G.run.t * 1000) } });
+          landing: r.landing, mach05: r.mach05, topKmh: r.topKmh, launchSpeed: r.launchV, landed: r.reason === 'landed' ? 1 : 0, elapsedMs: Math.round(G.run.t * 1000) } });
     }
   }
   function togglePause() { G.paused = !G.paused; G.paused ? A.suspend() : A.resume(); }
 
   /* ---------------- events → juice ---------------- */
   const KMH = v => Math.round(v * 3.6);
+  // One speed scale (m/s shown as km/h) for the road meter and the sky meter, with Mach 0.5 marked on both.
+  const SPEED_MAX = C.M_MAX, MACH_MARK = { at: C.MACH05, label: 'MACH 0.5' };
   function burst(x, y, n, colors, speed, life, grav, glow) {
     if (!G.q) n = Math.ceil(n * 0.5);
     for (let i = 0; i < n; i++) {
@@ -191,6 +197,9 @@
         case 'rim': A.sfx('landed_trick', 2); G.flash = 0.3; G.flashColor = '#5af0ff'; G.banner = { text: 'CLEARED THE CANYON', sub: 'now ride the momentum', t: G.t, dur: 2.4, color: '#5af0ff' }; break;
         case 'splash': A.sfx('crash'); G.shake = 16; burst(cs.x, cs.y, 40, ['#2fc4c9', '#7fe8e4', '#fff'], 300, 1); break;
         case 'boost': A.sfx('boost'); G.shake = Math.max(G.shake, 11); G.flash = Math.max(G.flash, 0.22); G.flashColor = '#5af0ff'; G.boostT = 0.9; G.fovKick = 1; burst(cs.x, cs.y + 20, 22, ['#5af0ff', '#b9fbff', '#7b55ff'], 300, 0.6, -40, true); popup('AIR BOOST', '#5af0ff'); break;
+        case 'mach': A.sfx('mach'); G.machT = 1; G.flash = 0.9; G.flashColor = '#ffffff'; G.shake = 26; G.fovKick = 1; G.hitStop = 0.08;
+          G.banner = { text: 'MACH 0.5', sub: `${KMH(ev.v)} km/h  ·  +${C.MACH_BONUS}`, t: G.t, dur: 2.6, color: '#ffffff' };
+          burst(cs.x, cs.y - 10, 40, ['#ffffff', '#cfefff', '#9fd8ff'], 520, 0.7, 0, true); break;
         case 'empty': A.sfx('empty'); popup('NO AIR', '#ff5a78'); break;
         case 'trick': A.sfx('trick'); break;
         case 'landed_trick': A.sfx('landed_trick', ev.combo); G.shake = Math.max(G.shake, 5);
@@ -258,7 +267,7 @@
     G.bob = s.phase === 'road' ? Math.sin(G.t * 17) * 0.018 * Math.min(1, s.v / 60) + (Math.random() - 0.5) * 0.012 * Math.min(1, s.v / 80) : s.phase === 'sky' ? Math.sin(G.t * 2.2) * 0.04 : 0;
     if (G.screen === 'play' && !G.paused && !FORCE_Q) { G.fpsAcc = (G.fpsAcc || 0) + dt; G.fpsN = (G.fpsN || 0) + 1;
       if (G.fpsAcc > 2.5) { const avg = G.fpsAcc / G.fpsN; if (G.q && avg > 1 / 48) { G.q = 0; resize(); } G.fpsAcc = 0; G.fpsN = 0; } }
-    G.shake *= Math.exp(-dt * 7); G.fovKick = Math.max(0, G.fovKick - dt * 2.2); G.flash = Math.max(0, G.flash - dt * 2); G.boostT = Math.max(0, G.boostT - dt);
+    G.machT = Math.max(0, (G.machT || 0) - dt * 0.9); G.shake *= Math.exp(-dt * 7); G.fovKick = Math.max(0, G.fovKick - dt * 2.2); G.flash = Math.max(0, G.flash - dt * 2); G.boostT = Math.max(0, G.boostT - dt);
     for (const p of G.particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= 0.98; }
     G.particles = G.particles.filter(p => p.life > 0);
     if (s.phase === 'road' && G.screen === 'play' && !s.over && G.carScreenLast && Math.random() < s.v / 90) {
@@ -291,6 +300,7 @@
     if (view.carScreen) G.carScreenLast = view.carScreen;
     const spd = s.phase === 'road' ? s.v : s.m;
     if (!s.over) R.speedLines(ctx, W, H, G.cam.hy, Math.max(0, (spd - 55) / 60) + G.boostT * 0.6, G.t, G.boostT > 0.1, !G.q);
+    if (G.machT > 0 && G.carScreenLast) vaporCone(G.carScreenLast, 1 - G.machT);
     if (G.screen !== 'end') drawParticles();
     if (G.screen === 'play' && !s.over) drawWarnings(camP, s);
     ctx.restore();
@@ -302,6 +312,21 @@
     if (G.screen === 'title') drawTitle();
     else { drawHud(s); if (G.screen === 'end') drawEnd(); }
     if (G.paused) drawPause();
+  }
+  // Sonic-boom vapor cone: a bright condensation disc that blooms around the car, then expanding shock rings.
+  function vaporCone(cs, a) {
+    const k = cs.k || 30, cx = cs.x, cy = cs.y - k * 0.4;
+    ctx.save();
+    const disc = Math.min(1, a * 4), fade = Math.max(0, 1 - a * 1.4);
+    if (fade > 0) {
+      const R = k * (1.6 + disc * 2.2), g = ctx.createRadialGradient(cx, cy, R * 0.35, cx, cy, R);
+      g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.55, `rgba(235,248,255,${0.75 * fade})`); g.addColorStop(0.8, `rgba(200,230,255,${0.45 * fade})`); g.addColorStop(1, 'rgba(200,230,255,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, cy, R, R * 0.62, 0, 0, 7); ctx.fill();
+    }
+    for (let i = 0; i < 3; i++) { const t = a - i * 0.12; if (t <= 0 || t > 0.9) continue;
+      const R = k * (2 + t * 14); ctx.globalAlpha = (1 - t / 0.9) * 0.8; ctx.strokeStyle = i ? '#cfefff' : '#ffffff'; ctx.lineWidth = Math.max(2, k * 0.18 * (1 - t));
+      ctx.beginPath(); ctx.ellipse(cx, cy, R, R * 0.6, 0, 0, 7); ctx.stroke(); }
+    ctx.restore(); ctx.globalAlpha = 1;
   }
   function drawParticles() {
     for (const p of G.particles) {
@@ -320,7 +345,7 @@
   const T = { label: 11, body: 14, value: 24 };
   function mg() { return { l: 12 + G.safe.l, r: 12 + G.safe.r, t: 12 + G.safe.t, b: 12 + G.safe.b }; }
   function chip(x, y, w, h, r = 12) { panel(x, y, w, h, r, 'rgba(22,10,36,0.74)'); ctx.strokeStyle = 'rgba(255,255,255,0.09)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5, r); ctx.stroke(); }
-  function meter(x, y, w, h, value, max, mark, colorLow, colorHigh, label, sub) {
+  function meter(x, y, w, h, value, max, mark, colorLow, colorHigh, label, sub, extra) {
     chip(x - 12, y - 32, w + 24, h + 44, 12);
     const f = Math.max(0, Math.min(1, value / max)), m = mark / max, ok = value >= mark;
     ctx.fillStyle = '#1a0d26'; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2); ctx.fill();
@@ -329,6 +354,8 @@
     ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, Math.max(h, w * f), h, h / 2); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 2, Math.max(0, w * f - 6), h * 0.3, h * 0.15); ctx.fill();
     if (mark) { const mx = x + w * m; ctx.fillStyle = '#fff'; ctx.fillRect(mx - 1.5, y - 6, 3, h + 12); ctx.beginPath(); ctx.moveTo(mx - 6, y - 11); ctx.lineTo(mx + 6, y - 11); ctx.lineTo(mx, y - 5); ctx.fill(); }
+    if (extra) { const ex = x + w * Math.min(1, extra.at / max), hit = value >= extra.at; ctx.fillStyle = hit ? '#ffffff' : 'rgba(255,255,255,0.55)'; ctx.fillRect(ex - 1, y - 4, 2, h + 8);
+      text(extra.label, ex, y + h + 9, 9, hit ? '#ffffff' : 'rgba(255,233,240,0.75)', 'center', false, 800); }
     text(label, x, y - 16, T.body, '#fff', 'left', true, 800);
     if (sub && sub.text) text(sub.text, x + w, y - 16, w < 300 ? 10 : 12, sub.color, 'right', true, 800);
   }
@@ -371,8 +398,8 @@
       ctx.fillStyle = '#1a0d26'; ctx.fillRect(bx, py + 29, bw, 6); ctx.fillStyle = '#ffd23f'; ctx.fillRect(bx, py + 29, bw * f, 6);
       ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(bx + bw * f, py + 32, 5, 0, 7); ctx.fill();
       const ok = s.v >= C.CLEAR_V, pulse = left < 400 ? 0.6 + 0.4 * Math.sin(G.t * 12) : 1;
-      meter(mx, my, mw, 14, s.v, C.V_MAX, C.CLEAR_V, '#ff7a1a', '#5af0ff', `${KMH(s.v)} km/h`,
-        { text: ok ? 'WILL CLEAR ✓' : `CLEAR ${KMH(C.CLEAR_V)} km/h`, color: ok ? `rgba(90,240,200,${pulse})` : `rgba(255,210,63,${pulse})` });
+      meter(mx, my, mw, 14, s.v, SPEED_MAX, C.CLEAR_V, '#ff7a1a', '#5af0ff', `${KMH(s.v)} km/h`,
+        { text: ok ? 'WILL CLEAR ✓' : `CLEAR ${KMH(C.CLEAR_V)} km/h`, color: ok ? `rgba(90,240,200,${pulse})` : `rgba(255,210,63,${pulse})` }, MACH_MARK);
     } else if (s.phase === 'sky' || (s.over && s.phase !== 'fall')) {
       const farRim = C.ROAD_LEN + C.CANYON_W, toRim = Math.ceil(farRim - s.z);
       chip(px, py, pw, 44);
@@ -380,9 +407,9 @@
       const band = s.y < C.BAND_PLANE ? 'BIRDS' : s.y < C.BAND_SAT ? 'PLANES' : 'SATELLITES';
       text(`ALT ${Math.round(s.y)} m  ·  ${band}`, W / 2, py + 32, T.label, '#ffd9e6', 'center', false, 700);
       const climbing = s.m >= C.LIFT_REF, low = s.m < C.LIFT_REF * 0.7 && !s.over, blink = low && Math.floor(G.t * 6) % 2;
-      meter(mx, my, mw, 14, s.m, C.M_MAX, C.LIFT_REF, '#ff7a1a', '#5af0ff', `MOMENTUM ${Math.round(s.m)}`,
+      meter(mx, my, mw, 14, s.m, SPEED_MAX, C.LIFT_REF, '#ff7a1a', '#5af0ff', `${KMH(s.m)} km/h${s.counts.mach ? '  ·  MACH 0.5 ✓' : ''}`,
         { text: s.trick > 0 ? 'FLIPPING…' : low ? (blink ? (s.air > 0 ? 'SINKING: BOOST!' : 'SINKING') : '') : climbing ? '▲ CLIMBING' : '▼ SINKING',
-          color: low ? '#ff5a78' : climbing ? '#5af0ff' : '#ffd23f' });
+          color: low ? '#ff5a78' : climbing ? '#5af0ff' : '#ffd23f' }, MACH_MARK);
       const flipReady = s.trick <= 0 && s.t - s.lastTrickEnd >= C.TRICK_CD && s.y > C.TRICK_MIN_ALT;
       if (G.touch && !s.over) { const b = BTN(); btn(b.boost, 'BOOST', '#5af0ff', s.air > 0 && s.boostCd <= 0, `${s.air}`); btn(b.trick, 'FLIP', '#ffd23f', flipReady); }
     } else if (s.phase === 'fall') {
@@ -477,7 +504,7 @@
     ctx.globalAlpha = a; ctx.fillStyle = 'rgba(20,6,30,0.6)'; ctx.fillRect(0, 0, W, H);
     const titles = { landed: ['CLEAN LANDING', '#5af0ff'], road: ['WIPED OUT', '#ff3b5c'], air: ['MIDAIR COLLISION', '#ff3b5c'], botched: ['BOTCHED LANDING', '#ff7a1a'], short: ['SHORT OF THE CANYON', '#ff5a78'] };
     const [title, col] = titles[r.reason] || ['RUN OVER', '#fff'];
-    const pw = Math.min(460, W - 32), ph = r.newBest ? 372 : 340, px = W / 2 - pw / 2, py = H / 2 - ph / 2 + (1 - a) * 30;
+    const pw = Math.min(460, W - 32), ph = r.newBest ? 404 : 372, px = W / 2 - pw / 2, py = H / 2 - ph / 2 + (1 - a) * 30;
     chip(px, py, pw, ph, 20);
     ctx.fillStyle = col; ctx.fillRect(px + 20, py + 1, pw - 40, 4);
     text(title, W / 2, py + 36, W < 500 ? 22 : 28, col);
@@ -486,27 +513,28 @@
       ['Pickups', `${r.counts.orbs} coins · ${r.counts.air} AIR · ${r.counts.nearMiss} near`, r.pickups],
       ['Tricks', `${r.counts.tricks} kickflip${r.counts.tricks === 1 ? '' : 's'}`, r.tricks],
       ['Landing', r.landing ? 'stuck it' : '—', r.landing],
+      ['Mach 0.5', r.mach05 ? `617+ · top ${r.topKmh} km/h` : `top ${r.topKmh} km/h`, r.mach, r.mach05 ? '#ffffff' : null],
     ];
     // rows count up one after another
     const el = G.t - G.endAt;
     rows.forEach((row, i) => {
       const y = py + 80 + i * 36, ra = Math.max(0, Math.min(1, (el - 0.25 - i * 0.15) / 0.3)); if (!ra) return;
       ctx.globalAlpha = a * ra;
-      text(row[0], px + 22, y, 16, '#ffd9e6', 'left', false, 700);
+      text(row[0] + (i === 4 && r.mach05 ? ' ✓' : ''), px + 22, y, 16, row[3] || '#ffd9e6', 'left', false, 700);
       if (pw > 380) text(row[1], px + pw * 0.56, y, 12, '#b9a6ee', 'center', false, 600);
       text('+' + Math.round(row[2] * ra).toLocaleString('en-US'), px + pw - 22, y, 18, '#fff', 'right', false);
     });
     ctx.globalAlpha = a;
-    ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(px + 20, py + 222, pw - 40, 2);
-    const tv = Math.round(r.total * Math.max(0, Math.min(1, (el - 0.9) / 0.5)));
-    text('TOTAL', px + 22, py + 250, 20, '#ffd23f', 'left', false); text(tv.toLocaleString('en-US'), px + pw - 22, py + 250, 32, '#ffd23f', 'right');
+    ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(px + 20, py + 258, pw - 40, 2);
+    const tv = Math.round(r.total * Math.max(0, Math.min(1, (el - 1.05) / 0.5)));
+    text('TOTAL', px + 22, py + 286, 20, '#ffd23f', 'left', false); text(tv.toLocaleString('en-US'), px + pw - 22, py + 286, 32, '#ffd23f', 'right');
     const launch = r.launchV ? `launch ${KMH(r.launchV)} km/h  ·  peak alt ${r.maxAlt} m` : `crashed before the canyon (clear line ${KMH(C.CLEAR_V)} km/h)`;
-    text(launch, W / 2, py + 284, 12, '#ffd9e6', 'center', false, 600);
+    text(launch, W / 2, py + 318, 12, '#ffd9e6', 'center', false, 600);
     if (r.newBest && el > 1.4) {
       if (!G.newBestShown) { G.newBestShown = true; A.sfx('land'); for (let i = 0; i < (G.q ? 90 : 40); i++) G.particles.push({ x: W / 2 + (Math.random() - 0.5) * pw, y: py - 10, vx: (Math.random() - 0.5) * 300, vy: -200 - Math.random() * 250, life: 2, max: 2, c: ['#ffd23f', '#ff4fd8', '#5af0ff', '#fff'][i % 4], s: 4 + Math.random() * 4, g: 380 }); }
-      const pulse = 1 + 0.06 * Math.sin(G.t * 8); ctx.save(); ctx.translate(W / 2, py + 322); ctx.scale(pulse, pulse);
+      const pulse = 1 + 0.06 * Math.sin(G.t * 8); ctx.save(); ctx.translate(W / 2, py + 354); ctx.scale(pulse, pulse);
       panel(-110, -18, 220, 36, 18, '#ffd23f'); text('★ NEW BEST ★', 0, 1, 18, '#1a0d26', 'center', false); ctx.restore();
-    } else if (!r.newBest) text(`best ${best.toLocaleString('en-US')}`, W / 2, py + 312, 14, '#b9a6ee', 'center', false, 800);
+    } else if (!r.newBest) text(`best ${best.toLocaleString('en-US')}`, W / 2, py + 346, 14, '#b9a6ee', 'center', false, 800);
     if (el > 0.8) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.t * 5); text(G.touch ? 'TAP TO RIDE AGAIN' : 'SPACE / TAP TO RIDE AGAIN', W / 2, Math.min(H - mg().b - 14, py + ph + 28), 20, '#fff'); }
     ctx.globalAlpha = 1;
     if (G.screen === 'end') drawParticles();
@@ -534,7 +562,7 @@
     capabilities: { pause: true, touch: true, keyboard: true, orientation: 'landscape' },
     mount(config) { if (config.mode !== 'free') throw new Error('Canyon Jump supports Free Play only.'); },
     start() { startRun(); },
-    pause() { G.paused = true; held.clear(); touches.clear(); stick = null; A.suspend(); },
+    pause() { G.paused = true; held.clear(); touches.clear(); lanes.clear(); stick = null; A.suspend(); },
     resume() { G.paused = false; last = performance.now(); A.resume(); },
     restart() { startRun(); },
     audio(muted) { A.setMuted(muted); },

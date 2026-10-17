@@ -17,7 +17,7 @@
     CAR_HW: 0.8, OBST_HW: { cactus: 0.85, rock: 1.25, tumbleweed: 0.8, cone: 0.4 }, SWAY: 0.45,
     REACT_T: 0.45, SWITCH_T: 0.3, // seconds budgeted to notice a row and to cross one lane
     // Flight
-    G: 9.8, LIFT_REF: 70, M_DECAY: 6, M_MAX: 140,
+    G: 9.8, LIFT_REF: 70, M_DECAY: 6, M_MAX: 180,
     STEER_V: 20, STEER_RESP: 10, CLIMB_K: 20, PITCH_V: 10, VY_RESP: 2.8,
     BOOST_M: 20, BOOST_VY: 8, BOOST_CD: 0.3,
     TRICK_TIME: 0.85, TRICK_CD: 0.5, TRICK_COST: 5, TRICK_MIN_ALT: 8, TRICK_PTS: 50, COMBO_WINDOW: 1.0,
@@ -25,6 +25,9 @@
     SKY_X: 36, SKY_CEIL: 200, SKY_CHUNK: 80,
     BAND_PLANE: 35, BAND_SAT: 80, // altitude bands: birds below 35 m, planes 35–80 m, satellites above
     WARN_T: 1.6,
+    // Mach 0.5 ≈ 617 km/h. Speed is m/s everywhere: road speed v on the ground, forward momentum m in the air.
+    // The road tops out at V_MAX (396 km/h), so Mach is earned in the sky by chaining AIR boosts (≈4 back to back).
+    MACH05: 617 / 3.6, MACH_BONUS: 250,
   });
 
   function rng(seed) {
@@ -57,7 +60,8 @@
       const lanesIn = d => prevFree.some(l => Math.abs(l - d) * C.SWITCH_T + C.REACT_T <= dtRow);
       // Forgiving opening: single-lane rows only for the first stretch, then the double blocks ramp in.
       let blocked = r() < (z < 450 ? 0 : 0.25 + progress * 0.4) ? 2 : 1;
-      let lanes = [-1, 0, 1].sort(() => r() - 0.5);
+      // Fisher–Yates with the seeded RNG: a random-comparator sort consumes RNG differently across JS engines.
+      let lanes = [-1, 0, 1]; for (let k = 2; k > 0; k--) { const j = Math.floor(r() * (k + 1)); [lanes[k], lanes[j]] = [lanes[j], lanes[k]]; }
       let free = lanes.slice(blocked);
       if (!free.some(lanesIn)) {
         const ok = [-1, 0, 1].filter(lanesIn);
@@ -99,7 +103,7 @@
       m: 0, vy: 0, vx: 0, air: C.AIR_START, rot: 0, trick: 0, combo: 0, lastTrickEnd: -9, bank: 0, boostCd: 0, boostT: 0, launchT: 0,
       obstacles: road.obstacles, pickups: road.pickups,
       sky: [], skyPickups: [], skyChunk: 0,
-      pts: { pickups: 0, tricks: 0, landing: 0 }, counts: { orbs: 0, air: 0, pads: 0, tricks: 0, boosts: 0, nearMiss: 0 },
+      pts: { pickups: 0, tricks: 0, landing: 0, mach: 0 }, counts: { orbs: 0, air: 0, pads: 0, tricks: 0, boosts: 0, nearMiss: 0, mach: 0 }, maxV: 0,
       maxAlt: 0, events: [],
     };
   }
@@ -122,9 +126,15 @@
       s.rot += dt * 2.2;
       if (s.y <= -C.CANYON_DEPTH + 1) { s.y = -C.CANYON_DEPTH + 1; s.events.push({ e: 'splash' }); end(s, 'short'); }
     }
+    if (!s.over) checkMach(s);
     return s;
   }
 
+  function speedOf(s) { return s.phase === 'road' ? s.v : s.phase === 'sky' ? s.m : 0; }
+  function checkMach(s) {
+    const v = speedOf(s); if (v > s.maxV) s.maxV = v;
+    if (!s.counts.mach && v >= C.MACH05) { s.counts.mach = 1; s.pts.mach = C.MACH_BONUS; s.events.push({ e: 'mach', v }); }
+  }
   function roadStep(s, input, dt) {
     if (input.leftEdge && s.lane > -1) { s.lane--; s.events.push({ e: 'lane' }); }
     if (input.rightEdge && s.lane < 1) { s.lane++; s.events.push({ e: 'lane' }); }
@@ -272,12 +282,12 @@
   function score(s) {
     const distance = Math.floor(s.z);
     const pastRim = Math.max(0, Math.floor(s.z - C.ROAD_LEN - C.CANYON_W));
-    const total = distance + s.pts.pickups + s.pts.tricks + s.pts.landing;
-    return { total, distance, pastRim, pickups: s.pts.pickups, tricks: s.pts.tricks, landing: s.pts.landing,
+    const total = distance + s.pts.pickups + s.pts.tricks + s.pts.landing + s.pts.mach;
+    return { total, distance, pastRim, pickups: s.pts.pickups, tricks: s.pts.tricks, landing: s.pts.landing, mach: s.pts.mach, mach05: s.counts.mach, topKmh: Math.round(s.maxV * 3.6),
       launchV: Math.round(s.launchV), maxAlt: Math.round(s.maxAlt), counts: { ...s.counts }, reason: s.reason };
   }
 
-  const api = { C, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp };
+  const api = { C, speedOf, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp };
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CJSim = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

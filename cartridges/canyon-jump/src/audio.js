@@ -96,6 +96,11 @@
         hit(t, 0.03, 5000, 0.5); const o = A.ctx.createOscillator(), g = A.ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.35);
         g.gain.setValueAtTime(0.7, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4); o.connect(g); g.connect(A.master); o.start(t); o.stop(t + 0.45);
         tone(140, 'sawtooth', t, 0.5, 0.22, null, 2200, 560); hit(t + 0.02, 0.8, 500, 0.5, null, 6000); break; }
+      case 'mach': // sonic boom: the classic double "ba-boom" N-wave, a noise crack, and a bright rising sting
+        [0, 0.13].forEach((d, i) => { const o = A.ctx.createOscillator(), g = A.ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(110 - i * 20, t + d); o.frequency.exponentialRampToValueAtTime(28, t + d + 0.5);
+          g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.95, t + d + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.6); o.connect(g); g.connect(A.master); o.start(t + d); o.stop(t + d + 0.65);
+          hit(t + d, 0.35, 1400, 0.6, null, 160); });
+        [0, 7, 12, 19].forEach((n, i) => tone(mtof(64 + n), 'sawtooth', t + 0.3 + i * 0.06, 0.5, 0.08, null, 4000)); break;
       case 'empty': tone(160, 'square', t, 0.12, 0.12, null, 800); break;
       case 'trick': hit(t, 0.35, 3000, 0.12, null, 800); break;
       case 'landed_trick': [0, 4, 7, 12].forEach((n, i) => tone(mtof(76 + n + Math.min(arg || 0, 4) * 2), 'square', t + i * 0.05, 0.14, 0.09, null, 5000)); break;
