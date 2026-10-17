@@ -104,9 +104,10 @@
       else if (padAhead && !bad(padAhead.lane)) want = padAhead.lane;
       if (s.tick % 6 === 0) { if (want < s.lane) i.leftEdge = true; if (want > s.lane) i.rightEdge = true; }
     } else if (s.phase === 'sky') {
-      if (s.m < 62 && s.air > 0 && s.tick % 60 === 0) i.boostEdge = true;
-      if (s.y > 30 && s.trick <= 0 && s.tick % 200 === 0) i.trickEdge = true;
-      i.up = s.vy < -3 && s.y < 40;
+      const th = S.threats(s).filter(t => t.tt < 1.0)[0];
+      if (th) { if (th.x >= s.x) i.left = true; else i.right = true; if (th.y > s.y && s.y > 15) i.down = true; else i.up = true; }
+      if (s.m < C.LIFT_REF - 10 && s.air > 0 && s.tick % 30 === 0) i.boostEdge = true;
+      if (s.y > 25 && s.trick <= 0 && s.tick % 300 === 0) i.trickEdge = true;
     }
     return i;
   }
@@ -157,7 +158,7 @@
         case 'short': A.sfx('short'); G.shake = 8; G.banner = { text: s.launchV && s.launchV < C.CLEAR_V ? 'TOO SLOW' : 'FELL SHORT', sub: 'the canyon wins this one', t: G.t, dur: 2.5, color: '#ff5a78' }; break;
         case 'rim': A.sfx('landed_trick', 2); G.flash = 0.3; G.flashColor = '#5af0ff'; G.banner = { text: 'CLEARED THE CANYON', sub: 'now ride the momentum', t: G.t, dur: 2.4, color: '#5af0ff' }; break;
         case 'splash': A.sfx('crash'); G.shake = 16; burst(cs.x, cs.y, 40, ['#2fc4c9', '#7fe8e4', '#fff'], 300, 1); break;
-        case 'boost': A.sfx('boost'); G.shake = Math.max(G.shake, 7); G.boostT = 0.8; burst(cs.x, cs.y + 20, 22, ['#5af0ff', '#b9fbff', '#7b55ff'], 260, 0.6, -40); popup('AIR BOOST', '#5af0ff'); break;
+        case 'boost': A.sfx('boost'); G.shake = Math.max(G.shake, 11); G.flash = Math.max(G.flash, 0.22); G.flashColor = '#5af0ff'; G.boostT = 0.9; G.fovKick = 1; burst(cs.x, cs.y + 20, 22, ['#5af0ff', '#b9fbff', '#7b55ff'], 260, 0.6, -40); popup('AIR BOOST', '#5af0ff'); break;
         case 'empty': A.sfx('empty'); popup('NO AIR', '#ff5a78'); break;
         case 'trick': A.sfx('trick'); break;
         case 'landed_trick': A.sfx('landed_trick', ev.combo); G.shake = Math.max(G.shake, 4);
@@ -196,13 +197,18 @@
       const a = Math.max(0, Math.min(1, (s.z - (C.ROAD_LEN - 160)) / 120));
       target.y = 2.7 + s.y * 0.6 + a * 4.5; target.z = s.z - 7.5 - a * 5; hyT = H * (0.44 - a * 0.08);
     }
-    if (s.phase === 'sky' || (s.over && s.reason !== 'road')) { target.y = s.y + 3.3; target.z = s.z - 9.5; target.x = s.x * 0.75; }
+    if (s.phase === 'sky' || (s.over && s.reason !== 'road')) {
+      // Fixed framing in the sky so the car stays a readable size; boosts punch the FOV briefly.
+      target.y = s.y + 3.0; target.z = s.z - 8.5; target.x = s.x * 0.8; target.f = H * 1.1 * (1 - 0.1 * (G.fovKick || 0));
+    }
     // Over the gorge: pull the camera back and up and look down so the drop, river and far rim are on screen.
     const overGap = s.z > C.ROAD_LEN - 10 && s.z < C.ROAD_LEN + C.CANYON_W + 30 && (s.phase === 'sky' || s.phase === 'fall' || (s.over && s.reason !== 'road'));
     if (overGap) {
       // Launch cam: hang back at the near lip while the car arcs out, then trail it across.
-      target.z = Math.max(s.z - 20, Math.min(s.z - 14, C.ROAD_LEN - 30));
-      target.y = s.y + 8; target.x = s.x * 0.7 + 2; hyT = H * 0.2;
+      // Then ease in to a closer trail after ~0.6 s so the car doesn't shrink to a dot.
+      const ease = s.phase === 'sky' ? Math.max(0, Math.min(1, (s.t - (s.launchT || 0) - 0.6) / 1.4)) : 0;
+      target.z = Math.max(s.z - 20 + ease * 8, Math.min(s.z - 14 + ease * 3, C.ROAD_LEN - 30 + ease * 1e4));
+      target.y = s.y + 8 - ease * 3; target.x = s.x * 0.7 + 2; hyT = H * (0.2 + ease * 0.1);
     }
     if (s.phase === 'fall') { target.y = Math.max(s.y + 20, -C.CANYON_DEPTH + 20); target.z = s.z - 30; }
     if (s.over && (s.reason === 'road' || s.reason === 'air' || s.reason === 'botched')) target.z = G.cam.z; // freeze on impact
@@ -212,7 +218,7 @@
     const pitch = s.phase === 'sky' ? Math.max(-30, Math.min(30, -s.vy * 1.6)) : 0;
     G.cam.hy += (hyT + (overGap ? 0 : pitch) - G.cam.hy) * k * 0.7;
     G.roll += ((s.rot || 0) - G.roll) * 0.6; if (!s.trick) G.roll = (s.rot || 0);
-    G.shake *= Math.exp(-dt * 7); G.flash = Math.max(0, G.flash - dt * 2); G.boostT = Math.max(0, G.boostT - dt);
+    G.shake *= Math.exp(-dt * 7); G.fovKick = Math.max(0, (G.fovKick || 0) - dt * 2.5); G.flash = Math.max(0, G.flash - dt * 2); G.boostT = Math.max(0, G.boostT - dt);
     for (const p of G.particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= 0.98; }
     G.particles = G.particles.filter(p => p.life > 0);
     if (s.phase === 'road' && G.screen === 'play' && !s.over && G.carScreenLast && Math.random() < s.v / 90) {
@@ -240,13 +246,14 @@
     const roll = (s.bank || 0) * 0.12;
     const view = { cam: G.cam, t: G.t, carX: s.x, carY: s.y, carZ: s.z, groundY: s.z > C.ROAD_LEN && s.z < C.ROAD_LEN + C.CANYON_W ? -C.CANYON_DEPTH : 0,
       roll: G.roll + roll, boostT: G.boostT };
-    R.drawWorld(ctx, W, H, s, view);
+    const camP = R.drawWorld(ctx, W, H, s, view);
     if (view.carScreen) G.carScreenLast = view.carScreen;
     const spd = s.phase === 'road' ? s.v : s.m;
     if (!s.over) R.speedLines(ctx, W, H, G.cam.hy, Math.max(0, (spd - 55) / 60) + G.boostT * 0.6, G.t);
     // particles
     for (const p of G.particles) { ctx.globalAlpha = Math.max(0, p.life / p.max); ctx.fillStyle = p.c; ctx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s); }
     ctx.globalAlpha = 1;
+    if (G.screen === 'play' && !s.over) drawWarnings(camP, s);
     ctx.restore();
     // vignette + flash
     const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
@@ -303,10 +310,13 @@
       const pw = 300; panel(W / 2 - pw / 2 - 12, 12, pw + 24, 48);
       text(toRim > 0 ? `FAR RIM IN ${toRim} m` : `+${Math.floor(s.z - farRim)} m PAST THE RIM`, W / 2, 28, 15, toRim > 0 ? '#ffd23f' : '#5af0ff', 'center', true, 800);
       text(`ALT ${Math.round(s.y)} m`, W / 2, 48, 13, '#ffd9e6', 'center', false, 700);
-      const low = s.m < 30 && !s.over, blink = low && Math.floor(G.t * 6) % 2;
-      meter(mx, my, mw, 14, s.m, C.M_MAX, 0, '#ff7a1a', '#5af0ff', `MOMENTUM ${Math.round(s.m)}`,
-        { text: low ? (blink ? 'LOW: BOOST!' : '') : s.trick > 0 ? 'FLIPPING…' : 'decaying', color: low ? '#ff5a78' : '#ffd9e6' });
-      if (G.touch && !s.over) { const b = BTN(); btn(b.boost, 'BOOST', '#5af0ff', s.air > 0); btn(b.trick, 'FLIP', '#ffd23f', s.trick <= 0); }
+      // Momentum meter: the LIFT mark is where you hold altitude; above it you climb, below it you sink.
+      const climbing = s.m >= C.LIFT_REF, low = s.m < C.LIFT_REF * 0.7 && !s.over, blink = low && Math.floor(G.t * 6) % 2;
+      meter(mx, my, mw, 16, s.m, C.M_MAX, C.LIFT_REF, '#ff7a1a', '#5af0ff', `MOMENTUM ${Math.round(s.m)}`,
+        { text: s.trick > 0 ? 'FLIPPING…' : low ? (blink ? (s.air > 0 ? 'SINKING: BOOST!' : 'SINKING') : '') : climbing ? '▲ CLIMBING  ·  LIFT LINE' : '▼ SINKING  ·  LIFT LINE',
+          color: low ? '#ff5a78' : climbing ? '#5af0ff' : '#ffd23f' });
+      const flipReady = s.trick <= 0 && s.t - s.lastTrickEnd >= C.TRICK_CD && s.y > C.TRICK_MIN_ALT;
+      if (G.touch && !s.over) { const b = BTN(); btn(b.boost, 'BOOST', '#5af0ff', s.air > 0 && s.boostCd <= 0); btn(b.trick, 'FLIP', '#ffd23f', flipReady); }
     } else if (s.phase === 'fall') {
       text('↓', W / 2, H - 60, 40, '#ff5a78');
     }
@@ -318,6 +328,21 @@
       const a = (G.t - G.banner.t) / G.banner.dur, sc = a < 0.1 ? 0.6 + a * 4 : 1;
       ctx.globalAlpha = a > 0.8 ? (1 - a) * 5 : 1; ctx.save(); ctx.translate(W / 2, H * 0.17); ctx.scale(sc, sc);
       text(G.banner.text, 0, 0, 44, G.banner.color); text(G.banner.sub, 0, 38, 17, '#fff4e0', 'center', true, 700); ctx.restore(); ctx.globalAlpha = 1;
+    }
+  }
+  /* Telegraph: anything you'll reach within ~1.6 s near your line gets a pulsing marker; off-screen ones pin to the edge. */
+  function drawWarnings(cam, s) {
+    if (!cam || s.phase !== 'sky') return;
+    for (const th of S.threats(s)) {
+      const p = cam.p(th.x, th.y, th.o.z), urgent = th.tt < 0.8, pulse = 0.55 + 0.45 * Math.sin(G.t * (urgent ? 22 : 12));
+      let x = p ? p.x : W / 2, y = p ? p.y : H / 2;
+      const off = !p || x < 30 || x > W - 30 || y < 70 || y > H - 70;
+      x = Math.max(30, Math.min(W - 30, x)); y = Math.max(70, Math.min(H - 70, y));
+      const r = off ? 18 : Math.max(18, Math.min(60, (p ? p.k : 10) * th.o.r * 1.2));
+      ctx.globalAlpha = pulse; ctx.lineWidth = urgent ? 4 : 3; ctx.strokeStyle = urgent ? '#ff3b5c' : '#ffd23f';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
+      text('!', x, y, off ? 20 : 18, urgent ? '#ff3b5c' : '#ffd23f', 'center', true);
+      ctx.globalAlpha = 1;
     }
   }
   function btn(b, label, color, on) {
@@ -338,7 +363,7 @@
     const steps = [
       ['1  STRAIGHTAWAY', G.touch ? 'Swipe or tap left/right to switch lanes.' : '←/→ or A/D to switch lanes.', 'Dodge cacti, rocks, cones, tumbleweeds. Grab AIR cans + speed pads.', '#ffd23f'],
       ['2  LAUNCH', `Hit the ramp above the CLEAR line (${KMH(C.CLEAR_V)} km/h)`, 'on the speed meter, or you drop into the canyon.', '#ff4fd8'],
-      ['3  SKY', G.touch ? 'Drag left side to steer. BOOST spends AIR. FLIP = kickflip.' : 'Arrows/WASD steer. SPACE spends AIR. X = kickflip.', 'Flips cost momentum. Land upright past the far rim.', '#5af0ff'],
+      ['3  SKY', G.touch ? 'Drag left side to steer. BOOST spends AIR. FLIP = kickflip.' : 'Arrows/WASD steer. SPACE spends AIR. X = kickflip.', 'Stay above the LIFT line to climb. Flips cost momentum and need a breather. Watch for ! warnings. Land upright past the far rim.', '#5af0ff'],
     ];
     const cw = narrow ? W - 40 : Math.min(860, W - 60), ch = narrow ? 230 : 180, cx = W / 2 - cw / 2, cy = H * 0.34;
     panel(cx, cy, cw, ch, 18, 'rgba(27,12,40,0.82)');

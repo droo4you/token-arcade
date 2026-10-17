@@ -13,11 +13,18 @@
     PAD_BOOST: 7, PAD_DECAY: 0.6,
     CLEAR_V: 90,         // launch speed needed to clear the canyon
     AIR_MAX: 5, AIR_START: 1,
-    G: 9.8, LIFT_REF: 78, M_DECAY: 3.2, M_MAX: 140,
-    BOOST_M: 15, BOOST_VY: 5,
-    TRICK_TIME: 0.75, TRICK_COST: 3.5, TRICK_PTS: 150, COMBO_WINDOW: 1.1,
+    // Straightaway fairness: hitbox half-widths match the drawn sprites; tumbleweeds sway inside their own lane.
+    CAR_HW: 0.8, OBST_HW: { cactus: 0.85, rock: 1.25, tumbleweed: 0.8, cone: 0.4 }, SWAY: 0.45,
+    REACT_T: 0.45, SWITCH_T: 0.3, // seconds budgeted to notice a row and to cross one lane
+    // Flight
+    G: 9.8, LIFT_REF: 70, M_DECAY: 6, M_MAX: 140,
+    STEER_V: 20, STEER_RESP: 10, CLIMB_K: 20, PITCH_V: 10, VY_RESP: 2.8,
+    BOOST_M: 20, BOOST_VY: 8, BOOST_CD: 0.3,
+    TRICK_TIME: 0.85, TRICK_CD: 0.5, TRICK_COST: 5, TRICK_MIN_ALT: 8, TRICK_PTS: 50, COMBO_WINDOW: 1.0,
     ORB_PTS: 50, AIR_PTS: 20, LANDING_BONUS: 500,
-    SKY_X: 36, SKY_CEIL: 280,
+    SKY_X: 36, SKY_CEIL: 200, SKY_CHUNK: 80,
+    BAND_PLANE: 35, BAND_SAT: 80, // altitude bands: birds below 35 m, planes 35–80 m, satellites above
+    WARN_T: 1.6,
   });
 
   function rng(seed) {
@@ -33,36 +40,47 @@
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const OBST = ['cactus', 'rock', 'tumbleweed', 'cone'];
 
-  /* Lay out the highway: rows of obstacles that always leave at least one open lane, pickups in the gaps. */
+  /* Worst-case speed at a given z: natural acceleration plus a generous allowance for stacked pads. */
+  function vEstAt(z) {
+    const t = (-C.V0 + Math.sqrt(C.V0 * C.V0 + 2 * C.ACCEL * z)) / C.ACCEL;
+    return Math.min(C.V_MAX, Math.min(C.V_NATURAL, C.V0 + C.ACCEL * t) + 20);
+  }
+  /* Lay out the highway. Rows are spaced by time at the worst-case speed, and each row's open lane is
+     chosen so it is reachable from the previous row's open lanes within the reaction + lane-switch budget. */
   function buildRoad(seed) {
     const r = rng(seed ^ 0x9e3779b9);
     const obstacles = [], pickups = [];
-    let z = 110, pads = 0, prevFree = [-1, 0, 1], prevZ = 0;
+    let z = 110, pads = 0, prevFree = [-1, 0, 1], prevZ = -1e9;
     while (z < C.ROAD_LEN - 90) {
       const progress = z / C.ROAD_LEN;
-      const blocked = r() < 0.3 + progress * 0.35 ? 2 : 1;
+      const dtRow = (z - prevZ) / vEstAt(z);
+      const lanesIn = d => prevFree.some(l => Math.abs(l - d) * C.SWITCH_T + C.REACT_T <= dtRow);
+      let blocked = r() < 0.3 + progress * 0.35 ? 2 : 1;
       let lanes = [-1, 0, 1].sort(() => r() - 0.5);
-      // Fairness: with two lanes blocked, the open lane must be reachable from the last row's open lanes.
-      if (blocked === 2 && !prevFree.some(l => Math.abs(l - lanes[2]) <= 1 && (Math.abs(l - lanes[2]) === 0 || z - prevZ > 54))) {
-        const open = prevFree[Math.floor(r() * prevFree.length)];
-        lanes = [-1, 0, 1].filter(l => l !== open).concat([open]);
+      let free = lanes.slice(blocked);
+      if (!free.some(lanesIn)) {
+        const ok = [-1, 0, 1].filter(lanesIn);
+        if (ok.length) { const open = ok[Math.floor(r() * ok.length)]; lanes = [-1, 0, 1].filter(l => l !== open).concat([open]); }
+        else blocked = 0; // can't happen with the spacing below, but never trap the player
+        free = lanes.slice(blocked);
       }
       for (let i = 0; i < blocked; i++) {
         const type = OBST[Math.floor(r() * OBST.length)];
         obstacles.push({ type, lane: lanes[i], z, phase: r() * 6.28, hit: false });
       }
-      const free = lanes.slice(blocked);
-      const lane = free[Math.floor(r() * free.length)];
+      // Only lanes the player can actually be in by this row count as "open" for the next row.
+      const reach = free.filter(lanesIn);
+      const lane = reach[Math.floor(r() * reach.length)];
       const roll = r();
-      // Pads matter most late: the natural top speed is under the clear line.
       const padChance = 0.12 + progress * 0.16;
       if (roll < padChance) { pickups.push({ type: 'pad', lane, z: z + 8, taken: false }); pads++; }
       else if (roll < padChance + 0.24) pickups.push({ type: 'air', lane, z: z + 6, taken: false });
       else for (let k = 0; k < 4; k++) pickups.push({ type: 'orb', lane, z: z - 10 + k * 7, taken: false });
-      prevFree = free; prevZ = z;
-      z += Math.max(44, 70 - progress * 20 - r() * 8);
+      prevFree = reach; prevZ = z;
+      // Gap in seconds at worst-case speed: always enough to react and cross one lane, sometimes two.
+      const gapT = C.REACT_T + C.SWITCH_T * (r() < 0.35 ? 2 : 1) + 0.12 + r() * 0.25 - progress * 0.08;
+      z += Math.max(46, gapT * vEstAt(z));
     }
-    // Guarantee a fair late run-up: two pads in the final stretch, in different lanes.
     if (pads < 8) for (let i = 0; i < 8 - pads; i++) pickups.push({ type: 'pad', lane: (i % 3) - 1, z: 300 + i * 180, taken: false });
     pickups.push({ type: 'pad', lane: 0, z: C.ROAD_LEN - 70, taken: false });
     pickups.push({ type: 'pad', lane: -1, z: C.ROAD_LEN - 210, taken: false });
@@ -77,7 +95,7 @@
     return {
       seed, t: 0, tick: 0, phase: 'road', over: false, reason: null,
       z: 0, x: 0, y: 0, lane: 0, v: C.V0, vBase: C.V0, padBoost: 0, launchV: 0,
-      m: 0, vy: 0, vx: 0, air: C.AIR_START, rot: 0, trick: 0, combo: 0, lastTrickEnd: -9, bank: 0,
+      m: 0, vy: 0, vx: 0, air: C.AIR_START, rot: 0, trick: 0, combo: 0, lastTrickEnd: -9, bank: 0, boostCd: 0, boostT: 0, launchT: 0,
       obstacles: road.obstacles, pickups: road.pickups,
       sky: [], skyPickups: [], skyChunk: 0,
       pts: { pickups: 0, tricks: 0, landing: 0 }, counts: { orbs: 0, air: 0, pads: 0, tricks: 0, boosts: 0, nearMiss: 0 },
@@ -87,7 +105,7 @@
 
   function rampY(z) { const t = (z - (C.ROAD_LEN - C.RAMP_LEN)) / C.RAMP_LEN; return t <= 0 ? 0 : C.RAMP_H * Math.min(1, t) * Math.min(1, t); }
   function laneX(lane) { return lane * C.LANE_W; }
-  function obstacleX(o, t) { return laneX(o.lane) + (o.type === 'tumbleweed' ? Math.sin(t * 1.7 + o.phase) * 1.3 : 0); }
+  function obstacleX(o, t) { return laneX(o.lane) + (o.type === 'tumbleweed' ? Math.sin(t * 1.7 + o.phase) * C.SWAY : 0); }
 
   function end(s, reason) { if (s.over) return; s.over = true; s.reason = reason; s.events.push({ e: 'end', reason }); }
 
@@ -122,8 +140,8 @@
       if (o.hit || o.z < z0 - 3) continue;
       if (Math.abs(o.z - s.z) < 1.9) {
         const gap = Math.abs(obstacleX(o, s.t) - s.x);
-        if (gap < 1.55) { o.hit = true; s.events.push({ e: 'crash', what: o.type }); end(s, 'road'); return; }
-        if (!o.near && gap < 2.6) { o.near = true; s.counts.nearMiss++; s.pts.pickups += 10; s.events.push({ e: 'near' }); }
+        if (gap < C.OBST_HW[o.type] + C.CAR_HW) { o.hit = true; s.events.push({ e: 'crash', what: o.type }); end(s, 'road'); return; }
+        if (!o.near && gap < C.OBST_HW[o.type] + C.CAR_HW + 1) { o.near = true; s.counts.nearMiss++; s.pts.pickups += 10; s.events.push({ e: 'near' }); }
       }
     }
     for (const p of s.pickups) {
@@ -139,7 +157,7 @@
     if (s.z >= C.ROAD_LEN) {
       s.launchV = s.v; s.m = s.v;
       if (s.v >= C.CLEAR_V) {
-        s.phase = 'sky'; s.vy = 9 + (s.v - C.CLEAR_V) * 0.35; s.y = C.RAMP_H;
+        s.phase = 'sky'; s.vy = 12 + (s.v - C.CLEAR_V) * 0.4; s.y = C.RAMP_H; s.launchT = s.t;
         s.events.push({ e: 'launch', v: s.v });
       } else {
         s.phase = 'fall'; s.vy = 4; s.y = C.RAMP_H;
@@ -148,61 +166,84 @@
     }
   }
 
+  function bandType(y) { return y < C.BAND_PLANE ? 'bird' : y < C.BAND_SAT ? 'plane' : 'satellite'; }
+  const SKY_R = { bird: 1.4, plane: 3.4, satellite: 2.8 };
+  /* Sky traffic is spawned ~6 s ahead around the player's altitude, never stacked: objects in a chunk keep a
+     flyable gap between them, and each type lives in its own altitude band. */
   function spawnSkyChunk(s) {
     const i = s.skyChunk++;
     const r = rng((s.seed + 0x51ed27 + i * 7919) >>> 0);
-    const z0 = C.ROAD_LEN + 120 + i * 70;
-    const density = Math.min(4, 1 + Math.floor(i / 6) + (r() < 0.5 ? 1 : 0));
-    for (let k = 0; k < density; k++) {
-      const y = clamp(s.y + (r() - 0.45) * 60, 6, C.SKY_CEIL - 6);
-      const type = y < 70 ? 'bird' : y < 170 ? 'plane' : 'satellite';
-      s.sky.push({ type, z: z0 + r() * 70, x: (r() * 2 - 1) * C.SKY_X * 0.9, y, phase: r() * 6.28,
-        vx: type === 'plane' ? (r() < 0.5 ? -1 : 1) * (4 + r() * 4) : 0,
-        r: type === 'plane' ? 3.4 : type === 'satellite' ? 2.8 : 1.4, hit: false, near: false });
+    const z0 = C.ROAD_LEN + 140 + i * C.SKY_CHUNK;
+    const density = Math.min(3, 1 + Math.floor(i / 5) + (r() < 0.4 ? 1 : 0));
+    const placed = [];
+    for (let k = 0; k < density * 3 && placed.length < density; k++) {
+      const y = clamp(s.y + (r() - 0.4) * 50, 8, C.SKY_CEIL - 8), type = bandType(y), rad = SKY_R[type];
+      const o = { type, z: z0 + r() * C.SKY_CHUNK, x: (r() * 2 - 1) * C.SKY_X * 0.85, y, phase: r() * 6.28, r: rad, hit: false, near: false };
+      const near = placed.concat(s.sky.slice(-6));
+      if (near.some(p => Math.abs(p.z - o.z) < 25 && Math.hypot(p.x - o.x, p.y - o.y) < p.r + o.r + 9)) continue;
+      placed.push(o);
     }
-    if (r() < 0.55) s.skyPickups.push({ type: r() < 0.4 ? 'air' : 'orb', z: z0 + r() * 70, x: (r() * 2 - 1) * 18,
-      y: clamp(s.y + (r() - 0.5) * 30, 5, C.SKY_CEIL - 5), taken: false });
+    s.sky.push(...placed);
+    if (r() < 0.5) s.skyPickups.push({ type: r() < 0.3 ? 'air' : 'orb', z: z0 + r() * C.SKY_CHUNK, x: (r() * 2 - 1) * 18,
+      y: clamp(s.y + (r() - 0.3) * 30, 8, C.SKY_CEIL - 5), taken: false });
   }
+  // Motion is small and bounded so what you see 5 s out is where it will be.
   function skyObjPos(o, t) {
-    if (o.type === 'bird') return { x: o.x + Math.sin(t * 1.3 + o.phase) * 3, y: o.y + Math.sin(t * 2.6 + o.phase) * 1.2 };
-    if (o.type === 'plane') return { x: o.x + o.vx * (t % 1000), y: o.y };
+    if (o.type === 'bird') return { x: o.x + Math.sin(t * 1.3 + o.phase) * 2, y: o.y + Math.sin(t * 2.6 + o.phase) * 0.8 };
+    if (o.type === 'plane') return { x: o.x + Math.sin(t * 0.35 + o.phase) * 4, y: o.y };
     return { x: o.x + Math.sin(t * 0.4 + o.phase) * 1.5, y: o.y };
   }
+  /* Objects the car will reach within WARN_T seconds and that sit near its current line: the HUD flags these. */
+  function threats(s) {
+    if (s.phase !== 'sky') return [];
+    const out = [];
+    for (const o of s.sky) {
+      if (o.hit || o.z < s.z) continue;
+      const tt = (o.z - s.z) / Math.max(10, s.m); if (tt > C.WARN_T) continue;
+      const p = skyObjPos(o, s.t), d = Math.hypot(p.x - s.x, p.y - s.y);
+      if (d < o.r + 7) out.push({ o, x: p.x, y: p.y, tt, d });
+    }
+    return out;
+  }
+  const lerpRate = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
 
   function skyStep(s, input, dt) {
     const sx = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const sy = (input.up ? 1 : 0) - (input.down ? 1 : 0);
-    s.vx += (sx * 22 - s.vx * 3) * dt;
+    // Steering: velocity snaps toward the stick target and damps fast when released (no floaty drift).
+    s.vx = lerpRate(s.vx, sx * C.STEER_V, sx ? C.STEER_RESP : C.STEER_RESP * 1.3, dt);
     s.x = clamp(s.x + s.vx * dt, -C.SKY_X, C.SKY_X);
-    s.bank = clamp(s.vx / 12, -1, 1);
-    s.vy += sy * 15 * dt;
-    if (sy > 0) s.m -= 1.6 * dt; else if (sy < 0) s.m += 1.1 * dt;
-    const lift = clamp(s.m / C.LIFT_REF, 0, 1.12);
-    s.vy += (-C.G + C.G * lift) * dt;
-    s.vy = clamp(s.vy * (1 - 0.55 * dt), -34, 26);
+    if (Math.abs(s.x) >= C.SKY_X) s.vx = 0;
+    s.bank = clamp(s.vx / 14, -1, 1);
+    // Vertical: momentum above LIFT_REF climbs, below it sinks; pitch nudges on top. Pitching up bleeds momentum, diving gains it.
+    const lift = s.m / C.LIFT_REF;
+    const vyT = clamp((lift - 1) * C.CLIMB_K, -24, 12) + sy * C.PITCH_V;
+    s.vy = lerpRate(s.vy, vyT, C.VY_RESP, dt);
+    if (sy > 0) s.m -= 3 * dt; else if (sy < 0) s.m += 2.5 * dt;
     s.m = clamp(s.m - C.M_DECAY * dt, 0, C.M_MAX);
-    if (input.boostEdge) {
-      if (s.air > 0) { s.air--; s.m = Math.min(C.M_MAX, s.m + C.BOOST_M); s.vy += C.BOOST_VY; s.counts.boosts++; s.events.push({ e: 'boost' }); }
+    s.boostCd = Math.max(0, s.boostCd - dt); s.boostT = Math.max(0, s.boostT - dt);
+    if (input.boostEdge && s.boostCd <= 0) {
+      if (s.air > 0) { s.air--; s.m = Math.min(C.M_MAX, s.m + C.BOOST_M); s.vy = Math.max(s.vy, 0) + C.BOOST_VY; s.boostCd = C.BOOST_CD; s.boostT = 0.4; s.counts.boosts++; s.events.push({ e: 'boost' }); }
       else s.events.push({ e: 'empty' });
     }
-    if (input.trickEdge && s.trick <= 0 && s.y > 3) {
+    if (input.trickEdge && s.trick <= 0 && s.t - s.lastTrickEnd >= C.TRICK_CD && s.y > C.TRICK_MIN_ALT) {
       s.trick = C.TRICK_TIME; s.m = Math.max(0, s.m - C.TRICK_COST); s.events.push({ e: 'trick' });
     }
     if (s.trick > 0) {
       s.trick -= dt; s.rot = Math.PI * 2 * (1 - Math.max(0, s.trick) / C.TRICK_TIME);
       if (s.trick <= 0) {
         s.rot = 0; s.counts.tricks++;
-        s.combo = s.t - s.lastTrickEnd < C.COMBO_WINDOW + C.TRICK_TIME ? s.combo + 1 : 0;
-        const pts = Math.round(C.TRICK_PTS * (1 + Math.min(s.combo, 2) * 0.5));
+        s.combo = s.t - s.lastTrickEnd < C.COMBO_WINDOW + C.TRICK_TIME + C.TRICK_CD ? s.combo + 1 : 0;
+        const pts = Math.round(C.TRICK_PTS * (1 + Math.min(s.combo, 2) * 0.25));
         s.pts.tricks += pts; s.lastTrickEnd = s.t; s.events.push({ e: 'landed_trick', pts, combo: s.combo });
       }
     }
-    const z0 = s.z; s.z += s.m * dt;
+    const z0 = s.z; s.z += Math.max(s.m, 12) * dt;
     if (z0 < C.ROAD_LEN + C.CANYON_W && s.z >= C.ROAD_LEN + C.CANYON_W) s.events.push({ e: 'rim' });
     s.y = Math.min(C.SKY_CEIL, s.y + s.vy * dt);
     if (s.y >= C.SKY_CEIL) s.vy = Math.min(0, s.vy);
     s.maxAlt = Math.max(s.maxAlt, s.y);
-    while (C.ROAD_LEN + 120 + s.skyChunk * 70 < s.z + 520) spawnSkyChunk(s);
+    while (C.ROAD_LEN + 140 + s.skyChunk * C.SKY_CHUNK < s.z + 520) spawnSkyChunk(s);
     for (const o of s.sky) {
       if (o.hit || o.z < z0 - 4 || o.z > s.z + 4) continue;
       if (Math.abs(o.z - s.z) < o.r + 1) {
@@ -235,7 +276,7 @@
       launchV: Math.round(s.launchV), maxAlt: Math.round(s.maxAlt), counts: { ...s.counts }, reason: s.reason };
   }
 
-  const api = { C, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, clamp };
+  const api = { C, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp };
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CJSim = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
