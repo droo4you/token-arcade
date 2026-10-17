@@ -472,6 +472,12 @@
   }
   function hoodoo(ctx, cam, x, z, hh, wd, i) {
     const b = cam.p(x, -CANYON_DEPTH, z), t = cam.p(x, -CANYON_DEPTH + hh, z); if (!b || !t) return;
+    // From the road the near rim hides the gorge: clip hoodoos to above the rim line until we're over the gap.
+    const rimP = cam.z < C.ROAD_LEN ? cam.p(0, S.rampY(C.ROAD_LEN) * 0, C.ROAD_LEN) : null;
+    if (rimP) { if (t.y >= rimP.y) return; ctx.save(); ctx.beginPath(); ctx.rect(0, 0, cam.W, rimP.y); ctx.clip(); }
+    try { hoodooBody(ctx, cam, x, z, hh, wd, i, b, t); } finally { if (rimP) ctx.restore(); }
+  }
+  function hoodooBody(ctx, cam, x, z, hh, wd, i, b, t) {
     const w = wd * b.k, cols = ['#c4593f', '#9e3d34', '#d8754a', '#7a2a2c', '#b2463a'], bands = 6;
     for (let j = 0; j < bands; j++) {
       const y0 = lerp(b.y, t.y, j / bands), y1 = lerp(b.y, t.y, (j + 1) / bands), ww = w * (1 - j * 0.07) * (0.85 + hash(i * 7 + j) * 0.3);
@@ -574,7 +580,7 @@
   }
 
   // Tapered streaks radiating from the vanishing point; tinted cyan while boosting.
-  function speedLines(ctx, W, H, hy, amount, t, tint) {
+  function speedLines(ctx, W, H, hy, amount, t, tint, lowQ) {
     if (amount <= 0) return;
     const n = Math.min(46, Math.floor(amount * 42)), cx = W / 2, cy = hy + H * 0.1, R = Math.hypot(W, H) * 0.5;
     const col = tint ? '150,240,255' : '255,240,220';
@@ -582,8 +588,8 @@
       const seed = i * 7 + Math.floor(t * 24) * 131, a = hash(seed) * Math.PI * 2, r0 = (0.42 + hash(seed + 3) * 0.35) * R;
       const len = (0.12 + amount * 0.35 * hash(i * 13)) * R, dx = Math.cos(a), dy = Math.sin(a) * 0.75, wdt = 1 + hash(i * 5) * 2.5 * Math.min(1, amount);
       const x0 = cx + dx * r0, y0 = cy + dy * r0, x1 = cx + dx * (r0 + len), y1 = cy + dy * (r0 + len);
-      const g = ctx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(1, `rgba(${col},${Math.min(0.75, 0.25 + amount * 0.45)})`);
-      ctx.strokeStyle = g; ctx.lineWidth = wdt; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      const al = Math.min(0.75, 0.25 + amount * 0.45);
+      if (lowQ) ctx.strokeStyle = `rgba(${col},${al * 0.6})`; else { const g = ctx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(1, `rgba(${col},${al})`); ctx.strokeStyle = g; } ctx.lineWidth = wdt; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
     }
   }
 

@@ -290,7 +290,7 @@
     const camP = R.drawWorld(ctx, W, H, s, view);
     if (view.carScreen) G.carScreenLast = view.carScreen;
     const spd = s.phase === 'road' ? s.v : s.m;
-    if (!s.over) R.speedLines(ctx, W, H, G.cam.hy, Math.max(0, (spd - 55) / 60) + G.boostT * 0.6, G.t, G.boostT > 0.1);
+    if (!s.over) R.speedLines(ctx, W, H, G.cam.hy, Math.max(0, (spd - 55) / 60) + G.boostT * 0.6, G.t, G.boostT > 0.1, !G.q);
     if (G.screen !== 'end') drawParticles();
     if (G.screen === 'play' && !s.over) drawWarnings(camP, s);
     ctx.restore();
