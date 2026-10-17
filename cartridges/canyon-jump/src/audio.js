@@ -13,34 +13,61 @@
     A.master = ctx.createGain(); A.master.gain.value = A.muted ? 0 : 0.6;
     const comp = ctx.createDynamicsCompressor(); A.master.connect(comp); comp.connect(ctx.destination);
     A.noise = noiseBuffer(ctx);
-    // Engine: two detuned saws through a lowpass whose cutoff follows speed.
-    const eg = ctx.createGain(); eg.gain.value = 0; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 400; lp.Q.value = 6;
-    const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(); o1.type = 'sawtooth'; o2.type = 'square'; o2.detune.value = -1200 + 8;
-    o1.connect(lp); o2.connect(lp); lp.connect(eg); eg.connect(A.master); o1.start(); o2.start();
-    A.engine = { gain: eg, lp, o1, o2 };
-    // Wind: looping noise through a bandpass.
+    // Electric drivetrain: a motor whine (sine + 2nd harmonic) over a sub, plus a filtered saw growl. Pitch follows speed.
+    const eg = ctx.createGain(); eg.gain.value = 0;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600; lp.Q.value = 4;
+    const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), o3 = ctx.createOscillator(), o4 = ctx.createOscillator();
+    o1.type = 'sine'; o2.type = 'triangle'; o3.type = 'sine'; o4.type = 'sawtooth';
+    const g1 = ctx.createGain(), g2 = ctx.createGain(), g3 = ctx.createGain(), g4 = ctx.createGain();
+    g1.gain.value = 0.5; g2.gain.value = 0.18; g3.gain.value = 0.6; g4.gain.value = 0.22;
+    o1.connect(g1); o2.connect(g2); o3.connect(g3); o4.connect(g4); [g1, g2, g3, g4].forEach(g => g.connect(lp));
+    lp.connect(eg); eg.connect(A.master); [o1, o2, o3, o4].forEach(o => o.start());
+    A.engine = { gain: eg, lp, o1, o2, o3, o4 };
+    // Wind: looping noise through a bandpass that opens with altitude and speed.
     const ws = ctx.createBufferSource(); ws.buffer = A.noise; ws.loop = true;
     const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 700; bp.Q.value = 0.7;
     const wg = ctx.createGain(); wg.gain.value = 0; ws.connect(bp); bp.connect(wg); wg.connect(A.master); ws.start();
     A.wind = { gain: wg, bp };
-    A.music = ctx.createGain(); A.music.gain.value = 0.16; A.music.connect(A.master);
-    A.timer = setInterval(scheduleMusic, 60);
+    // Music: a road section and a sky section on separate buses that crossfade on launch.
+    A.music = ctx.createGain(); A.music.gain.value = 0.17; A.music.connect(A.master);
+    A.busRoad = ctx.createGain(); A.busSky = ctx.createGain(); A.busRoad.gain.value = 1; A.busSky.gain.value = 0;
+    A.busRoad.connect(A.music); A.busSky.connect(A.music);
+    A.timer = setInterval(scheduleMusic, 50);
     A.nextBeat = ctx.currentTime + 0.1;
   };
-  // A small sunset synthwave loop: bass on the beat, a pentatonic arp in eighths.
-  const BASS = [45, 45, 43, 41], ARP = [0, 7, 12, 15, 12, 7, 3, 7];
+  // Sunset synthwave in A minor. Road: four-on-the-floor, octave bass, 16th arp. Sky: half-time pads and a high sparkle arp.
+  const BASS = [45, 41, 43, 40], ARP = [0, 7, 12, 15, 12, 7, 3, 7], CHORDS = [[57, 60, 64], [53, 57, 60], [55, 59, 62], [52, 55, 59]];
   const mtof = n => 440 * Math.pow(2, (n - 69) / 12);
   function scheduleMusic() {
     const ctx = A.ctx; if (!ctx || ctx.state !== 'running') return;
-    const spb = 60 / 112 / 2;
-    while (A.nextBeat < ctx.currentTime + 0.25) {
-      const b = A.beat++, bar = Math.floor(b / 16) % 4, root = BASS[bar];
-      if (b % 2 === 0) tone(mtof(root - 12 + (b % 8 === 4 ? 12 : 0)), 'sawtooth', A.nextBeat, spb * 1.6, 0.22, A.music, 500);
-      tone(mtof(root + 24 + ARP[b % 8]), 'triangle', A.nextBeat, spb * 0.9, 0.12, A.music, 3000);
-      if (b % 4 === 2) hit(A.nextBeat, 0.05, 6000, 0.12, A.music);
+    const spb = 60 / 116 / 4; // 16th notes
+    while (A.nextBeat < ctx.currentTime + 0.2) {
+      const b = A.beat++, step = b % 16, bar = Math.floor(b / 16) % 4, root = BASS[bar], at = A.nextBeat;
+      // road bus
+      if (step % 4 === 0) kick(at, A.busRoad);
+      if (step % 2 === 0) tone(mtof(root - 12 + (step % 4 === 2 ? 12 : 0)), 'sawtooth', at, spb * 1.8, 0.2, A.busRoad, 520);
+      if (step % 4 === 2) hit(at, 0.04, 7000, 0.1, A.busRoad);
+      if (step === 4 || step === 12) hit(at, 0.12, 1800, 0.16, A.busRoad, 900);
+      tone(mtof(root + 24 + ARP[step % 8]), 'square', at, spb * 0.8, 0.05, A.busRoad, 2600);
+      // sky bus
+      if (step === 0) CHORDS[bar].forEach(n => tone(mtof(n), 'sawtooth', at, spb * 16, 0.05, A.busSky, 1400));
+      if (step === 0 || step === 10) tone(mtof(root - 12), 'sine', at, spb * 6, 0.22, A.busSky);
+      if (step % 2 === 0) tone(mtof(CHORDS[bar][(step / 2) % 3] + 24), 'triangle', at, spb * 2.5, 0.06, A.busSky, 6000);
+      if (step === 8) hit(at, 0.3, 4000, 0.05, A.busSky, 9000);
       A.nextBeat += spb;
     }
   }
+  function kick(at, dest) {
+    const ctx = A.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(140, at); o.frequency.exponentialRampToValueAtTime(42, at + 0.12);
+    g.gain.setValueAtTime(0.5, at); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.22);
+    o.connect(g); g.connect(dest); o.start(at); o.stop(at + 0.25);
+  }
+  A.setPhase = function (phase) {
+    const ctx = A.ctx; if (!ctx || A.phase === phase) return; A.phase = phase; const t = ctx.currentTime;
+    const sky = phase === 'sky';
+    A.busRoad.gain.setTargetAtTime(sky ? 0 : 1, t, 0.35); A.busSky.gain.setTargetAtTime(sky ? 1 : 0, t, 0.35);
+  };
   function tone(freq, type, at, dur, vol, dest, cutoff, slideTo) {
     const ctx = A.ctx, o = ctx.createOscillator(), g = ctx.createGain();
     o.type = type; o.frequency.setValueAtTime(freq, at);
@@ -65,7 +92,10 @@
       case 'pad': tone(220, 'sawtooth', t, 0.35, 0.22, null, 2400, 880); hit(t, 0.4, 900, 0.25, null, 5000); break;
       case 'lane': hit(t, 0.08, 1800, 0.06); break;
       case 'near': tone(1760, 'sine', t, 0.08, 0.07); break;
-      case 'boost': hit(t, 0.6, 400, 0.45, null, 4000); tone(110, 'sawtooth', t, 0.6, 0.25, null, 1200, 330); break;
+      case 'boost': { // punchy: transient click, sub drop, rising saw, long whoosh
+        hit(t, 0.03, 5000, 0.5); const o = A.ctx.createOscillator(), g = A.ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.35);
+        g.gain.setValueAtTime(0.7, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4); o.connect(g); g.connect(A.master); o.start(t); o.stop(t + 0.45);
+        tone(140, 'sawtooth', t, 0.5, 0.22, null, 2200, 560); hit(t + 0.02, 0.8, 500, 0.5, null, 6000); break; }
       case 'empty': tone(160, 'square', t, 0.12, 0.12, null, 800); break;
       case 'trick': hit(t, 0.35, 3000, 0.12, null, 800); break;
       case 'landed_trick': [0, 4, 7, 12].forEach((n, i) => tone(mtof(76 + n + Math.min(arg || 0, 4) * 2), 'square', t + i * 0.05, 0.14, 0.09, null, 5000)); break;
@@ -79,15 +109,19 @@
     }
   };
   // Continuous layers, called each frame.
-  A.drive = function (phase, speed, momentum, active) {
+  // Continuous layers, called each frame.
+  A.drive = function (phase, speed, momentum, active, alt) {
     const ctx = A.ctx; if (!ctx) return; const t = ctx.currentTime;
     const road = active && phase === 'road', sky = active && (phase === 'sky' || phase === 'fall');
-    A.engine.gain.gain.setTargetAtTime(road ? 0.07 : sky ? 0.02 : 0, t, 0.08);
-    const f = 40 + speed * 1.6;
-    A.engine.o1.frequency.setTargetAtTime(f, t, 0.05); A.engine.o2.frequency.setTargetAtTime(f * 1.002, t, 0.05);
-    A.engine.lp.frequency.setTargetAtTime(300 + speed * 18, t, 0.05);
-    A.wind.gain.gain.setTargetAtTime(sky ? 0.05 + Math.min(momentum, 120) / 900 : road ? speed / 2200 : 0, t, 0.2);
-    A.wind.bp.frequency.setTargetAtTime(400 + (sky ? momentum : speed) * 12, t, 0.2);
+    A.setPhase(sky || (phase === 'sky') ? 'sky' : 'road');
+    A.engine.gain.gain.setTargetAtTime(road ? 0.09 : sky ? 0.025 : 0, t, 0.08);
+    const f = 55 + (sky ? momentum * 1.6 : speed * 3.2); // whine climbs with speed
+    A.engine.o1.frequency.setTargetAtTime(f * 2, t, 0.05); A.engine.o2.frequency.setTargetAtTime(f * 4.02, t, 0.05);
+    A.engine.o3.frequency.setTargetAtTime(f * 0.5, t, 0.05); A.engine.o4.frequency.setTargetAtTime(f, t, 0.05);
+    A.engine.lp.frequency.setTargetAtTime(400 + speed * 22, t, 0.05);
+    const a = Math.min(1, (alt || 0) / 150);
+    A.wind.gain.gain.setTargetAtTime(sky ? 0.04 + a * 0.08 + Math.min(momentum, 120) / 1400 : road ? speed / 2400 : 0, t, 0.2);
+    A.wind.bp.frequency.setTargetAtTime(sky ? 500 + a * 1600 + momentum * 6 : 400 + speed * 10, t, 0.2);
   };
   A.setMuted = function (m) { A.muted = !!m; if (A.master) A.master.gain.setTargetAtTime(A.muted ? 0 : 0.6, A.ctx.currentTime, 0.02); };
   A.suspend = function () { A.ctx?.suspend?.(); };
