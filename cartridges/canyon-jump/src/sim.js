@@ -55,7 +55,8 @@
       const progress = z / C.ROAD_LEN;
       const dtRow = (z - prevZ) / vEstAt(z);
       const lanesIn = d => prevFree.some(l => Math.abs(l - d) * C.SWITCH_T + C.REACT_T <= dtRow);
-      let blocked = r() < 0.3 + progress * 0.35 ? 2 : 1;
+      // Forgiving opening: single-lane rows only for the first stretch, then the double blocks ramp in.
+      let blocked = r() < (z < 450 ? 0 : 0.25 + progress * 0.4) ? 2 : 1;
       let lanes = [-1, 0, 1].sort(() => r() - 0.5);
       let free = lanes.slice(blocked);
       if (!free.some(lanesIn)) {
