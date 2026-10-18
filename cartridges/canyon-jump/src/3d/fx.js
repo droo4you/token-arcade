@@ -62,3 +62,72 @@ export function createParticles(max = 900) {
     get count() { return P.length; },
   };
 }
+
+/* Clouds: camera-facing soft puffs, one instanced draw call, billboarded in the vertex shader (no per-frame CPU).
+   Each cluster is a handful of puffs; the sunset tint is lighter on top, cooler underneath. */
+export function createClouds({ count = 70, seed = 9, z0, z1, yMin = 45, yMax = 230, xSpan = 700, top = '#ffd9cf', bottom = '#9a6a9e', rand }) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
+  for (let i = 0; i < 14; i++) { const x = 30 + rand() * 68, y = 40 + rand() * 48, r = 18 + rand() * 26, gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); }
+  const tex = new THREE.CanvasTexture(cv);
+  const base = new THREE.PlaneGeometry(1, 1), geo = new THREE.InstancedBufferGeometry();
+  geo.index = base.index; geo.setAttribute('position', base.attributes.position); geo.setAttribute('uv', base.attributes.uv);
+  const offs = [], scl = [], shade = [];
+  for (let c = 0; c < count; c++) {
+    const cx = (rand() * 2 - 1) * xSpan * (rand() < 0.4 ? 0.1 : 1), cy = yMin + Math.pow(rand(), 1.3) * (yMax - yMin), cz = z0 + rand() * (z1 - z0), n = 5 + Math.floor(rand() * 6), w = 40 + rand() * 70;
+    for (let k = 0; k < n; k++) { offs.push(cx + (rand() - 0.5) * w * 1.6, cy + (rand() - 0.3) * w * 0.3, -(cz + (rand() - 0.5) * w)); const s = w * (0.5 + rand() * 0.6); scl.push(s, s * 0.62); shade.push(rand()); }
+  }
+  geo.setAttribute('ioff', new THREE.InstancedBufferAttribute(new Float32Array(offs), 3));
+  geo.setAttribute('iscl', new THREE.InstancedBufferAttribute(new Float32Array(scl), 2));
+  geo.setAttribute('ishade', new THREE.InstancedBufferAttribute(new Float32Array(shade), 1));
+  geo.instanceCount = shade.length;
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: true,
+    uniforms: { map: { value: tex }, top: { value: new THREE.Color(top) }, bottom: { value: new THREE.Color(bottom) }, fade: { value: 1 }, ...THREE.UniformsLib.fog },
+    vertexShader: /* glsl */`
+      attribute vec3 ioff; attribute vec2 iscl; attribute float ishade; varying vec2 vUv; varying float vS; varying float vNear;
+      #include <fog_pars_vertex>
+      void main() { vUv = uv; vS = ishade; vec4 mvPosition = modelViewMatrix * vec4(ioff, 1.0); mvPosition.xy += position.xy * iscl;
+        vNear = smoothstep(4.0, 40.0, -mvPosition.z); gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */`
+      uniform sampler2D map; uniform vec3 top, bottom; uniform float fade; varying vec2 vUv; varying float vS; varying float vNear;
+      #include <fog_pars_fragment>
+      void main() { vec4 t = texture2D(map, vUv); vec3 c = mix(bottom, top, smoothstep(0.15, 0.85, vUv.y) * (0.75 + 0.25 * vS));
+        gl_FragColor = vec4(c, t.a * fade * vNear); if (gl_FragColor.a < 0.01) discard;
+        #include <fog_fragment>
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; mesh.renderOrder = 4;
+  return { mesh, material: mat };
+}
+
+/* Wind streaks: thin additive lines that fly past the camera. World-stationary in feel (they stream toward and
+   past you at your speed) but always generated around the camera, so there is nothing to place or recycle on the CPU. */
+export function createStreaks(n = 160, rand) {
+  const base = new THREE.PlaneGeometry(1, 1); base.translate(0, 0.5, 0); base.rotateX(-Math.PI / 2); // unit quad along -z... local z in [-1, 0]
+  const geo = new THREE.InstancedBufferGeometry(); geo.index = base.index; geo.setAttribute('position', base.attributes.position); geo.setAttribute('uv', base.attributes.uv);
+  const a = [];
+  for (let i = 0; i < n; i++) { const ang = rand() * Math.PI * 2, r = 4.5 + Math.pow(rand(), 0.6) * 16; a.push(Math.cos(ang) * r, Math.sin(ang) * r * 0.75, rand()); }
+  geo.setAttribute('iseed', new THREE.InstancedBufferAttribute(new Float32Array(a), 3)); geo.instanceCount = n;
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { travel: { value: 0 }, len: { value: 4 }, amt: { value: 0 }, span: { value: 90 }, color: { value: new THREE.Color('#fff4ea') } },
+    vertexShader: /* glsl */`
+      attribute vec3 iseed; uniform float travel, len, span; varying float vA; varying vec2 vUv;
+      void main() { vUv = uv;
+        float d = mod(iseed.z * span + travel, span);          // 0..span, grows as we travel
+        vec3 p = vec3(iseed.x, iseed.y, -(span - d) + 4.0);       // in view space-ish: ahead of the camera, coming at it
+        p.z += position.z * len; vec2 w = normalize(vec2(-iseed.y, iseed.x)); p.xy += w * position.x * 0.035;
+        vA = smoothstep(0.0, 0.25, d / span) * (1.0 - smoothstep(0.85, 1.0, d / span));
+        gl_Position = projectionMatrix * vec4(p, 1.0); }`,
+    fragmentShader: /* glsl */`
+      uniform float amt; uniform vec3 color; varying float vA; varying vec2 vUv;
+      void main() { float e = 1.0 - abs(vUv.x - 0.5) * 2.0; gl_FragColor = vec4(color * amt * vA * e * (0.4 + 0.6 * vUv.y), 1.0); }`,
+  });
+  const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; mesh.renderOrder = 6;
+  return { mesh, material: mat };
+}

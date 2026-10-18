@@ -57,20 +57,22 @@ function loft(sec, u0, u1, rings, around, opts = {}) {
 }
 
 function bodyGeometry() {
-  const top = profile([[0, 0.36], [0.05, 0.47], [0.14, 0.61], [0.22, 0.72], [0.32, 0.74], [0.45, 0.78], [0.6, 0.84], [0.74, 0.885], [0.88, 0.875], [0.96, 0.83], [1, 0.76]]);
-  const bot = profile([[0, 0.24], [0.06, 0.17], [0.5, 0.15], [0.9, 0.19], [1, 0.3]]);
-  const hw = profile([[0, 0.58], [0.04, 0.82], [0.12, 0.95], [0.22, 0.99], [0.36, 0.95], [0.5, 0.92], [0.66, 0.975], [0.79, 1.02], [0.9, 1.0], [0.97, 0.95], [1, 0.88]]);
+  // Low wedge: a long, gently rising hood, the cab set well back, high rounded rear haunches and a tail that rolls
+  // under in plan and profile (a two-seat EV roadster stance; generic, no trademarked surfaces).
+  const top = profile([[0, 0.3], [0.04, 0.41], [0.12, 0.52], [0.25, 0.6], [0.36, 0.66], [0.5, 0.75], [0.64, 0.835], [0.76, 0.87], [0.86, 0.855], [0.94, 0.79], [0.985, 0.67], [1, 0.56]]);
+  const bot = profile([[0, 0.22], [0.06, 0.16], [0.5, 0.14], [0.9, 0.17], [0.97, 0.25], [1, 0.36]]);
+  const hw = profile([[0, 0.55], [0.04, 0.8], [0.12, 0.93], [0.22, 0.975], [0.38, 0.9], [0.5, 0.885], [0.66, 0.98], [0.78, 1.03], [0.88, 1.0], [0.96, 0.9], [1, 0.72]]);
   const sec = u => {
     const t = top(u), b = bot(u);
-    return { cy: (t + b) / 2, hh: (t - b) / 2, hw: hw(u), n: 3.2, tumble: 0.16, tuck: 0.1, crown: 0.12 * bump(u, 0.2, 0.1) + 0.08 * bump(u, 0.79, 0.11) - 0.015 * bump(u, 0.5, 0.12) };
+    return { cy: (t + b) / 2, hh: (t - b) / 2, hw: hw(u), n: 3.2, tumble: 0.16, tuck: 0.1, crown: 0.11 * bump(u, 0.2, 0.1) + 0.12 * bump(u, 0.79, 0.12) - 0.02 * bump(u, 0.5, 0.12) };
   };
   return loft(sec, 0, 1, 150, 72, { arches: true, trimY: 0.26 });
 }
 function canopyGeometry() {
-  const top = profile([[0, 0.7], [0.1, 0.87], [0.3, 1.06], [0.46, 1.1], [0.62, 1.055], [0.8, 0.95], [1, 0.83]], 120, 5);
-  const hw = profile([[0, 0.46], [0.25, 0.71], [0.5, 0.75], [0.8, 0.67], [1, 0.47]], 120, 5);
-  const sec = u => { const t = top(u), b = 0.62; return { cy: (t + b) / 2, hh: (t - b) / 2, hw: hw(u), n: 2.4, tumble: 0.34 }; };
-  const U0 = 0.3, U1 = 0.84, span = U1 - U0; // canopy spans body u 0.30..0.84
+  const top = profile([[0, 0.66], [0.1, 0.82], [0.3, 1.02], [0.48, 1.075], [0.65, 1.03], [0.82, 0.93], [1, 0.84]], 120, 5);
+  const hw = profile([[0, 0.5], [0.25, 0.72], [0.5, 0.745], [0.8, 0.64], [1, 0.45]], 120, 5);
+  const sec = u => { const t = top(u), b = 0.6; return { cy: (t + b) / 2, hh: (t - b) / 2, hw: hw(u), n: 2.4, tumble: 0.36 }; };
+  const U0 = 0.35, U1 = 0.83, span = U1 - U0; // canopy spans body u 0.35..0.83 (cab set back, long hood)
   const g = loft(v => sec(v), 0, 1, 70, 64, { capScale: 0.6 });
   g.scale(1, 1, span);
   g.translate(0, 0, -Z0 * span + Z0 + U0 * L);
@@ -99,13 +101,31 @@ function rimGeometry() {
   return merge(parts.map(p => p.index ? p.toNonIndexed() : p));
 }
 
-export function buildCar(level, { lowQ = false } = {}) {
+/* Neutral studio environment for the paint only: the scene's sunset sky env made the white body reflect purple and
+   orange everywhere, so it read pink / brown. Reflections now come from a white softbox sky over a grey floor. */
+function studioEnv(renderer) {
+  const sc = new THREE.Scene();
+  sc.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, uniforms: {},
+    vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: 'varying vec3 vD; void main(){ float h = vD.y; vec3 c = mix(vec3(0.42,0.42,0.44), vec3(0.92,0.93,0.95), smoothstep(-0.25, 0.1, h)); c = mix(c, vec3(1.35,1.35,1.38), smoothstep(0.35, 0.9, h)); c += vec3(1.2) * smoothstep(0.97, 0.995, abs(vD.x)) * step(0.0, h); gl_FragColor = vec4(c, 1.0); }' })));
+  const pm = new THREE.PMREMGenerator(renderer), rt = pm.fromScene(sc, 0.02); pm.dispose(); return rt.texture;
+}
+
+export function buildCar(level, { lowQ = false, renderer = null } = {}) {
   const group = new THREE.Group(); group.name = 'roadster';
   const tilt = new THREE.Group(); group.add(tilt); // banking / pitch / kickflip live here, wheels included
+  // Pearl white: neutral base, no iridescence (it tinted pink at sunset), a clearcoat over a satin base, studio
+  // reflections, and a soft camera-side fill so the tail and flanks stay white when the low sun is in front of you.
   const paint = new THREE.MeshPhysicalMaterial({
-    color: level.car.paint, vertexColors: true, metalness: 0.12, roughness: 0.3,
-    clearcoat: 1, clearcoatRoughness: 0.035, iridescence: 0.22, iridescenceIOR: 1.3, iridescenceThicknessRange: [180, 420], envMapIntensity: 1.15,
+    color: level.car.paint, vertexColors: true, metalness: 0.0, roughness: 0.26,
+    clearcoat: 1, clearcoatRoughness: 0.03, envMapIntensity: 0.95, sheen: 0.25, sheenColor: new THREE.Color('#eef3ff'), sheenRoughness: 0.5,
   });
+  if (renderer) paint.envMap = studioEnv(renderer);
+  const fill = { value: new THREE.Color(level.car.fill || '#3d3f44') };
+  paint.onBeforeCompile = sh => {
+    sh.uniforms.paintFill = fill;
+    sh.fragmentShader = 'uniform vec3 paintFill;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += paintFill * vColor * (0.45 + 0.55 * max(dot(normal, vec3(0.0, 0.0, 1.0)), 0.0));');
+  };
   const glass = new THREE.MeshPhysicalMaterial({ color: '#020306', metalness: 0.0, roughness: 0.02, envMapIntensity: 0.75, specularIntensity: 1 });
   const trim = new THREE.MeshStandardMaterial({ color: '#121216', metalness: 0.4, roughness: 0.35, envMapIntensity: 1 });
   const tailMat = new THREE.MeshStandardMaterial({ color: '#2a0006', emissive: '#ff1f35', emissiveIntensity: 5.5, roughness: 0.3 });
@@ -115,9 +135,9 @@ export function buildCar(level, { lowQ = false } = {}) {
   const canopy = new THREE.Mesh(canopyGeometry(), glass); canopy.castShadow = true; tilt.add(canopy);
   // rear fascia, light bar, diffuser
   const tailZ = Z0 + L;
-  const fascia = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.15, 0.04), trim); fascia.position.set(0, 0.69, tailZ + 0.035); tilt.add(fascia);
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.045, 0.03), tailMat); bar.position.set(0, 0.705, tailZ + 0.06); tilt.add(bar);
-  for (const sx of [-1, 1]) { const end = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.08, 0.035), tailMat); end.position.set(sx * 0.76, 0.705, tailZ + 0.058); tilt.add(end); }
+  const fascia = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.12, 0.04), trim); fascia.position.set(0, 0.6, tailZ + 0.015); tilt.add(fascia);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.04, 0.03), tailMat); bar.position.set(0, 0.615, tailZ + 0.04); tilt.add(bar);
+  for (const sx of [-1, 1]) { const end = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 0.035), tailMat); end.position.set(sx * 0.6, 0.615, tailZ + 0.02); end.rotation.y = sx * 0.5; tilt.add(end); }
   const diff = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.13, 0.32), trim); diff.position.set(0, 0.25, tailZ - 0.12); tilt.add(diff);
   for (const sx of [-1, 1]) {
     const hl = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.035, 0.05), headMat); hl.position.set(sx * 0.5, 0.53, Z0 + 0.16); hl.rotation.y = sx * 0.42; hl.rotation.z = -sx * 0.08; tilt.add(hl);

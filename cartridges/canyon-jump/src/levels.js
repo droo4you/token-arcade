@@ -56,7 +56,7 @@
     obstacles: { cactus: 'saguaro', rock: 'sandstone', tumbleweed: 'tumbleweed', cone: 'cone' },
     skyObjects: { bird: 'crow', plane: 'jet', satellite: 'sat' },
     pickups: { orb: '#ffcf3f', air: '#4ff0ff', pad: '#ff4fd8' },
-    car: { paint: '#f2f0eb' },
+    car: { paint: '#f7f8fa', fill: '#33353a' },
   };
 
   const LEVELS = [RED_ROCK];
