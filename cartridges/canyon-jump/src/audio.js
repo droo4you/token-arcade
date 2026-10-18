@@ -101,13 +101,20 @@
           g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.95, t + d + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.6); o.connect(g); g.connect(A.master); o.start(t + d); o.stop(t + d + 0.65);
           hit(t + d, 0.35, 1400, 0.6, null, 160); });
         [0, 7, 12, 19].forEach((n, i) => tone(mtof(64 + n), 'sawtooth', t + 0.3 + i * 0.06, 0.5, 0.08, null, 4000)); break;
+      case 'whoosh': { // filtered noise sweep with a doppler-ish pitch drop
+        const dur = arg ? 0.45 : 0.35; hit(t, dur, arg ? 2600 : 1600, arg ? 0.55 : 0.4, null, 300); tone(arg ? 520 : 380, 'sine', t, dur * 0.8, 0.06, null, 0, 180); break; }
+      case 'flip': hit(t, 0.5, 700, 0.4, null, 4200); hit(t + 0.18, 0.35, 4200, 0.18, null, 900); break;
+      case 'ring': { const n = (arg || 0) % 6; [0, 7, 12].forEach((k, i) => tone(mtof(74 + n + k), 'triangle', t + i * 0.035, 0.22, 0.12, null, 6000)); hit(t, 0.3, 3500, 0.3, null, 900); break; }
+      case 'splash': hit(t, 1.2, 900, 0.9, null, 200); hit(t + 0.05, 0.6, 3000, 0.4, null, 600); tone(60, 'sine', t, 0.6, 0.5, null, 0, 30); break;
+      case 'cash': [0, 4, 7, 12, 16, 19].slice(0, 3 + Math.min(3, arg || 0)).forEach((n, i) => tone(mtof(72 + n), 'square', t + 0.25 + i * 0.07, 0.2, 0.09, null, 5000)); tone(mtof(96), 'sine', t + 0.7, 0.6, 0.08); break;
+      case 'beep': tone(arg ? 1250 : 900, 'square', t, 0.06, 0.08, null, 3000); break;
       case 'empty': tone(160, 'square', t, 0.12, 0.12, null, 800); break;
       case 'trick': hit(t, 0.35, 3000, 0.12, null, 800); break;
       case 'landed_trick': [0, 4, 7, 12].forEach((n, i) => tone(mtof(76 + n + Math.min(arg || 0, 4) * 2), 'square', t + i * 0.05, 0.14, 0.09, null, 5000)); break;
       case 'launch': tone(90, 'sawtooth', t, 1.2, 0.35, null, 2000, 520); hit(t, 1.2, 300, 0.4, null, 3000); [0, 7, 12].forEach((n, i) => tone(mtof(69 + n), 'triangle', t + 0.15 + i * 0.08, 0.4, 0.12)); break;
       case 'short': tone(440, 'triangle', t, 1.6, 0.25, null, 0, 70); break;
-      case 'crash': hit(t, 0.9, 600, 0.9, null, 90); tone(70, 'square', t, 0.5, 0.4, null, 400, 30); break;
-      case 'land': hit(t, 0.4, 300, 0.6, null, 120); [0, 4, 7, 11, 14].forEach((n, i) => tone(mtof(72 + n), 'triangle', t + 0.2 + i * 0.07, 0.5, 0.13)); break;
+      case 'crash': hit(t, 0.03, 4000, 0.8); hit(t, 0.9, 600, 0.9, null, 90); tone(70, 'square', t, 0.5, 0.4, null, 400, 30); tone(120, 'sine', t, 0.35, 0.6, null, 0, 35); break;
+      case 'land': hit(t, 0.03, 3000, 0.6); tone(90, 'sine', t, 0.35, 0.7, null, 0, 32); hit(t, 0.4, 300, 0.6, null, 120); [0, 4, 7, 11, 14].forEach((n, i) => tone(mtof(72 + n), 'triangle', t + 0.2 + i * 0.07, 0.5, 0.13)); break;
       case 'go': tone(880, 'square', t, 0.25, 0.12, null, 3000); break;
       case 'tick': tone(440, 'square', t, 0.1, 0.1, null, 2000); break;
       case 'ui': tone(660, 'triangle', t, 0.08, 0.1); break;
@@ -115,7 +122,7 @@
   };
   // Continuous layers, called each frame.
   // Continuous layers, called each frame.
-  A.drive = function (phase, speed, momentum, active, alt) {
+  A.drive = function (phase, speed, momentum, active, alt, dive) {
     const ctx = A.ctx; if (!ctx) return; const t = ctx.currentTime;
     const road = active && phase === 'road', sky = active && (phase === 'sky' || phase === 'fall');
     A.setPhase(sky || (phase === 'sky') ? 'sky' : 'road');
@@ -125,8 +132,10 @@
     A.engine.o3.frequency.setTargetAtTime(f * 0.5, t, 0.05); A.engine.o4.frequency.setTargetAtTime(f, t, 0.05);
     A.engine.lp.frequency.setTargetAtTime(400 + speed * 22, t, 0.05);
     const a = Math.min(1, (alt || 0) / 150);
-    A.wind.gain.gain.setTargetAtTime(sky ? 0.04 + a * 0.08 + Math.min(momentum, 120) / 1400 : road ? speed / 2400 : 0, t, 0.2);
-    A.wind.bp.frequency.setTargetAtTime(sky ? 500 + a * 1600 + momentum * 6 : 400 + speed * 10, t, 0.2);
+    // Wind roars with airspeed and screams in a dive.
+    const d = Math.min(1, (dive || 0) * 2.5);
+    A.wind.gain.gain.setTargetAtTime(sky ? 0.05 + a * 0.06 + Math.min(momentum, 180) / 900 + d * 0.12 : road ? speed / 2400 : 0, t, 0.12);
+    A.wind.bp.frequency.setTargetAtTime(sky ? 420 + a * 900 + momentum * 7 + d * 900 : 400 + speed * 10, t, 0.15);
   };
   A.setMuted = function (m) { A.muted = !!m; if (A.master) A.master.gain.setTargetAtTime(A.muted ? 0 : 0.6, A.ctx.currentTime, 0.02); };
   A.suspend = function () { A.ctx?.suspend?.(); };
