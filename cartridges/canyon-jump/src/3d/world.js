@@ -63,7 +63,7 @@ export function terrainHeight(level, x, z) {
 }
 
 function groundPatch(level, z0, z1, mat) {
-  const size = level.terrain.size, segX = 220, segZ = Math.max(24, Math.round((z1 - z0) / 18));
+  const size = level.terrain.size, segX = 150, segZ = Math.max(24, Math.round((z1 - z0) / 24));
   const g = new THREE.PlaneGeometry(size, z1 - z0, segX, segZ); g.rotateX(-Math.PI / 2);
   const p = g.attributes.position, cols = new Float32Array(p.count * 3), pal = level.palette;
   const sand = new THREE.Color(pal.sand), dark = new THREE.Color(pal.sandDark), light = new THREE.Color(pal.sandLight), sh = new THREE.Color(pal.shoulder), c = new THREE.Color();
