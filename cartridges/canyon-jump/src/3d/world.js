@@ -246,8 +246,8 @@ export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
   };
   const vc = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
   const vcFlat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
-  inst(P.saguaro(pal.cactus, 21), vc, place(sc2.cactus, sc2.minX + 2, sc2.spread, -300, C.ROAD_LEN + C.CANYON_W + 2500), () => 0.8 + r() * 0.7, true);
-  inst(P.sandstone(pal.rock, 31, 1.6), vcFlat, place(sc2.rock, sc2.minX + 3, sc2.spread, -300, C.ROAD_LEN + C.CANYON_W + 2500), () => 0.6 + r() * 2.2, true);
+  inst(P.saguaro(pal.cactus, 21, 1, 0), vc, place(sc2.cactus, sc2.minX + 2, sc2.spread, -300, C.ROAD_LEN + C.CANYON_W + 2500), () => 0.8 + r() * 0.7, true);
+  inst(P.sandstone(pal.rock, 31, 1.6), vcFlat, place(sc2.rock, sc2.minX + 3, sc2.spread, -300, C.ROAD_LEN + C.CANYON_W + 2500), () => 0.6 + r() * 2.2, false);
   inst(P.scrub(7), vcFlat, place(sc2.scrub, sc2.minX - 1, sc2.spread * 0.6, -300, C.ROAD_LEN + C.CANYON_W + 2500), () => 0.7 + r() * 0.9, false);
   // telephone poles + sagging wires
   const PL = level.terrain.poles, polePts = []; for (let z = -200; z < C.ROAD_LEN - 30; z += PL.spacing) polePts.push([PL.side * PL.offset, z]);

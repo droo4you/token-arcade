@@ -7,22 +7,22 @@ import { TAU, rng, tint, merge, xf, noise2, col } from './util.js';
 function capsule(r, len, seg = 10) { return new THREE.CapsuleGeometry(r, len, 4, seg); }
 
 /* Saguaro: ribbed trunk + two elbowed arms. Width across arms ≈ 1.7 m (hit half-width 0.85). */
-export function saguaro(c, seed = 1, scale = 1) {
+export function saguaro(c, seed = 1, scale = 1, lod = 1) { // lod 0 = cheap roadside scenery (~10x fewer triangles)
   const r = rng(seed), parts = [], green = c, dark = new THREE.Color(c).multiplyScalar(0.7).getHex();
   const ribbed = (rad, len) => {
-    const g = new THREE.CylinderGeometry(rad, rad * 1.04, len, 14, 6);
+    const g = new THREE.CylinderGeometry(rad, rad * 1.04, len, lod ? 14 : 7, lod ? 6 : 1);
     const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const a = Math.atan2(p.getZ(i), p.getX(i)), k = 1 + 0.07 * Math.cos(a * 7); p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k); }
     g.computeVertexNormals(); return g;
   };
   const H = 4.2 + r() * 1.2;
   parts.push(tint(xf(ribbed(0.34, H), { y: H / 2 }), green, 0.12, seed));
-  parts.push(tint(xf(new THREE.SphereGeometry(0.34, 14, 8, 0, TAU, 0, Math.PI / 2), { y: H, sy: 0.8 }), green, 0.1, seed + 1));
+  parts.push(tint(xf(new THREE.SphereGeometry(0.34, lod ? 14 : 7, lod ? 8 : 3, 0, TAU, 0, Math.PI / 2), { y: H, sy: 0.8 }), green, 0.1, seed + 1));
   for (const sx of [-1, 1]) {
     const y0 = 1.4 + r() * 1.2, up = 1.0 + r() * 1.1, out = 0.58;
     parts.push(tint(xf(ribbed(0.2, out), { x: sx * (out / 2 + 0.25), y: y0, rz: Math.PI / 2 }), dark, 0.1, seed + 2));
     parts.push(tint(xf(ribbed(0.21, up), { x: sx * (out + 0.25), y: y0 + up / 2 }), green, 0.1, seed + 3));
-    parts.push(tint(xf(new THREE.SphereGeometry(0.21, 12, 6, 0, TAU, 0, Math.PI / 2), { x: sx * (out + 0.25), y: y0 + up }), green, 0.1, seed + 4));
-    parts.push(tint(xf(new THREE.SphereGeometry(0.21, 10, 8), { x: sx * (out + 0.25), y: y0 }), green, 0.1, seed + 5));
+    parts.push(tint(xf(new THREE.SphereGeometry(0.21, lod ? 12 : 6, lod ? 6 : 2, 0, TAU, 0, Math.PI / 2), { x: sx * (out + 0.25), y: y0 + up }), green, 0.1, seed + 4));
+    parts.push(tint(xf(new THREE.SphereGeometry(0.21, lod ? 10 : 6, lod ? 8 : 4), { x: sx * (out + 0.25), y: y0 }), green, 0.1, seed + 5));
   }
   const g = merge(parts); if (scale !== 1) g.scale(scale, scale, scale); return g;
 }
