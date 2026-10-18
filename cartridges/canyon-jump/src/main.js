@@ -7,6 +7,10 @@
   const AUTOPILOT = params.get('autopilot') === '1' && !TA?.embedded; // standalone preview / capture only
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
+  // 3D world (src/render3d.js, ES module) draws into #gl under this HUD canvas; ?r=2d forces the legacy 2D renderer.
+  const glCanvas = params.get('r') !== '2d' && document.getElementById('gl');
+  const R3 = () => { const r = glCanvas && window.CJRender3D; return r && r.ready ? r : null; };
+  const waiting3D = () => glCanvas && !window.CJRender3D?.failed && !R3() && G.t < 4;
   let W = 960, H = 540, dpr = 1;
   const BEST_KEY = TA?.embedded ? 'ta.canyon-jump.best' : 'canyon-jump.best';
   let best = 0; try { best = +localStorage.getItem(BEST_KEY) || 0; } catch (e) { /* storage blocked */ }
@@ -34,6 +38,7 @@
     else { H = 540; W = Math.round(Math.max(540, Math.min(1200, H * cw / ch))); }
     const scale = Math.min(cw / W, ch / H);
     canvas.style.width = Math.round(W * scale) + 'px'; canvas.style.height = Math.round(H * scale) + 'px';
+    if (glCanvas && glCanvas.style) { glCanvas.style.width = canvas.style.width; glCanvas.style.height = canvas.style.height; }
     canvas.width = Math.round(W * scale * dpr); canvas.height = Math.round(H * scale * dpr);
     G.pxScale = scale * dpr;
     G.vh = Math.min(H, W * (G.portrait ? 0.85 : 0.62)); G.fb = G.vh * 1.1; // view band + focal base: keeps framing sane in portrait
@@ -152,7 +157,7 @@
     A.init(); A.sfx('go');
     const seed = params.has('seed') && !TA?.embedded ? +params.get('seed') : (Math.random() * 2 ** 31) >>> 0;
     G.run = S.newRun(seed); G.screen = 'play'; G.acc = 0; G.result = null; G.paused = false;
-    G.particles.length = 0; G.popups.length = 0; G.banner = { text: 'BEAT THE CLEAR LINE', sub: 'grab speed pads, dodge everything', t: G.t, dur: 2.2, color: '#ffd23f' };
+    G.particles.length = 0; G.popups.length = 0; R3()?.reset(); G.banner = { text: 'BEAT THE CLEAR LINE', sub: 'grab speed pads, dodge everything', t: G.t, dur: 2.2, color: '#ffd23f' };
     G.cam = { x: 0, y: 2.6, z: -8, f: 600, hy: HY(0.44), roll: 0 }; G.roll = 0; G.hitStop = 0; G.camDip = 0; G.fovKick = 0; G.machT = 0; G.newBestShown = false; G.landingRoll = 0;
   }
   function finish() {
@@ -182,8 +187,9 @@
   function sparks(x, y, n) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = 250 + Math.random() * 450; G.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 120, life: 0.5, max: 0.5, c: i % 2 ? '#ffd23f' : '#fff4c0', s: 2, g: 600, streak: true, glow: true }); } }
   function dustRing(x, y, k) { for (let i = 0; i < 34; i++) { const a = (i / 34) * Math.PI * 2, v = 160 + Math.random() * 120; G.particles.push({ x: x + Math.cos(a) * k * 0.6, y: y + 4, vx: Math.cos(a) * v * 1.4, vy: Math.sin(a) * v * 0.25 - 20, life: 0.9, max: 0.9, c: i % 3 ? '#e8b087' : '#fff0dc', s: 5 + Math.random() * 6, g: -30, soft: true }); } }
   function handleEvents(s) {
-    const cs = G.carScreenLast || { x: W / 2, y: H * 0.72 };
+    const cs = G.carScreenLast || { x: W / 2, y: H * 0.72 }, r3 = R3();
     for (const ev of s.events) {
+      if (r3) r3.event(ev, s);
       switch (ev.e) {
         case 'orb': A.sfx('orb', s.counts.orbs % 8); burst(cs.x, cs.y - 30, 8, ['#ffd34d', '#fff6c0'], 160, 0.5); popup('+50', '#ffd34d'); break;
         case 'air': A.sfx('air'); burst(cs.x, cs.y - 30, 14, ['#5af0ff', '#ffffff'], 220, 0.6); popup(s.air >= C.AIR_MAX ? 'AIR FULL' : '+1 AIR', '#5af0ff'); break;
@@ -270,7 +276,7 @@
     G.machT = Math.max(0, (G.machT || 0) - dt * 0.9); G.shake *= Math.exp(-dt * 7); G.fovKick = Math.max(0, G.fovKick - dt * 2.2); G.flash = Math.max(0, G.flash - dt * 2); G.boostT = Math.max(0, G.boostT - dt);
     for (const p of G.particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= 0.98; }
     G.particles = G.particles.filter(p => p.life > 0);
-    if (s.phase === 'road' && G.screen === 'play' && !s.over && G.carScreenLast && Math.random() < s.v / 90) {
+    if (!R3() && s.phase === 'road' && G.screen === 'play' && !s.over && G.carScreenLast && Math.random() < s.v / 90) {
       const cs = G.carScreenLast; G.particles.push({ x: cs.x + (Math.random() - 0.5) * cs.k * 2, y: cs.y + cs.k * 0.3, vx: (Math.random() - 0.5) * 60, vy: 20 + Math.random() * 40, life: 0.5, max: 0.5, c: '#f4b07a', s: 3 + Math.random() * 4, g: -60 });
     }
     G.popups = G.popups.filter(p => G.t - p.t < 1.1);
@@ -290,14 +296,17 @@
   function draw() {
     const s = G.screen === 'title' ? attract : G.run;
     ctx.setTransform(G.pxScale, 0, 0, G.pxScale, 0, 0);
+    const r3 = R3();
+    if (r3 || waiting3D()) ctx.clearRect(0, 0, W, H);
     const sh = G.shake, ox = (Math.random() - 0.5) * sh, oy = (Math.random() - 0.5) * sh;
     ctx.save(); ctx.translate(ox, oy);
     const roll = (s.bank || 0) * 0.14;
     G.cam.q = G.q;
     const view = { cam: G.cam, t: G.t, carX: s.x, carY: s.y, carZ: s.z, bob: G.bob || 0, spin: G.spin || 0, bank: s.bank || 0, groundY: s.z > C.ROAD_LEN && s.z < C.ROAD_LEN + C.CANYON_W ? -C.CANYON_DEPTH : 0,
       roll: G.roll + roll, boostT: G.boostT };
-    const camP = R.drawWorld(ctx, W, H, s, view);
+    const camP = r3 ? r3.render(s, view, G, W, H) : waiting3D() ? null : R.drawWorld(ctx, W, H, s, view);
     if (view.carScreen) G.carScreenLast = view.carScreen;
+    if (camP && camP.hy != null && r3) G.cam.hy = camP.hy; // speed lines radiate from the real 3D horizon
     const spd = s.phase === 'road' ? s.v : s.m;
     if (!s.over) R.speedLines(ctx, W, H, G.cam.hy, Math.max(0, (spd - 55) / 60) + G.boostT * 0.6, G.t, G.boostT > 0.1, !G.q);
     if (G.machT > 0 && G.carScreenLast) vaporCone(G.carScreenLast, 1 - G.machT);
@@ -306,8 +315,9 @@
     ctx.restore();
     // vignette + flash
     const vr = Math.max(W, H);
+    if (!(r3 && G.q)) { // the 3D post chain has its own vignette
     const vg = ctx.createRadialGradient(W / 2, H / 2, vr * 0.3, W / 2, H / 2, vr * 0.75);
-    vg.addColorStop(0, 'rgba(20,0,30,0)'); vg.addColorStop(1, 'rgba(20,0,30,0.5)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+    vg.addColorStop(0, 'rgba(20,0,30,0)'); vg.addColorStop(1, 'rgba(20,0,30,0.5)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); }
     if (G.flash > 0) { ctx.globalAlpha = G.flash * 0.6; ctx.fillStyle = G.flashColor; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
     if (G.screen === 'title') drawTitle();
     else { drawHud(s); if (G.screen === 'end') drawEnd(); }

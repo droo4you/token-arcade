@@ -9,14 +9,19 @@
   html, body { margin: 0; height: 100%; background: #12081f; overflow: hidden; }
   body { display: flex; align-items: center; justify-content: center; touch-action: none; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
   canvas { display: block; outline: none; touch-action: none; }
+  #stage { position: relative; }
+  #gl { position: absolute; left: 0; top: 0; pointer-events: none; }
+  #game { position: relative; }
 </style>
 </head>
 <body>
-<canvas id="game" tabindex="0"></canvas>
+<div id="stage"><canvas id="gl"></canvas><canvas id="game" tabindex="0"></canvas></div>
 <script src="src/sim.js"></script>
+<script src="src/levels.js"></script>
 <script src="src/audio.js"></script>
 <script src="src/render.js"></script>
 <script src="src/input.js"></script>
 <script src="src/main.js"></script>
+<script type="module" src="src/render3d.js"></script>
 </body>
 </html>
