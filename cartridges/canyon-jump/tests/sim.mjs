@@ -92,12 +92,15 @@ test('energy management: climbing trades speed for height, diving trades height 
 });
 
 test('the gorge: you can dive below the rim, but the river and the far wall end the run', () => {
-  const a = launchAt(110); a.y = -40; a.gam = -0.3; // deep in the canyon, heading down
+  const a = launchAt(110); a.z = C.ROAD_LEN + 120; a.y = -40; a.gam = -0.3; // deep in the canyon, heading down
   while (!a.over) S.step(a, { down: true });
   assert.equal(a.reason, 'short'); assert.ok(a.z < C.ROAD_LEN + C.CANYON_W);
   const b = launchAt(110); b.z = C.ROAD_LEN + C.CANYON_W - 30; b.y = -20; b.gam = 0;
   while (!b.over) S.step(b, {});
-  assert.equal(b.reason, 'short'); assert.ok(b.events.length >= 0);
+  assert.equal(b.reason, 'short'); assert.ok(b.z <= C.ROAD_LEN + C.CANYON_W - S.wallInset(20) + 2, 'stopped by the far wall where its profile juts out');
+  // The wall profile narrows the gorge with depth and is shared with the 3D walls.
+  for (let d = 0; d < C.CANYON_DEPTH; d += 5) assert.ok(S.wallInset(d + 5) >= S.wallInset(d));
+  assert.ok(S.inWall(C.ROAD_LEN + 10, -60) && !S.inWall(C.ROAD_LEN + C.CANYON_W / 2, -100) && !S.inWall(C.ROAD_LEN + 10, 5));
   const c = launchAt(110); c.z = C.ROAD_LEN + 200; c.y = -30; c.gam = 0.35; // pull out of the canyon in time
   for (let i = 0; i < 120 * 2 && !c.over; i++) S.step(c, { up: true });
   assert.ok(!c.over || c.reason === 'landed', 'climbing out of the canyon is survivable');

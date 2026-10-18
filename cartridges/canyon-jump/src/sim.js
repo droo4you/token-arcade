@@ -25,6 +25,9 @@
     // Tricks feed an unbanked combo: pot × multiplier pays out only on a clean landing past the far rim.
     FLIP_T: 0.7, ROLL_T: 1.05, FLIP_PTS: 60, ROLL_PTS: 100, TRICK_CD: 0.2, TRICK_COST: 3, TRICK_MIN_AGL: 8, VARIETY: 1.5,
     MULT_STEP: 0.5, MULT_MAX: 6, NEAR_POT: 25, NEAR_MULT: 0.25, RING_POT: 50, RING_MULT: 0.25, RING_V: 8, RING_R: 3.2,
+    // Gorge wall profile shared by the sim and the 3D walls: [depth below the rim, inset into the gap] (m). Cliff bands,
+    // benches and an inner gorge: the canyon narrows as it deepens, from 300 m at the rim to ~212 m at the river.
+    WALL: [[0, 0], [4, 0.5], [30, 3], [34, 14], [68, 18], [74, 30], [104, 34], [110, 44]],
     LAND_MAX_DIVE: 0.42, ROAD_BONUS: 150, ROAD_HW: 7,
     ORB_PTS: 50, AIR_PTS: 20, LANDING_BONUS: 500,
     SKY_X: 36, SKY_CEIL: 200, SKY_CHUNK: 80,
@@ -123,6 +126,14 @@
   /* Ground height under z: the rim plateau (0) on both sides, the river floor over the gap. */
   function groundY(z) { return z > C.ROAD_LEN && z < C.ROAD_LEN + C.CANYON_W ? -C.CANYON_DEPTH : 0; }
   const agl = s => s.y - groundY(s.z);
+  /* How far a wall at depth d (m below the rim) juts into the gap. */
+  function wallInset(d) {
+    const W = C.WALL; if (d <= 0) return 0; if (d >= W[W.length - 1][0]) return W[W.length - 1][1];
+    let k = 0; while (W[k + 1][0] < d) k++;
+    const [d0, i0] = W[k], [d1, i1] = W[k + 1]; return i0 + (i1 - i0) * (d - d0) / (d1 - d0);
+  }
+  /* Inside the rock of either gorge wall at (z, y)? */
+  function inWall(z, y) { if (y >= 0 || z <= C.ROAD_LEN || z >= FAR_RIM()) return false; const k = wallInset(-y); return z < C.ROAD_LEN + k || z > FAR_RIM() - k; }
 
   function end(s, reason) { if (s.over) return; s.over = true; s.reason = reason; s.events.push({ e: 'end', reason }); }
 
@@ -137,7 +148,7 @@
       // Too slow off the ramp: no lift, just a heavy tumble into the gorge.
       s.vy -= C.G_SKY * dt; s.y += s.vy * dt; s.z += s.m * dt; s.m = Math.max(0, s.m - 14 * dt);
       s.rot += dt * 2.2;
-      if (s.z >= FAR_RIM() - 0.5 && s.y < 0) { s.z = FAR_RIM() - 0.5; s.events.push({ e: 'crash', what: 'wall' }); end(s, 'short'); }
+      if (s.y < 0 && s.z >= FAR_RIM() - wallInset(-s.y)) { s.z = FAR_RIM() - wallInset(-s.y); s.events.push({ e: 'crash', what: 'wall' }); end(s, 'short'); }
       else if (s.y <= -C.CANYON_DEPTH + 1) { s.y = -C.CANYON_DEPTH + 1; s.events.push({ e: 'splash' }); end(s, 'short'); }
     }
     if (!s.over) checkMach(s);
@@ -314,10 +325,8 @@
     s.y = s.y + s.vy * dt;
     if (s.y >= C.SKY_CEIL) { s.y = C.SKY_CEIL; s.gam = Math.min(0, s.gam); s.vy = Math.min(0, s.vy); }
     s.maxAlt = Math.max(s.maxAlt, s.y);
-    if (z0 < FAR_RIM() && s.z >= FAR_RIM()) {
-      if (s.y < 0) { s.z = FAR_RIM() - 0.5; s.events.push({ e: 'crash', what: 'wall' }); end(s, 'short'); return; }
-      s.events.push({ e: 'rim' });
-    }
+    if (inWall(s.z, s.y) || (z0 < FAR_RIM() && s.z >= FAR_RIM() && s.y < 0)) { s.events.push({ e: 'crash', what: 'wall' }); end(s, 'short'); return; }
+    if (z0 < FAR_RIM() && s.z >= FAR_RIM()) s.events.push({ e: 'rim' });
     while (C.ROAD_LEN + 140 + s.skyChunk * C.SKY_CHUNK < s.z + 520) spawnSkyChunk(s);
     for (const o of s.sky) {
       if (o.hit || o.z < z0 - 4 || o.z > s.z + 4) continue;
@@ -410,7 +419,7 @@
       combo: { pot: s.cmb.pot, mult: s.cmb.mult, n: s.cmb.n }, onRoad: s.onRoad };
   }
 
-  const api = { C, speedOf, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp, groundY, agl, liftAccel, bot, LAUNCH_GAM };
+  const api = { C, speedOf, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp, groundY, agl, liftAccel, bot, LAUNCH_GAM, wallInset, inWall };
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CJSim = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

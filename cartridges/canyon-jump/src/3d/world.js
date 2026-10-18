@@ -5,6 +5,7 @@
 import * as THREE from '../../vendor/three/three.module.min.js';
 import { TAU, rng, clamp, smooth, lerp, fbm, noise2, tint, merge, xf, canvasTex, speckle } from './util.js';
 import * as P from './props.js';
+import { buildCanyon } from './canyon.js';
 
 const DEG = Math.PI / 180;
 
@@ -114,15 +115,6 @@ function signTexture(text, color = '#2f6e3a') {
     g.fillStyle = '#f4f1ea'; g.font = '900 64px "Trebuchet MS", system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, w / 2, h / 2 + 4);
   });
 }
-function rampTexture() {
-  const tex = canvasTex(256, 512, (g, w, h) => {
-    g.fillStyle = '#ffcf1f'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#1c1220'; for (let i = 0; i < 6; i++) { const y = 30 + i * 80; g.beginPath(); g.moveTo(20, y + 50); g.lineTo(128, y); g.lineTo(236, y + 50); g.lineTo(236, y + 74); g.lineTo(128, y + 24); g.lineTo(20, y + 74); g.closePath(); g.fill(); }
-    g.fillStyle = '#ff3b5c'; g.fillRect(0, 0, 16, h); g.fillRect(w - 16, 0, 16, h);
-  }, { repeat: [1, 1] });
-  return tex;
-}
-
 /* Mesas: noise-displaced cylinders with flat tops and strata colors, merged into one draw call. */
 function mesas(level, C) {
   const M = level.terrain.mesas, r = rng(M.seed), pal = level.palette.mesa, parts = [], gapZ1 = C.ROAD_LEN + C.CANYON_W;
@@ -150,53 +142,6 @@ function mesas(level, C) {
   return merge(parts);
 }
 
-/* Canyon walls (phase 1 placeholder): two displaced, strata-banded cliff faces, a floor and a river. */
-function canyon(level, C, matOpts) {
-  const group = new THREE.Group(), strata = level.canyon.strata, D = C.CANYON_DEPTH, size = level.terrain.size, J = level.canyon.wallJitter;
-  const wall = (zEdge, dir) => {
-    const g = new THREE.PlaneGeometry(size, D + 8, 260, 30), p = g.attributes.position, cols = new Float32Array(p.count * 3), c = new THREE.Color();
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i), y = p.getY(i) - D / 2 + 2; // top at +2 above rim... clamp to rim
-      const yy = Math.min(0, y), ledge = Math.round(-yy / (D / level.canyon.ledges)) ;
-      const off = (fbm(x * 0.02, yy * 0.05 + zEdge, 4) - 0.5) * J * 2 + (yy < -D * 0.85 ? (yy + D * 0.85) * -0.9 : 0) + ledge * 1.4;
-      p.setXYZ(i, x, yy, -(zEdge + dir * off));
-      const band = Math.floor(-yy / (D / strata.length) + fbm(x * 0.01, 3, 2) * 1.5);
-      c.set(strata[clamp(band, 0, strata.length - 1)]).multiplyScalar(0.85 + 0.25 * fbm(x * 0.05, yy * 0.2, 2));
-      cols.set([c.r, c.g, c.b], i * 3);
-    }
-    g.setAttribute('color', new THREE.BufferAttribute(cols, 3)); g.computeVertexNormals();
-    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide, flatShading: true })); m.receiveShadow = true; return m;
-  };
-  group.add(wall(C.ROAD_LEN, 1), wall(C.ROAD_LEN + C.CANYON_W, -1));
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(size, C.CANYON_W, 1, 1), new THREE.MeshStandardMaterial({ color: strata[strata.length - 1], roughness: 1 }));
-  floor.rotation.x = -Math.PI / 2; floor.position.set(0, -D, -(C.ROAD_LEN + C.CANYON_W / 2)); group.add(floor);
-  const river = new THREE.Mesh(new THREE.PlaneGeometry(size, level.canyon.river.width), new THREE.MeshStandardMaterial({ color: level.canyon.river.color, roughness: 0.12, metalness: 0.2, emissive: level.canyon.river.color, emissiveIntensity: 0.25 }));
-  river.rotation.x = -Math.PI / 2; river.position.set(0, -D + 0.6, -(C.ROAD_LEN + C.CANYON_W / 2)); group.add(river);
-  return group;
-}
-
-function ramp(C, S) {
-  const g = new THREE.BufferGeometry(), W = 7.2, N = 24, pos = [], uv = [], idx = [];
-  const z0 = C.ROAD_LEN - C.RAMP_LEN;
-  for (let i = 0; i <= N; i++) { const z = z0 + (C.RAMP_LEN * i) / N, y = S.rampY(z) + 0.04; pos.push(-W, y, -z, W, y, -z); uv.push(0, i / N * 5, 1, i / N * 5); }
-  for (let i = 0; i < N; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
-  const top = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: rampTexture(), roughness: 0.6, emissive: '#ffb000', emissiveIntensity: 0.08 }));
-  top.receiveShadow = true; top.castShadow = true;
-  const grp = new THREE.Group(); grp.add(top);
-  // side skirts + lip face
-  const skirt = new THREE.MeshStandardMaterial({ color: '#2a2030', roughness: 0.7 });
-  for (const sx of [-1, 1]) {
-    const sg = new THREE.BufferGeometry(), sp = [], si = [];
-    for (let i = 0; i <= N; i++) { const z = z0 + (C.RAMP_LEN * i) / N; sp.push(sx * W, S.rampY(z) + 0.04, -z, sx * W, 0, -z); }
-    for (let i = 0; i < N; i++) { const a = i * 2; si.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
-    sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)); sg.setIndex(si); sg.computeVertexNormals();
-    grp.add(new THREE.Mesh(sg, new THREE.MeshStandardMaterial({ color: '#2a2030', roughness: 0.7, side: THREE.DoubleSide })));
-  }
-  const lip = new THREE.Mesh(new THREE.BoxGeometry(W * 2, C.RAMP_H + 6, 0.6), skirt); lip.position.set(0, (C.RAMP_H - 6) / 2, -C.ROAD_LEN - 0.3); grp.add(lip);
-  return grp;
-}
-
 export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
   const C = S.C, scene = new THREE.Scene(), t = level.time;
   scene.fog = new THREE.Fog(t.fog.color, t.fog.near, t.fog.far);
@@ -214,6 +159,8 @@ export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
   sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
   const sc = sun.shadow.camera; sc.left = -34; sc.right = 34; sc.top = 34; sc.bottom = -34; sc.near = 1; sc.far = 260;
   scene.add(sun); scene.add(sun.target);
+  if (t.fill) { const f = new THREE.DirectionalLight(t.fill.color, t.fill.intensity), e = t.fill.elevation * DEG, a = t.fill.azimuth * DEG;
+    f.position.set(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)).multiplyScalar(100); scene.add(f); scene.add(f.target); }
 
   // ground (near side up to the rim, far side from the far rim)
   const sandMap = sandTexture(level); sandMap.repeat.set(level.terrain.size / 6, 1);
@@ -231,8 +178,7 @@ export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
   const farLen = 4000, farTex = roadTex.clone(); farTex.repeat.set(1, farLen / 28); farTex.needsUpdate = true;
   const roadFar = new THREE.Mesh(new THREE.PlaneGeometry(14, farLen), new THREE.MeshStandardMaterial({ map: farTex, roughness: 0.82, bumpMap: farTex, bumpScale: 0.6 }));
   roadFar.rotation.x = -Math.PI / 2; roadFar.position.set(0, 0.015, -(C.ROAD_LEN + C.CANYON_W + farLen / 2)); roadFar.receiveShadow = true; scene.add(roadFar);
-  scene.add(ramp(C, S));
-  scene.add(canyon(level, C));
+  const gorge = buildCanyon(level, S, terrainHeight); scene.add(gorge.group);
   const mesaMesh = new THREE.Mesh(mesas(level, C), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }));
   scene.add(mesaMesh);
 
@@ -271,5 +217,5 @@ export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
     for (const sx of [-1.8, 1.8]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 4.2, 0.14), new THREE.MeshStandardMaterial({ color: '#8d8a86', metalness: 0.6, roughness: 0.4 })); post.position.set(sx, 2.1, -0.05); post.castShadow = true; grp.add(post); }
     grp.position.set(-10.5, 0, -sg.at); grp.rotation.y = 0.12; scene.add(grp);
   }
-  return { scene, sky, sun, sunDir, hemi, envRT, roadMat, groundMat };
+  return { scene, sky, sun, sunDir, hemi, envRT, roadMat, groundMat, update: t => gorge.update(t) };
 }

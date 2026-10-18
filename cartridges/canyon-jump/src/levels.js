@@ -21,6 +21,9 @@
       sun: { elevation: 9, azimuth: 24, color: '#ffc08a', intensity: 3.4, disk: 0.032, glow: '#ff8c5a', glowStrength: 0.9 },
       sky: { zenith: '#1d0f45', mid: '#6b2c7a', horizon: '#ff9468', below: '#c46a50', haze: 0.55, stars: 0.0 },
       hemi: { sky: '#ffb9a8', ground: '#8a4632', intensity: 1.0 },
+      // Fill: a soft, shadowless bounce from behind the chase cam, so faces turned away from the low sun (the car's tail,
+      // the far gorge wall) still show their shape instead of going flat.
+      fill: { color: '#ffe2d4', intensity: 1.1, elevation: 28, azimuth: 195 },
       fog: { color: '#e48a6e', near: 140, far: 1900 },
       exposure: 1.0,
       envIntensity: 1.0,
@@ -44,7 +47,7 @@
       signs: [{ at: 1000, text: 'CANYON 1 KM' }, { at: 1500, text: 'CANYON 500 M' }, { at: 1820, text: 'JUMP AHEAD' }],
     },
     canyon: {
-      strata: ['#cf6a45', '#b2463a', '#93352f', '#d9824f', '#7a2a2c', '#5d2028', '#45161f'],
+      strata: ['#e9ad7e', '#cf6a45', '#b2463a', '#e08a58', '#93352f', '#c2603f', '#7a2a2c', '#5d2028'],
       wallJitter: 7,            // m of horizontal roughness on the walls
       ledges: 5,
       river: { color: '#2fc4c9', width: 46 },

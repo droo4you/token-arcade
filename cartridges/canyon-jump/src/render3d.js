@@ -209,7 +209,7 @@ function init() {
     updateCamera(s, view, G, dt, W, H);
     if (api.debugCam) { const d = api.debugCam; camera.position.set(s.x + d.p[0], (s.y || 0) + d.p[1], -(s.z + d.p[2])); camera.lookAt(s.x + d.l[0], (s.y || 0) + d.l[1], -(s.z + d.l[2])); if (d.fov) { camera.fov = d.fov; camera.updateProjectionMatrix(); } }
     sky.position.copy(camera.position);
-    updateDynamic(s, t);
+    updateDynamic(s, t); world.update(t);
     // dust: rear-wheel spray on the road, faster = more
     if (s.phase === 'road' && !s.over && G.screen !== 'end') {
       emitAcc += dt * (6 + s.v * 0.5) * (q ? 1 : 0.5);
