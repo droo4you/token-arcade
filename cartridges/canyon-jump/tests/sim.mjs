@@ -284,3 +284,80 @@ test('Mach 0.5 (617 km/h) is out of reach on the road and earned in the sky with
   // Determinism holds with the new state.
   assert.deepEqual(S.score(chain(4).s), S.score(chain(4).s));
 });
+
+/* ---------- STABILIZE (cold-gas thrusters) and landing forgiveness ---------- */
+function highFlight(seed = 40) { const s = launchAt(105, seed); s.y = 80; s.gam = 0; s.m = 95; s.air = 3; return s; }
+const stepN = (s, n, input = {}) => { for (let i = 0; i < n && !s.over; i++) S.step(s, input); };
+
+test('stabilize cancels an in-progress trick smoothly and levels a steep dive in ~0.4 s', () => {
+  const s = highFlight(); S.step(s, { trickEdge: true }); stepN(s, Math.round(0.2 * 120)); // flip ~30% round
+  assert.ok(s.trick > 0 && S.trickProgress(s) < C.STAB_CREDIT);
+  s.gam = -0.9; const rot0 = s.rot, pot0 = s.cmb.pot;
+  S.step(s, { stabEdge: true });
+  assert.equal(s.trick, 0, 'trick stopped'); assert.ok(s.stabT > 0);
+  const ev = s.events.find(e => e.e === 'stab'); assert.equal(ev.outcome, 'cancelled'); assert.equal(ev.free, false);
+  // the spin unwinds monotonically back to upright (no snap)
+  let prev = Math.abs(s.rot);
+  for (let i = 0; i < C.STAB_T * 120; i++) { S.step(s, {}); assert.ok(Math.abs(s.rot) <= prev + 1e-9); prev = Math.abs(s.rot); }
+  assert.ok(Math.abs(rot0) > 0.5); assert.equal(s.rot, 0, 'upright when the burn ends');
+  assert.ok(Math.abs(s.gam - C.STAB_GAM) < 0.06, `nose levelled to ${(s.gam * 57.3).toFixed(1)}°`);
+  assert.ok(s.gam > -5 / 57.3 - 0.02 && s.gam < 0.02, 'about 0 to -5°');
+  assert.equal(s.cmb.pot, pot0, 'combo pot kept'); assert.equal(s.counts.tricks, 0, 'a cancelled trick scores nothing');
+});
+
+test('a trick cancelled at least half done counts as landed for the combo', () => {
+  const s = highFlight(41); S.step(s, { trickEdge: true }); stepN(s, Math.round(C.FLIP_T * 0.6 * 120));
+  assert.ok(S.trickProgress(s) >= C.STAB_CREDIT);
+  S.step(s, { stabEdge: true });
+  assert.equal(s.counts.tricks, 1); assert.equal(s.cmb.pot, C.FLIP_PTS);
+  assert.ok(s.events.some(e => e.e === 'landed_trick' && e.via === 'stab'));
+  assert.equal(s.events.find(e => e.e === 'stab').outcome, 'credited');
+  stepN(s, C.STAB_T * 120 + 2); assert.equal(s.rot, 0); assert.ok(!s.over);
+});
+
+test('stabilize costs one AIR can, has a short cooldown, and still works slower with no cans', () => {
+  const s = highFlight(42); s.air = 2;
+  S.step(s, { stabEdge: true }); assert.equal(s.air, 1); assert.equal(s.stabDur, C.STAB_T); assert.equal(s.counts.stabs, 1);
+  // spam is ignored until the cooldown runs out
+  for (let i = 0; i < Math.round(C.STAB_CD * 120) - 2; i++) S.step(s, { stabEdge: true });
+  assert.equal(s.counts.stabs, 1); assert.equal(s.air, 1);
+  stepN(s, 3); S.step(s, { stabEdge: true }); assert.equal(s.counts.stabs, 2); assert.equal(s.air, 0);
+  // zero cans: the lifeline fires anyway, slower, with a long cooldown
+  stepN(s, Math.round(C.STAB_CD * 120) + 2); s.gam = -0.8;
+  S.step(s, { stabEdge: true }); assert.equal(s.counts.stabs, 3); assert.equal(s.air, 0);
+  assert.equal(s.stabDur, C.STAB_T_FREE); assert.ok(s.events.some(e => e.e === 'stab' && e.free));
+  stepN(s, Math.round(C.STAB_T * 120)); assert.ok(s.gam < C.STAB_GAM - 0.1, 'the free burn is slower than a paid one');
+  stepN(s, Math.round((C.STAB_T_FREE - C.STAB_T) * 120)); assert.ok(Math.abs(s.gam - C.STAB_GAM) < 0.08, 'but still levels the nose');
+  for (let i = 0; i < Math.round(C.STAB_CD_FREE * 120) - Math.round(C.STAB_T_FREE * 120) - 3; i++) S.step(s, { stabEdge: true });
+  assert.equal(s.counts.stabs, 3, 'free stabilize has a 3 s cooldown');
+  stepN(s, 6); S.step(s, { stabEdge: true }); assert.equal(s.counts.stabs, 4);
+});
+
+test('stabilize trims the sink rate and blocks new tricks while firing; deterministic', () => {
+  const a = highFlight(43), b = highFlight(43); a.gam = b.gam = -0.4;
+  S.step(a, { stabEdge: true }); S.step(b, {});
+  stepN(a, 20); stepN(b, 20);
+  assert.ok(a.y > b.y + 1, 'thrusters hold you up compared with no burn');
+  S.step(a, { trickEdge: true }); assert.equal(a.trick, 0, 'no tricks mid-burn');
+  const run = () => { const s = highFlight(44); s.z = C.ROAD_LEN + C.CANYON_W + 40; s.y = 30; s.gam = -0.5; s.cmb = { pot: 200, mult: 2, n: 3, last: 'flip' };
+    S.step(s, { trickEdge: true }); for (let i = 0; i < 40 * 120 && !s.over; i++) S.step(s, i === 40 ? { stabEdge: true } : {}); return S.score(s); };
+  assert.deepEqual(run(), run());
+});
+
+test('stabilizing on final approach turns a certain crash into a clean landing and keeps the combo', () => {
+  const mk = () => { const t = highFlight(45); t.cmb = { pot: 300, mult: 3, n: 4, last: 'roll' }; t.z = C.ROAD_LEN + C.CANYON_W + 50; t.y = 14; t.gam = -0.75; t.m = 70; return t; };
+  const crash = mk(); while (!crash.over) S.step(crash, {}); assert.equal(crash.reason, 'botched');
+  const save = mk(); S.step(save, { stabEdge: true }); while (!save.over) S.step(save, {});
+  assert.equal(save.reason, 'landed'); assert.equal(save.pts.tricks, 900, 'pot × mult cashed');
+});
+
+test('forgiveness: nose-down up to 32° sticks, steeper crashes; a trick >= 85% round at touchdown auto-finishes', () => {
+  assert.ok(Math.abs(C.LAND_MAX_DIVE * 57.2958 - 32) < 0.2); assert.equal(C.TRICK_AUTO, 0.85);
+  const at = (gamDeg, trickDone) => { const s = highFlight(46); s.z = C.ROAD_LEN + C.CANYON_W + 60; s.m = 70; s.gam = gamDeg / 57.2958; s.y = 0.05; s.pIn = 0;
+    if (trickDone != null) { s.y = 20; S.step(s, { trickEdge: true }); s.trick = s.trickDur * (1 - trickDone); s.y = 0.05; s.gam = gamDeg / 57.2958; }
+    S.step(s, {}); while (!s.over) S.step(s, {}); return s; };
+  assert.equal(at(-28).reason, 'landed', '28° nose-down was a crash before, now clean');
+  assert.equal(at(-36).reason, 'botched');
+  const auto = at(-5, 0.9); assert.equal(auto.reason, 'landed'); assert.equal(auto.counts.tricks, 1); assert.equal(auto.counts.autoFinish, 1); assert.ok(auto.pts.tricks > 0);
+  assert.equal(at(-5, 0.6).reason, 'botched', 'a trick barely past half still botches');
+});

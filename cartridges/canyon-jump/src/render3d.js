@@ -41,17 +41,23 @@ function init() {
   const fx = createParticles(1100); scene.add(fx.points);
 
   /* ---------- dynamic objects: obstacles, pickups, sky traffic (instanced pools) ---------- */
+  // Road obstacles read at distance: they take ~45% less haze than the scenery and get a soft warm rim on the silhouette.
+  const readable = (m, extra) => { m.onBeforeCompile = sh => {
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vec3(1.0, 0.86, 0.7) * pow(1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0), 2.5) * 0.32;' + (extra || ''))
+      .replace('#include <fog_fragment>', '#ifdef USE_FOG\n float fogFactor = smoothstep(fogNear, fogFar, vFogDepth) * 0.55;\n gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);\n#endif'); }; m.customProgramCacheKey = () => 'cj-readable-' + (extra ? 'x' : ''); return m; };
   const vc = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
   const vcFlat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
+  const vcFlatT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
   const glowMat = (hex, k) => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.25, metalness: 0.6, emissive: hex, emissiveIntensity: k, envMapIntensity: 1.3 });
   const coneMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 });
-  coneMat.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vec3(step(0.8, vColor.b)) * 0.6;'); };
+  readable(coneMat, '\n totalEmissiveRadiance += vec3(step(0.8, vColor.b)) * 0.6;');
   const pool = (geo, mat, max, shadow = true) => { const m = new THREE.InstancedMesh(geo, mat, max); m.count = 0; m.castShadow = shadow; m.receiveShadow = true; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; };
   const skin = level.obstacles, pal = level.palette;
   const OB = {
-    cactus: pool(P.SKINS[skin.cactus](pal.cactus, 3, 0.95), vc, 96),
-    rock: pool(P.SKINS[skin.rock](pal.rock, 5, 1.25), vcFlat, 96),
-    tumbleweed: pool(P.SKINS[skin.tumbleweed](9), vcFlat, 96),
+    cactus: pool(P.SKINS[skin.cactus](pal.cactus, 3, 0.95), readable(vc), 96),
+    rock: pool(P.SKINS[skin.rock](pal.rock, 5, 1.25), readable(vcFlat), 96),
+    tumbleweed: pool(P.SKINS[skin.tumbleweed](9), readable(vcFlatT), 96),
     cone: pool(P.SKINS[skin.cone](), coneMat, 96),
   };
   const PK = {
@@ -194,9 +200,11 @@ function init() {
       const dist = 9.2 + skK * 2.2 + (G.camKick || 0) * 3.2 + hold * 5 + dive * 1.5, h = 2.4 + alt * 2.2 + hold * 2.5;
       tx = s.x * 0.85; ty = s.y - Math.sin(g) * dist + h * Math.cos(g); tz = s.z - Math.cos(g) * dist;
       lx = s.x; ly = s.y + Math.sin(s.gam || 0) * 22 + 0.4 - alt * 3.5 - hold * 1.5; lz = s.z + Math.cos(s.gam || 0) * 22;
-      fov = 61 + skK * 9 + dive * 10 + (G.trickKick || 0) * -4;
+      fov = 61 + skK * 9 + dive * 10 + (G.trickKick || 0) * -4 - (G.stabFx || 0) * 4;
     } else {
-      tx = s.x * 0.62; ty = (s.y || 0) + 2.3 + runUp * 3.5 - spdK * 0.25; tz = s.z - 6.6 - spdK * 1.1 - runUp * 4; lx = s.x * 0.85; ly = (s.y || 0) + 0.95; lz = s.z + 16; fov = 56 + spdK * 11;
+      // Straightaway chase: back and up far enough that rows of obstacles read well ahead (phase 3: ~+45% distance,
+      // ~2x height, look point 21 m down the road, tilted down so the road ahead fills more of the screen), the car still big enough to read its lane. Blends into the run-up/ramp cam.
+      tx = s.x * 0.55; ty = (s.y || 0) + 4.5 + runUp * 2.2 + spdK * 0.3; tz = s.z - 9.4 - spdK * 1.3 - runUp * 3; lx = s.x * 0.75; ly = (s.y || 0) + 0.1; lz = s.z + 21 - runUp * 3; fov = 55 + spdK * 9;
     }
     fov += (G.fovKick || 0) * 10 + (G.boostT || 0) * 4;
     ty -= (G.camDip || 0) * 1.2;
@@ -211,7 +219,7 @@ function init() {
     cam.fov = damp(cam.fov, fov, 5, dt);
     if (ended) { if (cam.frozenZ == null) { cam.frozenZ = s.z + cam.offZ; cam.frozenY = cam.y; } cam.y = cam.frozenY; } else cam.frozenZ = null;
     cam.z = cam.frozenZ ?? (s.z + cam.offZ);
-    const buffet = sky && !s.over ? clamp((s.m - 70) / 100, 0, 1) * 0.05 * (1 + clamp(-(s.gam || 0), 0, 1) * 2) : 0; // wind buffet at speed
+    const buffet = sky && !s.over ? clamp((s.m - 70) / 100, 0, 1) * 0.05 * (1 + clamp(-(s.gam || 0), 0, 1) * 2) * (1 - (G.stabFx || 0)) : 0; // wind buffet at speed (thrusters settle it)
     const sh = (G.shake || 0) * 0.008 + buffet;
     camera.position.set(cam.x + (Math.random() - 0.5) * sh, cam.y + (Math.random() - 0.5) * sh, -cam.z);
     tmpV.set(cam.lx, cam.ly, -(s.z + cam.lz)); camera.lookAt(tmpV);
@@ -222,6 +230,7 @@ function init() {
   }
 
   /* ---------- per-frame ---------- */
+  let carPrev = null; const carVel = { x: 0, y: 0, z: 0 };
   let lastT = null, cssW = 0, cssH = 0, emitAcc = 0, prevPhase = '';
   const proj = new THREE.Vector3();
   const stats = { frames: 0, cpuMs: 0, calls: 0, tris: 0, tier: 1 };
@@ -235,12 +244,14 @@ function init() {
     const onGround = s.phase === 'road' || (s.over && s.reason === 'road') || (s.over && s.reason === 'landed');
     car.group.position.set(s.x, (s.y || 0) + (onGround ? (view.bob || 0) : 0), -s.z);
     const pitch = s.phase === 'sky' ? clamp((s.gam || 0) + (s.pIn || 0) * 0.07, -1.1, 0.9) : s.phase === 'fall' ? -0.5 : (s.phase === 'road' && s.z > C.ROAD_LEN - C.RAMP_LEN ? 0.13 : 0);
-    car.update({ spin: view.spin || 0, bank: s.bank || 0, roll: (view.roll || 0) * (s.trick > 0 ? 1 : 0.6), pitch, boost: Math.max(G.boostT || 0, 0), glow: G.boostT || 0 });
+    car.update({ spin: view.spin || 0, bank: s.bank || 0, roll: (view.roll || 0) * (s.trick > 0 || s.stabT > 0 ? 1 : 0.6), pitch, boost: Math.max(G.boostT || 0, 0), glow: G.boostT || 0 });
     // In the sky the car flies its path: nose follows the flight-path angle (plus a little angle of attack from the
     // stick), a barrel roll swings it round a helix around the line, a kickflip spins it in place.
     if (s.phase === 'sky' || (s.over && s.reason !== 'road' && s.phase === 'sky')) {
-      if (s.trick > 0 && s.trickKind === 'roll') { const a = s.rot, R = 1.3; car.group.position.x += Math.sin(a) * R * s.trickDir; car.group.position.y += (1 - Math.cos(a)) * R * 0.6; }
+      if ((s.trick > 0 || s.stabT > 0) && s.trickKind === 'roll' && s.rot) { const a = s.rot, R = 1.3; car.group.position.x += Math.sin(a) * R * s.trickDir; car.group.position.y += (1 - Math.cos(a)) * R * 0.6; }
     }
+    // Measured car velocity (world units / render second): includes slow-mo and hit-stop, so gas jets stay attached.
+    { const P0 = car.group.position; if (carPrev && dt > 0) { carVel.x = clamp((P0.x - carPrev.x) / dt, -200, 200); carVel.y = clamp((P0.y - carPrev.y) / dt, -200, 200); carVel.z = clamp((P0.z - carPrev.z) / dt, -260, 260); } carPrev = { x: P0.x, y: P0.y, z: P0.z }; }
     const blob = car.group.children[1]; // contact shadow sticks to the ground under the car
     const gy = s.z > C.ROAD_LEN && s.z < C.ROAD_LEN + C.CANYON_W ? -C.CANYON_DEPTH : 0;
     blob.position.y = gy - (s.y || 0) + 0.03; blob.material.opacity = 0.75 * clamp(1 - ((s.y || 0) - gy) / 14, 0, 1);
@@ -258,6 +269,8 @@ function init() {
         fx.emit({ x: s.x + sx, y: 0.1, z: -(s.z - 1.3), vx: sx * 1.4 + (s.bank || 0) * -4, vy: 0.5, vz: 1 + s.v * 0.08, jitter: 1.4, jitterY: 0.8, life: 0.7, s0: 0.2, s1: 1.1, color: pal.sandLight, alpha: 0.2, drag: 1.6, grav: -0.15 }); }
       if (G.boostT > 0.05) fx.emit({ x: s.x + (Math.random() - 0.5) * 1.5, y: 0.7, z: -(s.z - 2.2), vz: 6, jitter: 0.6, life: 0.35, s0: 0.25, s1: 0.05, color: level.pickups.air, hdr: 3, alpha: 0.9, drag: 0.5 }, 2);
     }
+    // STABILIZE: white cold-gas jets from the car's four corners and both sides while the thrusters burn.
+    if (s.phase === 'sky' && s.stabT > 0 && !s.over) thrusters(s, dt * (q ? 1 : 0.5));
     // Wind streaks stream past at airspeed (sky) or at high road speed; clouds and fog open up with altitude.
     const spdNow = s.phase === 'road' ? s.v : s.m, inSky = s.phase === 'sky' && !s.over;
     streaks.material.uniforms.travel.value += dt * spdNow * 0.9;
@@ -287,6 +300,15 @@ function init() {
     stats.frames++; stats.cpuMs += performance.now() - t0; stats.calls = renderer.info.render.calls; stats.tris = renderer.info.render.triangles; stats.tier = tier; stats.particles = fx.count;
     return { p, hy: hz ? hz.y : H * 0.44, W, H };
   }
+  const JETS = [[-1.0, 0.25, 1.9, -1, 0], [1.0, 0.25, 1.9, 1, 0], [-1.0, 0.25, -1.9, -1, 0], [1.0, 0.25, -1.9, 1, 0], [-1.05, 0.55, 0, -1, 0.6], [1.05, 0.55, 0, 1, 0.6], [-0.7, -0.15, 1.2, -0.4, -1], [0.7, -0.15, -1.2, 0.4, -1]];
+  function thrusters(s, k) {
+    const x = car.group.position.x, y = car.group.position.y, z = car.group.position.z, r = s.rot || 0, cr = Math.cos(r), sr = Math.sin(r);
+    for (const [jx, jy, jz, dx, dy] of JETS) {
+      if (Math.random() > 0.75 * k * 60) continue; // ~45 puffs/s per jet at 60 fps
+      const ox = jx * cr - jy * sr, oy = jx * sr + jy * cr, vx = dx * cr - dy * sr, vy = dx * sr + dy * cr;
+      fx.emit({ x: x + ox, y: y + 0.45 + oy, z: z - jz, vx: carVel.x + vx * 11, vy: carVel.y + vy * 11, vz: carVel.z * 0.96, jitter: 1.6, jitterY: 0.8, life: 0.26, s0: 0.14, s1: 0.75, color: '#ffffff', hdr: 1.5, alpha: 0.8, drag: 0.6 }, 2);
+    }
+  }
   function event(ev, s) {
     const x = s.x, y = s.y || 0, z = -s.z;
     if (ev.e === 'pad') fx.emit({ x, y: 0.2, z, jitter: 9, jitterY: 2, life: 0.5, s0: 0.5, s1: 0.1, color: level.pickups.pad, hdr: 3, drag: 3 }, 30);
@@ -295,9 +317,11 @@ function init() {
     else if (ev.e === 'crash') { fx.emit({ x, y: y + 0.8, z, jitter: 14, jitterY: 8, life: 0.7, s0: 0.25, s1: 0.05, color: '#ffd23f', hdr: 4, drag: 1, grav: 12 }, 50); fx.emit({ x, y: y + 0.3, z, jitter: 6, jitterY: 3, life: 1.6, s0: 1.2, s1: 4, color: pal.sandLight, alpha: 0.5, drag: 1.2 }, 30); }
     else if (ev.e === 'launch') fx.emit({ x, y: y, z, jitter: 10, jitterY: 3, life: 1.2, s0: 0.8, s1: 3.5, color: pal.sandLight, alpha: 0.45, drag: 1.5 }, 40);
     else if (ev.e === 'land') for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2; fx.emit({ x: x + Math.cos(a), y: 0.3, z: z + Math.sin(a), vx: Math.cos(a) * 12, vz: Math.sin(a) * 12, vy: 1.2, jitter: 2, life: 1.3, s0: 1, s1: 4, color: pal.sandLight, alpha: 0.5, drag: 1.6 }); }
+    else if (ev.e === 'stab') { const { x: cx, y: cy, z: cz } = car.group.position;
+      for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; fx.emit({ x: cx + Math.cos(a) * 1.1, y: cy + 0.5 + Math.sin(a) * 0.5, z: cz, vx: carVel.x + Math.cos(a) * 10, vy: carVel.y + Math.sin(a) * 6, vz: carVel.z * 0.95, jitter: 2, life: 0.4, s0: 0.25, s1: 1.2, color: '#ffffff', hdr: 1.6, alpha: 0.75, drag: 0.8 }); } }
     else if (ev.e === 'boost' || ev.e === 'mach') fx.emit({ x, y: y + 0.6, z: z + 2.2, vz: 10, jitter: 5, jitterY: 3, life: 0.6, s0: 0.5, s1: 0.1, color: ev.e === 'mach' ? '#ffffff' : level.pickups.air, hdr: 3, drag: 2 }, ev.e === 'mach' ? 60 : 26);
   }
-  const api = { ready: true, render, event, stats, level, renderer, scene, camera, car, debugCam: null, reset() { fx.clear(); cam.init = false; } };
+  const api = { ready: true, render, event, stats, level, renderer, scene, camera, car, debugCam: null, reset() { fx.clear(); cam.init = false; carPrev = null; } };
   window.CJRender3D = api;
 }
 

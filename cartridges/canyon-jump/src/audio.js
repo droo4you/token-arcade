@@ -108,6 +108,12 @@
       case 'splash': hit(t, 1.2, 900, 0.9, null, 200); hit(t + 0.05, 0.6, 3000, 0.4, null, 600); tone(60, 'sine', t, 0.6, 0.5, null, 0, 30); break;
       case 'cash': [0, 4, 7, 12, 16, 19].slice(0, 3 + Math.min(3, arg || 0)).forEach((n, i) => tone(mtof(72 + n), 'square', t + 0.25 + i * 0.07, 0.2, 0.09, null, 5000)); tone(mtof(96), 'sine', t + 0.7, 0.6, 0.08); break;
       case 'beep': tone(arg ? 1250 : 900, 'square', t, 0.06, 0.08, null, 3000); break;
+      case 'stab': { // cold-gas thrusters: a few sharp valve pops, then a high hiss (longer on the slow no-AIR burn)
+        const dur = arg ? 0.9 : 0.42; [0, 0.05, 0.11].forEach((d, i) => hit(t + d, 0.05, 6500 - i * 900, 0.32));
+        const ss = A.ctx.createBufferSource(), hp = A.ctx.createBiquadFilter(), g = A.ctx.createGain(); ss.buffer = A.noise; hp.type = 'highpass'; hp.frequency.setValueAtTime(3200, t); hp.frequency.exponentialRampToValueAtTime(7000, t + dur);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.42, t + 0.03); g.gain.setValueAtTime(0.42, t + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        ss.connect(hp); hp.connect(g); g.connect(A.master); ss.start(t, Math.random()); ss.stop(t + dur + 0.05);
+        tone(240, 'sine', t, 0.18, 0.12, null, 0, 120); break; }
       case 'empty': tone(160, 'square', t, 0.12, 0.12, null, 800); break;
       case 'trick': hit(t, 0.35, 3000, 0.12, null, 800); break;
       case 'landed_trick': [0, 4, 7, 12].forEach((n, i) => tone(mtof(76 + n + Math.min(arg || 0, 4) * 2), 'square', t + i * 0.05, 0.14, 0.09, null, 5000)); break;

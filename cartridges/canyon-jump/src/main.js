@@ -49,9 +49,10 @@
   addEventListener('resize', resize); resize();
 
   /* ---------------- input ---------------- */
-  const held = new Set(); const edges = { left: false, right: false, boost: false, trick: false, roll: false };
+  const held = new Set(); const edges = { left: false, right: false, boost: false, trick: false, roll: false, stab: false };
   const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
-    Space: 'boost', KeyX: 'trick', KeyK: 'trick', ShiftLeft: 'trick', ShiftRight: 'trick', KeyJ: 'boost', KeyC: 'roll', KeyL: 'roll' };
+    // Space / Shift = STABILIZE (thrusters). Boost is Z (next to X/C) or J (next to K/L).
+    Space: 'stab', ShiftLeft: 'stab', ShiftRight: 'stab', KeyZ: 'boost', KeyJ: 'boost', KeyX: 'trick', KeyK: 'trick', KeyC: 'roll', KeyL: 'roll' };
   function onKey(e, down) {
     const a = KEYMAP[e.code];
     if (down) A.init();
@@ -69,7 +70,10 @@
   // Touch: swipe for lanes on the road; in the sky, the left side is an analog stick (up/down = pitch, sideways = steer),
   // the right side has BOOST / FLIP / ROLL (tap the right side = boost, swipe up = kickflip, swipe sideways = barrel roll).
   const touches = new Map(); let stick = null; const lanes = window.CJInput.create();
-  const BTN = () => { const r = 12 + (G.safe?.r || 0), b = 12 + (G.safe?.b || 0); return { boost: { x: W - r - 62, y: H - b - 112, r: 52 }, trick: { x: W - r - 170, y: H - b - 52, r: 40 }, roll: { x: W - r - 168, y: H - b - 152, r: 38 } }; };
+  // STABILIZE is a wide thumb pill above the boost/flip/roll cluster, on the right, well clear of the left stick.
+  const BTN = () => { const r = 12 + (G.safe?.r || 0), b = 12 + (G.safe?.b || 0); return { boost: { x: W - r - 62, y: H - b - 112, r: 52 }, trick: { x: W - r - 170, y: H - b - 52, r: 40 }, roll: { x: W - r - 168, y: H - b - 152, r: 38 },
+    stab: { x: W - r - 104, y: H - b - 238, w: 188, h: 62, pill: true } }; };
+  const inBtn = (p, k, B) => B.pill ? Math.abs(p.x - B.x) < B.w / 2 + 10 && Math.abs(p.y - B.y) < B.h / 2 + 10 : Math.hypot(p.x - B.x, p.y - B.y) < B.r * 1.25;
   const STICK_R = 46;
   function toLogical(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
   function onDown(e) {
@@ -82,7 +86,7 @@
     if (hitBtn(p, 'pause')) { togglePause(); return; }
     const run = G.run, b = BTN();
     if (run.phase === 'sky' && G.touch) {
-      for (const k of ['boost', 'trick', 'roll']) if (Math.hypot(p.x - b[k].x, p.y - b[k].y) < b[k].r * 1.25) { edges[k] = true; G.btnFlash = { k, t: G.t }; touches.set(e.pointerId, { btn: k }); return; }
+      for (const k of ['stab', 'boost', 'trick', 'roll']) if (inBtn(p, k, b[k])) { edges[k] = true; G.btnFlash = { k, t: G.t }; touches.set(e.pointerId, { btn: k }); return; }
     }
     // Road: lane gestures go through CJInput (one gesture = at most one lane change).
     touches.set(e.pointerId, { x0: p.x, y0: p.y, x: p.x, y: p.y, t0: G.t, used: false });
@@ -124,7 +128,7 @@
   }
 
   function readInput() {
-    const i = { leftEdge: edges.left, rightEdge: edges.right, boostEdge: edges.boost, trickEdge: edges.trick, rollEdge: edges.roll,
+    const i = { leftEdge: edges.left, rightEdge: edges.right, boostEdge: edges.boost, trickEdge: edges.trick, rollEdge: edges.roll, stabEdge: edges.stab,
       left: held.has('left'), right: held.has('right'), up: held.has('up'), down: held.has('down') };
     if (edges.roll) i.rollDir = held.has('left') ? -1 : held.has('right') ? 1 : (G.rollDir || 1);
     for (const d of lanes.tick(G.t)) if (G.run?.phase === 'road') i[d === 'left' ? 'leftEdge' : 'rightEdge'] = true;
@@ -136,7 +140,7 @@
     }
     if (AUTOPILOT && G.run) Object.assign(i, autopilot(G.run));
     if (stick === null) G.stickVis = null;
-    edges.left = edges.right = edges.boost = edges.trick = edges.roll = false;
+    edges.left = edges.right = edges.boost = edges.trick = edges.roll = edges.stab = false;
     return i;
   }
   // The sim's reference pilot (CJSim.bot) flies the standalone ?autopilot=1 preview (used for capture); never active in the arcade.
@@ -205,7 +209,11 @@
           G.banner = { text: 'MACH 0.5', sub: `${KMH(ev.v)} km/h  ·  +${C.MACH_BONUS}`, t: G.t, dur: 2.6, color: '#ffffff' };
           burst(cs.x, cs.y - 10, 40, ['#ffffff', '#cfefff', '#9fd8ff'], 520, 0.7, 0, true); break;
         case 'empty': A.sfx('empty'); popup('NO AIR', '#ff5a78'); break;
+        case 'stab': A.sfx('stab', ev.free ? 1 : 0); G.stabFx = 1; G.shake = 0; G.camKick = 0; G.trickKick = 0; G.flash = Math.max(G.flash, 0.12); G.flashColor = '#e8f6ff';
+          popup('STABILIZED', '#e8f6ff', true, ev.outcome === 'credited' ? `${ev.kind === 'roll' ? 'ROLL' : 'FLIP'} SAVED` : ev.outcome === 'cancelled' ? 'trick cancelled' : ev.free ? 'no AIR: slow burn' : '−1 AIR');
+          burst(cs.x, cs.y - 6, 22, ['#ffffff', '#e8f6ff', '#c9e6ff'], 260, 0.55, -20); break;
         case 'landed_trick': A.sfx('landed_trick', ev.n - 1); G.shake = Math.max(G.shake, 9); G.hitStop = Math.max(G.hitStop, 0.06); G.slowT = Math.max(G.slowT || 0, 0.14); G.comboPulse = 1; G.fovKick = Math.max(G.fovKick, 0.5);
+          if (ev.via === 'auto') break; // touchdown auto-finish: the landing banner tells it
           popup(`${ev.kind === 'roll' ? 'BARREL ROLL' : 'KICKFLIP'} +${ev.pts}${ev.varied ? ' MIX' : ''}`, ev.kind === 'roll' ? '#ff4fd8' : '#ffd23f', true, ev.n > 1 ? `COMBO ×${fmtMult(ev.mult)}` : null);
           burst(cs.x, cs.y - 20, 26, ['#ffd23f', '#ff4fd8', '#5af0ff', '#fff'], 300, 0.7, 0, true); break;
         case 'crash': A.sfx('crash'); G.shake = 24; G.flash = 0.7; G.flashColor = '#ff3b5c'; G.hitStop = 0.16; G.slowT = 0.6;
@@ -215,7 +223,7 @@
             const B = { botched: ['BOTCHED LANDING', 'finish the trick before you touch down' + lost], nosedive: ['NOSE-DIVED', 'level out before you land' + lost], wall: ['HIT THE WALL', 'climb above the far rim'] }[ev.what] || ['WIPEOUT', `hit a ${ev.what === 'satellite' ? 'satellite' : ev.what}`];
             G.banner = { text: B[0], sub: B[1], t: G.t, dur: 3, color: '#ff3b5c' }; } break;
         case 'land': A.sfx('land'); G.shake = 14; G.camDip = 1; G.hitStop = 0.06; dustRing(cs.x, cs.y, cs.k || 30); burst(cs.x, cs.y, 24, ['#e3925a', '#ffd9a8', '#fff'], 300, 1); G.landZ = s.z; G.landingRoll = Math.max(10, s.m * 0.6);
-          G.banner = { text: ev.combo ? `COMBO +${fmtPts(ev.combo)}` : 'STUCK THE LANDING', sub: `${ev.combo ? `×${fmtMult(ev.mult)} cashed  ·  ` : ''}+${C.LANDING_BONUS} landing${ev.onRoad ? `  ·  +${C.ROAD_BONUS} on the road` : ''}`, t: G.t, dur: 3, color: ev.combo ? '#ffd23f' : '#5af0ff' };
+          G.banner = { text: ev.combo ? `COMBO +${fmtPts(ev.combo)}` : 'STUCK THE LANDING', sub: `${ev.combo ? `×${fmtMult(ev.mult)} cashed  ·  ` : ''}+${C.LANDING_BONUS} landing${ev.onRoad ? `  ·  +${C.ROAD_BONUS} on the road` : ''}${s.counts.autoFinish ? '  ·  trick auto-finished' : ''}`, t: G.t, dur: 3, color: ev.combo ? '#ffd23f' : '#5af0ff' };
           if (ev.combo) A.sfx('cash', Math.min(6, Math.round(ev.mult))); break;
         case 'end': setTimeout(() => { if (G.run === s && !G.destroyed) finish(); }, ev.reason === 'landed' ? 1600 : 1300); break;
       }
@@ -274,7 +282,7 @@
     G.bob = s.phase === 'road' ? Math.sin(G.t * 17) * 0.018 * Math.min(1, s.v / 60) + (Math.random() - 0.5) * 0.012 * Math.min(1, s.v / 80) : s.phase === 'sky' ? Math.sin(G.t * 2.2) * 0.04 : 0;
     if (G.screen === 'play' && !G.paused && !FORCE_Q) { G.fpsAcc = (G.fpsAcc || 0) + dt; G.fpsN = (G.fpsN || 0) + 1;
       if (G.fpsAcc > 2.5) { const avg = G.fpsAcc / G.fpsN; if (G.q && avg > 1 / 48) { G.q = 0; resize(); } G.fpsAcc = 0; G.fpsN = 0; } }
-    G.comboPulse = Math.max(0, (G.comboPulse || 0) - dt * 3); G.camKick = Math.max(0, (G.camKick || 0) - dt * 4); G.trickKick = Math.max(0, (G.trickKick || 0) - dt * 3);
+    G.stabFx = Math.max(0, (G.stabFx || 0) - dt * 2.5); G.comboPulse = Math.max(0, (G.comboPulse || 0) - dt * 3); G.camKick = Math.max(0, (G.camKick || 0) - dt * 4); G.trickKick = Math.max(0, (G.trickKick || 0) - dt * 3);
     G.machT = Math.max(0, (G.machT || 0) - dt * 0.9); G.shake *= Math.exp(-dt * 7); G.fovKick = Math.max(0, G.fovKick - dt * 2.2); G.flash = Math.max(0, G.flash - dt * 2); G.boostT = Math.max(0, G.boostT - dt);
     for (const p of G.particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= 0.98; }
     G.particles = G.particles.filter(p => p.life > 0);
@@ -446,14 +454,18 @@
       }
       const stall = s.m < C.V_STALL + 6 && !s.over, blink = Math.floor(G.t * 6) % 2;
       const warn = !s.over && landWarn(s);
-      const status = s.trick > 0 ? (s.trickKind === 'roll' ? 'BARREL ROLL…' : 'KICKFLIP…') : stall ? (blink ? 'STALL: DIVE!' : '') : s.gam > 0.05 ? '▲ CLIMBING' : s.gam < -0.05 ? '▼ DIVING' : 'LEVEL';
+      const status = s.stabT > 0 ? 'STABILIZING…' : s.trick > 0 ? (s.trickKind === 'roll' ? 'BARREL ROLL…' : 'KICKFLIP…') : stall ? (blink ? 'STALL: DIVE!' : '') : s.gam > 0.05 ? '▲ CLIMBING' : s.gam < -0.05 ? '▼ DIVING' : 'LEVEL';
       meter(mx, my, mw, 14, s.m, SPEED_MAX, C.V_STALL, '#ff7a1a', '#5af0ff', `${KMH(s.m)} km/h${s.counts.mach ? '  ·  MACH 0.5 ✓' : ''}`,
-        { text: status, color: stall ? '#ff5a78' : s.gam < -0.05 ? '#5af0ff' : '#ffd23f' }, MACH_MARK);
-      if (warn) { const big = warn === 'pull'; ctx.globalAlpha = 0.55 + 0.45 * Math.sin(G.t * 20);
-        text(big ? 'PULL UP!' : 'LEVEL OUT!', W / 2, H * (G.portrait ? 0.42 : 0.4), big ? 34 : 28, big ? '#ff3b5c' : '#ffd23f'); ctx.globalAlpha = 1; }
+        { text: status, color: s.stabT > 0 ? '#e8f6ff' : stall ? '#ff5a78' : s.gam < -0.05 ? '#5af0ff' : '#ffd23f' }, MACH_MARK);
+      if (warn && s.stabT <= 0) { const big = warn === 'pull', wy = H * (G.portrait ? 0.42 : 0.4); ctx.globalAlpha = 0.55 + 0.45 * Math.sin(G.t * 20);
+        text(big ? 'PULL UP!' : 'LEVEL OUT!', W / 2, wy, big ? 34 : 28, big ? '#ff3b5c' : '#ffd23f'); ctx.globalAlpha = 1;
+        // hint the thrusters (they're the fix for both warnings)
+        const ready = s.stabCd <= 0, key = G.touch ? 'tap STABILIZE ▶' : 'SPACE / SHIFT = STABILIZE';
+        text(ready ? key : `stabilize in ${s.stabCd.toFixed(1)} s`, W / 2, wy + (big ? 30 : 26), T.body + 1, ready ? '#e8f6ff' : 'rgba(232,246,255,0.6)', 'center', true, 800); }
+      if (!s.over) attitude(s);
       const flipReady = s.trick <= 0 && s.t - s.lastTrickEnd >= C.TRICK_CD && S.agl(s) > C.TRICK_MIN_AGL;
       if (G.touch && !s.over) {
-        const b = BTN(); btn(b.boost, 'BOOST', '#5af0ff', s.air > 0 && s.boostCd <= 0, `${s.air}`); btn(b.trick, 'FLIP', '#ffd23f', flipReady); btn(b.roll, 'ROLL', '#ff4fd8', flipReady);
+        const b = BTN(); btn(b.boost, 'BOOST', '#5af0ff', s.air > 0 && s.boostCd <= 0, `${s.air}`); btn(b.trick, 'FLIP', '#ffd23f', flipReady && s.stabT <= 0); btn(b.roll, 'ROLL', '#ff4fd8', flipReady && s.stabT <= 0); stabBtn(b.stab, s);
         if (G.stickVis) { const v = G.stickVis; ctx.globalAlpha = 0.5; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(v.x0, v.y0, STICK_R, 0, 7); ctx.stroke();
           ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(v.x0 + v.dx * STICK_R, v.y0 + v.dy * STICK_R, 16, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
         else if (s.t - s.launchT < 3) text('drag left side: ▲▼ pitch  ◀▶ steer', W * 0.25, H - mg().b - 70, T.body, '#fff', 'center', true, 700);
@@ -492,6 +504,35 @@
       ctx.globalAlpha = 1;
     }
   }
+  /* STABILIZE pill: cost shown on the right (1 AIR, or "slow" when out of cans), cooldown sweeps across it. */
+  function stabBtn(b, s) {
+    const cd = s.stabCd, maxCd = s.stabDur === C.STAB_T_FREE ? C.STAB_CD_FREE : C.STAB_CD, ready = cd <= 0, firing = s.stabT > 0;
+    const warn = landWarn(s), x = b.x - b.w / 2, y = b.y - b.h / 2, col = '#e8f6ff';
+    const pulse = ready && warn ? 0.5 + 0.5 * Math.sin(G.t * 14) : 0;
+    ctx.globalAlpha = ready || firing ? 0.95 : 0.55;
+    ctx.fillStyle = firing ? 'rgba(232,246,255,0.9)' : 'rgba(22,10,36,0.78)'; ctx.beginPath(); ctx.roundRect(x, y, b.w, b.h, b.h / 2); ctx.fill();
+    if (!ready && !firing) { ctx.save(); ctx.beginPath(); ctx.roundRect(x, y, b.w, b.h, b.h / 2); ctx.clip(); ctx.fillStyle = 'rgba(232,246,255,0.22)'; ctx.fillRect(x, y, b.w * (1 - cd / maxCd), b.h); ctx.restore(); }
+    ctx.lineWidth = 4 + pulse * 3; ctx.strokeStyle = pulse ? `rgba(255,255,255,${0.7 + pulse * 0.3})` : col; ctx.beginPath(); ctx.roundRect(x, y, b.w, b.h, b.h / 2); ctx.stroke();
+    text('STABILIZE', b.x - 16, b.y - 1, 17, firing ? '#1a0d26' : col, 'center', false, 900);
+    const free = s.air <= 0; ctx.fillStyle = free ? '#ffb35a' : '#5af0ff'; ctx.beginPath(); ctx.arc(x + b.w - 30, b.y, 17, 0, 7); ctx.fill();
+    text(free ? 'SLOW' : '−1', x + b.w - 30, b.y + 1, free ? 9 : 13, '#1a0d26', 'center', false, 900);
+    ctx.globalAlpha = 1;
+  }
+  /* Landing-attitude tick near touchdown: the car's nose angle against level, green inside the clean window. */
+  function attitude(s) {
+    if (s.phase !== 'sky' || s.z < C.ROAD_LEN + C.CANYON_W - 40 || s.vy >= 0 || !G.carScreenLast) return;
+    const h = S.agl(s), tImp = h / -s.vy; if (h > 45 && tImp > 3) return;
+    const trickOk = s.trick <= 0 || S.trickProgress(s) >= C.TRICK_AUTO, ok = s.gam >= -C.LAND_MAX_DIVE && trickOk;
+    const cs = G.carScreenLast, cx = Math.max(90, Math.min(W - 90, cs.x + 120)), cy = Math.max(90, Math.min(H - 120, cs.y - 20)), R = 34;
+    const col = ok ? '#38e8a0' : '#ff3b5c', a = clampA(s.gam);
+    ctx.globalAlpha = 0.9; chip(cx - R - 12, cy - R - 10, 2 * R + 24, 2 * R + 28, 12);
+    ctx.strokeStyle = 'rgba(56,232,160,0.35)'; ctx.lineWidth = 10; ctx.beginPath(); ctx.arc(cx, cy, R - 4, -0.05, C.LAND_MAX_DIVE); ctx.stroke(); // clean window (0..32° down)
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx - Math.cos(a) * R * 0.55, cy + Math.sin(a) * R * 0.55); ctx.lineTo(cx + Math.cos(a) * R, cy - Math.sin(a) * R); ctx.stroke(); ctx.lineCap = 'butt';
+    text(ok ? 'LAND OK' : s.trick > 0 && !trickOk ? 'TRICK!' : 'TOO STEEP', cx, cy + R + 4, 11, col, 'center', false, 900);
+    ctx.globalAlpha = 1;
+  }
+  const clampA = g => Math.max(-1.2, Math.min(0.9, g));
   function btn(b, label, color, on, badge) {
     const pressed = G.btnFlash && G.btnFlash.k === label.toLowerCase().replace('flip', 'trick') && G.t - G.btnFlash.t < 0.12;
     ctx.globalAlpha = on ? 0.95 : 0.35; ctx.fillStyle = pressed ? color : 'rgba(22,10,36,0.72)'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * (pressed ? 0.94 : 1), 0, 7); ctx.fill();
@@ -516,7 +557,7 @@
     const steps = [
       ['STRAIGHTAWAY', G.touch ? 'Tap or swipe left / right to change lanes. Dodge everything, grab AIR cans and speed pads.' : '← / → or A / D to change lanes. Dodge everything, grab AIR cans and speed pads.', '#ffd23f'],
       ['LAUNCH', `Hit the ramp above the CLEAR line (${KMH(C.CLEAR_V)} km/h) or you drop into the canyon.`, '#ff4fd8'],
-      ['SKY', G.touch ? 'Left side = stick: up/down pitch (dive for speed, climb for height). BOOST, FLIP, ROLL build a combo: level out and land past the far rim to cash it.' : '↑/↓ pitch: dive for speed, climb for height. ←/→ steer. SPACE boost, X kickflip, C barrel roll. Level out and land past the far rim to cash the combo.', '#5af0ff'],
+      ['SKY', G.touch ? 'Left side = stick: up/down pitch (dive for speed, climb for height). BOOST, FLIP, ROLL build a combo. STABILIZE fires thrusters to level out: land past the far rim to cash it.' : '↑/↓ pitch: dive for speed, climb for height. ←/→ steer. Z boost, X kickflip, C barrel roll. SPACE / SHIFT stabilize to level out, then land past the far rim to cash the combo.', '#5af0ff'],
     ];
     const cw = Math.min(880, W - M.l - M.r - 8), cx = W / 2 - cw / 2, cy = ly + size * 0.68 + 30, stack = cw < 640;
     ctx.font = font(13, 600);

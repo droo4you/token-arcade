@@ -28,7 +28,12 @@
     // Gorge wall profile shared by the sim and the 3D walls: [depth below the rim, inset into the gap] (m). Cliff bands,
     // benches and an inner gorge: the canyon narrows as it deepens, from 300 m at the rim to ~212 m at the river.
     WALL: [[0, 0], [4, 0.5], [30, 3], [34, 14], [68, 18], [74, 30], [104, 34], [110, 44]],
-    LAND_MAX_DIVE: 0.42, ROAD_BONUS: 150, ROAD_HW: 7,
+    // Landing forgiveness: nose-down up to 32° still sticks, and a trick at least 85% done at touchdown auto-finishes.
+    LAND_MAX_DIVE: 0.56, TRICK_AUTO: 0.85, ROAD_BONUS: 150, ROAD_HW: 7,
+    // STABILIZE (cold-gas thrusters): unwinds any trick to the nearest full turn, levels the nose to STAB_GAM and trims
+    // the sink rate. One AIR can = 0.4 s burn, 1 s cooldown; with no cans it still fires, slower (0.9 s) with a 3 s cooldown.
+    // A trick it cancels counts as landed (combo) if at least STAB_CREDIT done, otherwise it's just dropped. The pot is kept.
+    STAB_T: 0.4, STAB_CD: 1, STAB_T_FREE: 0.9, STAB_CD_FREE: 3, STAB_GAM: -0.05, STAB_SINK: 0.3, STAB_CREDIT: 0.5,
     ORB_PTS: 50, AIR_PTS: 20, LANDING_BONUS: 500,
     SKY_X: 36, SKY_CEIL: 200, SKY_CHUNK: 80,
     BAND_PLANE: 35, BAND_SAT: 80, // altitude bands: birds below 35 m, planes 35–80 m, satellites above
@@ -109,12 +114,12 @@
       seed, t: 0, tick: 0, phase: 'road', over: false, reason: null,
       z: 0, x: 0, y: 0, lane: 0, v: C.V0, vBase: C.V0, padBoost: 0, launchV: 0,
       // sky: m = airspeed, gam = flight-path angle (rad, + = climbing), pIn = smoothed pitch input (-1 dive .. +1 climb)
-      m: 0, vy: 0, vx: 0, gam: 0, pIn: 0, gLoad: 1, air: C.AIR_START, rot: 0, trick: 0, trickKind: null, trickDir: 1, trickDur: 0, lastTrickEnd: -9,
+      m: 0, vy: 0, vx: 0, gam: 0, pIn: 0, gLoad: 1, air: C.AIR_START, rot: 0, trick: 0, trickKind: null, trickDir: 1, trickDur: 0, lastTrickEnd: -9, stabT: 0, stabDur: 0, stabCd: 0, stabRot0: 0, stabRot1: 0,
       cmb: { pot: 0, mult: 1, n: 0, last: null }, bank: 0, boostCd: 0, boostT: 0, launchT: 0,
       obstacles: road.obstacles, pickups: road.pickups,
       sky: [], skyPickups: [], rings: [], skyChunk: 0,
       pts: { pickups: 0, tricks: 0, landing: 0, mach: 0 },
-      counts: { orbs: 0, air: 0, pads: 0, tricks: 0, flips: 0, rolls: 0, rings: 0, boosts: 0, nearMiss: 0, mach: 0, bestMult: 1 }, maxV: 0,
+      counts: { orbs: 0, air: 0, pads: 0, tricks: 0, flips: 0, rolls: 0, rings: 0, boosts: 0, nearMiss: 0, mach: 0, bestMult: 1, stabs: 0, autoFinish: 0 }, maxV: 0,
       maxAlt: 0, landGam: 0, onRoad: false, events: [],
     };
   }
@@ -282,9 +287,34 @@
   }
   function addCombo(s, pot, mult) { s.cmb.pot += pot; s.cmb.mult = Math.min(C.MULT_MAX, s.cmb.mult + mult); if (s.cmb.mult > s.counts.bestMult) s.counts.bestMult = s.cmb.mult; }
   function startTrick(s, kind, dir) {
-    if (s.trick > 0 || s.t - s.lastTrickEnd < C.TRICK_CD || agl(s) <= C.TRICK_MIN_AGL) return false;
+    if (s.trick > 0 || s.stabT > 0 || s.t - s.lastTrickEnd < C.TRICK_CD || agl(s) <= C.TRICK_MIN_AGL) return false;
     s.trickKind = kind; s.trickDir = dir || 1; s.trickDur = kind === 'roll' ? C.ROLL_T : C.FLIP_T; s.trick = s.trickDur;
     s.m = Math.max(0, s.m - C.TRICK_COST); s.events.push({ e: 'trick', kind, dir: s.trickDir }); return true;
+  }
+
+  const trickProgress = s => s.trick > 0 ? 1 - s.trick / s.trickDur : 0;
+  /* Bank a completed trick into the combo. via: undefined (spun all the way), 'stab' (thrusters, >= half done), 'auto' (touchdown). */
+  function finishTrick(s, via) {
+    s.trick = 0; s.counts.tricks++; s.counts[s.trickKind === 'roll' ? 'rolls' : 'flips']++;
+    const base = s.trickKind === 'roll' ? C.ROLL_PTS : C.FLIP_PTS, varied = s.cmb.last && s.cmb.last !== s.trickKind;
+    const pts = Math.round(base * (varied ? C.VARIETY : 1));
+    s.cmb.n++; s.cmb.last = s.trickKind; addCombo(s, pts, s.cmb.n > 1 ? C.MULT_STEP : 0);
+    s.lastTrickEnd = s.t; s.events.push({ e: 'landed_trick', kind: s.trickKind, pts, varied, n: s.cmb.n, mult: s.cmb.mult, pot: s.cmb.pot, via });
+  }
+  /* STABILIZE: fire the cold-gas thrusters. Returns false if still cooling down. */
+  function stabilize(s) {
+    if (s.phase !== 'sky' || s.stabCd > 0 || s.stabT > 0) return false;
+    const free = s.air <= 0; if (!free) s.air--;
+    s.stabDur = s.stabT = free ? C.STAB_T_FREE : C.STAB_T; s.stabCd = free ? C.STAB_CD_FREE : C.STAB_CD;
+    let outcome = null; const kind = s.trick > 0 ? s.trickKind : null;
+    s.stabRot0 = s.rot || 0; s.stabRot1 = 0;
+    if (s.trick > 0) {
+      const done = trickProgress(s);
+      if (done >= C.STAB_CREDIT) { s.stabRot1 = s.trickDir * Math.PI * 2; outcome = 'credited'; finishTrick(s, 'stab'); }
+      else { s.trick = 0; s.lastTrickEnd = s.t; outcome = 'cancelled'; }
+    }
+    s.counts.stabs++; s.events.push({ e: 'stab', free, kind, outcome, dur: s.stabDur });
+    return true;
   }
 
   function skyStep(s, input, dt) {
@@ -310,17 +340,21 @@
     }
     if (input.trickEdge) startTrick(s, 'flip', 1);
     else if (input.rollEdge) startTrick(s, 'roll', input.rollDir || (sx < 0 ? -1 : 1));
+    if (input.stabEdge) stabilize(s);
     if (s.trick > 0) {
       s.trick -= dt; s.rot = s.trickDir * Math.PI * 2 * (1 - Math.max(0, s.trick) / s.trickDur);
-      if (s.trick <= 0) {
-        s.trick = 0; s.rot = 0; s.counts.tricks++; s.counts[s.trickKind === 'roll' ? 'rolls' : 'flips']++;
-        const base = s.trickKind === 'roll' ? C.ROLL_PTS : C.FLIP_PTS, varied = s.cmb.last && s.cmb.last !== s.trickKind;
-        const pts = Math.round(base * (varied ? C.VARIETY : 1));
-        s.cmb.n++; s.cmb.last = s.trickKind; addCombo(s, pts, s.cmb.n > 1 ? C.MULT_STEP : 0);
-        s.lastTrickEnd = s.t; s.events.push({ e: 'landed_trick', kind: s.trickKind, pts, varied, n: s.cmb.n, mult: s.cmb.mult, pot: s.cmb.pot });
-      }
+      if (s.trick <= 0) { s.rot = 0; finishTrick(s); }
+    }
+    s.stabCd = Math.max(0, s.stabCd - dt);
+    if (s.stabT > 0) {
+      // Thrusters: unwind the spin along a smoothstep (no snap), and pull the flight path to the landing attitude.
+      s.stabT = Math.max(0, s.stabT - dt);
+      const u = 1 - s.stabT / s.stabDur, e = u * u * (3 - 2 * u);
+      s.rot = s.stabRot0 + (s.stabRot1 - s.stabRot0) * e; if (s.stabT <= 0) s.rot = 0;
+      s.gam = lerpRate(s.gam, C.STAB_GAM, 3 / s.stabDur, dt); s.pIn = lerpRate(s.pIn, 0, 3 / s.stabDur, dt);
     }
     s.vy = s.m * Math.sin(s.gam);
+    if (s.stabT > 0 && s.vy < 0) s.vy *= 1 - C.STAB_SINK; // thrusters push up a little against the sink
     const z0 = s.z; s.z += Math.max(4, s.m * Math.cos(s.gam)) * dt;
     s.y = s.y + s.vy * dt;
     if (s.y >= C.SKY_CEIL) { s.y = C.SKY_CEIL; s.gam = Math.min(0, s.gam); s.vy = Math.min(0, s.vy); }
@@ -356,6 +390,8 @@
       s.y = gy;
       if (gy < 0) { s.events.push({ e: 'splash' }); end(s, 'short'); return; }
       s.landGam = s.gam;
+      // Forgiveness: a trick that is nearly round (>= TRICK_AUTO) is finished for you instead of botched.
+      if (s.trick > 0 && trickProgress(s) >= C.TRICK_AUTO) { s.rot = 0; s.counts.autoFinish++; finishTrick(s, 'auto'); }
       const why = s.trick > 0 ? 'botched' : s.gam < -C.LAND_MAX_DIVE ? 'nosedive' : null;
       if (why) { s.events.push({ e: 'crash', what: why, lost: Math.round(s.cmb.pot * s.cmb.mult) }); end(s, 'botched'); return; }
       // Clean: pay the combo, the landing bonus, and a bonus for putting it on the far road.
@@ -405,6 +441,8 @@
     const machRun = !s.counts.mach && s.t - s.launchT < 3 && s.air >= 4 && s.launchV >= C.V_MAX - 1;
     if (machRun && s.boostCd <= 0) i.boostEdge = true;
     else if (s.air > 0 && s.boostCd <= 0 && s.tick % 12 === 0 && (s.m < 70 || (!pastRim && s.z > FAR_RIM() - 200 && s.m < 85))) i.boostEdge = true;
+    // Final approach: thrusters if we're coming in steep, or a trick won't come round before touchdown.
+    if (pastRim && s.vy < 0 && s.stabCd <= 0 && s.stabT <= 0 && tImpact < 1.5 && (s.gam < -C.LAND_MAX_DIVE * 0.7 || (s.trick > 0 && s.trick > tImpact * 0.9))) i.stabEdge = true;
     const quiet = !threats(s).some(t => t.tt < 1.6);
     if (quiet && !landing && h > 30 && s.m > 60 && s.trick <= 0 && s.t - s.lastTrickEnd > 0.6) { if (s.cmb.last === 'flip') { i.rollEdge = true; i.rollDir = s.tick % 2 ? 1 : -1; } else i.trickEdge = true; }
     return i;
@@ -419,7 +457,7 @@
       combo: { pot: s.cmb.pot, mult: s.cmb.mult, n: s.cmb.n }, onRoad: s.onRoad };
   }
 
-  const api = { C, speedOf, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp, groundY, agl, liftAccel, bot, LAUNCH_GAM, wallInset, inWall };
+  const api = { C, stabilize, trickProgress, speedOf, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp, groundY, agl, liftAccel, bot, LAUNCH_GAM, wallInset, inWall };
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CJSim = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
