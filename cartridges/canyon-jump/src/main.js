@@ -181,7 +181,7 @@
       G.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - speed * 0.3, life: life * (0.7 + Math.random() * 0.5), max: life, c: colors[i % colors.length], s: 2 + Math.random() * 3.5, g: grav ?? 300, glow });
     }
   }
-  function popup(text, color, big, sub) { const cs = G.carScreenLast || { x: W / 2, y: H * 0.7 }; G.popups.push({ text, color, x: Math.max(80, Math.min(W - 80, cs.x + (Math.random() - 0.5) * 60)), y: cs.y - 60, t: G.t, big, sub }); }
+  function popup(text, color, big, sub, key) { const cs = G.carScreenLast || { x: W / 2, y: H * 0.7 }; if (key) G.popups = G.popups.filter(p => p.key !== key); G.popups.push({ key, text, color, x: Math.max(80, Math.min(W - 80, cs.x + (Math.random() - 0.5) * 60)), y: cs.y - 60, t: G.t, big, sub }); }
   function sparks(x, y, n) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = 250 + Math.random() * 450; G.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 120, life: 0.5, max: 0.5, c: i % 2 ? '#ffd23f' : '#fff4c0', s: 2, g: 600, streak: true, glow: true }); } }
   function dustRing(x, y, k) { for (let i = 0; i < 34; i++) { const a = (i / 34) * Math.PI * 2, v = 160 + Math.random() * 120; G.particles.push({ x: x + Math.cos(a) * k * 0.6, y: y + 4, vx: Math.cos(a) * v * 1.4, vy: Math.sin(a) * v * 0.25 - 20, life: 0.9, max: 0.9, c: i % 3 ? '#e8b087' : '#fff0dc', s: 5 + Math.random() * 6, g: -30, soft: true }); } }
   function handleEvents(s) {
@@ -190,7 +190,7 @@
       if (r3) r3.event(ev, s);
       switch (ev.e) {
         case 'orb': A.sfx('orb', s.counts.orbs % 8); burst(cs.x, cs.y - 30, 8, ['#ffd34d', '#fff6c0'], 160, 0.5); popup('+50', '#ffd34d'); break;
-        case 'air': A.sfx('air'); burst(cs.x, cs.y - 30, 14, ['#5af0ff', '#ffffff'], 220, 0.6); G.airPulse = 1; popup('+1 AIR', '#5af0ff', false, s.air > 1 ? `${s.air} cans` : null); break;
+        case 'air': A.sfx('air'); burst(cs.x, cs.y - 30, 14, ['#5af0ff', '#ffffff'], 220, 0.6); G.airPulse = 1; popup('+1 AIR', '#5af0ff', false, s.air > 1 ? `${s.air} cans` : null, 'air'); break;
         case 'pad': A.sfx('pad'); G.fovKick = 0.8; burst(cs.x, cs.y, 16, ['#ff4fd8', '#ffd0f4', '#fff'], 260, 0.5, 200, true); G.shake = Math.max(G.shake, 6); G.flash = 0.25; G.flashColor = '#ff4fd8'; G.boostT = 0.6; popup('SPEED PAD', '#ff4fd8', true); break;
         case 'lane': A.sfx('lane'); break;
         case 'near': if (s.phase === 'sky') { A.sfx('whoosh', 1); G.shake = Math.max(G.shake, 5); popup('NEAR MISS', '#fff4e0', false, `×${fmtMult(ev.mult)}`); G.comboPulse = 1; } else { A.sfx('near'); popup('NEAR MISS', '#fff4e0'); } break;
@@ -204,7 +204,7 @@
         case 'rim': A.sfx('landed_trick', 2); G.flash = 0.3; G.flashColor = '#5af0ff'; G.banner = { text: 'CLEARED THE CANYON', sub: 'now ride the momentum', t: G.t, dur: 2.4, color: '#5af0ff' }; break;
         case 'splash': A.sfx('splash'); G.shake = 18; G.hitStop = 0.1; burst(cs.x, cs.y, 40, ['#2fc4c9', '#7fe8e4', '#fff'], 300, 1);
           if (s.phase === 'sky') G.banner = { text: 'INTO THE RIVER', sub: s.cmb.pot ? `combo lost (${fmtPts(s.cmb.pot * s.cmb.mult)})` : 'pull up sooner', t: G.t, dur: 2.8, color: '#ff5a78' }; break;
-        case 'boost': A.sfx('boost'); G.shake = Math.max(G.shake, 11); G.hitStop = Math.max(G.hitStop, 0.045); G.slowT = Math.max(G.slowT || 0, 0.08); G.camKick = 1; G.flash = Math.max(G.flash, 0.22); G.flashColor = '#5af0ff'; G.boostT = 0.9; G.fovKick = 1; burst(cs.x, cs.y + 20, 22, ['#5af0ff', '#b9fbff', '#7b55ff'], 300, 0.6, -40, true); popup(ev.dive ? 'DIVE BOOST' : 'AIR BOOST', '#5af0ff', ev.dive || ev.chain > 0, ev.chain > 0 ? `CHAIN ×${ev.chain + 1}` : null); G.airPulse = 0.6; break;
+        case 'boost': A.sfx('boost'); G.shake = Math.max(G.shake, 11); G.hitStop = Math.max(G.hitStop, 0.045); G.slowT = Math.max(G.slowT || 0, 0.08); G.camKick = 1; G.flash = Math.max(G.flash, 0.22); G.flashColor = '#5af0ff'; G.boostT = 0.9; G.fovKick = 1; burst(cs.x, cs.y + 20, 22, ['#5af0ff', '#b9fbff', '#7b55ff'], 300, 0.6, -40, true); popup(ev.dive ? 'DIVE BOOST' : 'AIR BOOST', '#5af0ff', ev.dive || ev.chain > 0, ev.chain > 0 ? `CHAIN ×${ev.chain + 1}` : null, 'boost'); G.airPulse = 0.6; break;
         case 'mach': A.sfx('mach'); G.machT = 1; G.flash = 0.9; G.flashColor = '#ffffff'; G.shake = 26; G.fovKick = 1; G.hitStop = 0.08;
           G.banner = { text: 'MACH 0.5!', sub: `${KMH(ev.v)} km/h  ·  +${C.MACH_BONUS}`, t: G.t, dur: 2.6, color: '#ffffff' };
           burst(cs.x, cs.y - 10, 40, ['#ffffff', '#cfefff', '#9fd8ff'], 520, 0.7, 0, true); break;
