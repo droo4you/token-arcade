@@ -12,16 +12,22 @@
     V0: 36, ACCEL: 1.25, V_NATURAL: 72, V_MAX: 110,
     PAD_BOOST: 7, PAD_DECAY: 0.6,
     CLEAR_V: 90,         // launch speed needed to clear the canyon
-    AIR_MAX: 5, AIR_START: 1,
+    AIR_START: 1,        // AIR cans stack without limit (no cap): hoard them for a Mach run or spend them to stabilize
     // Straightaway fairness: hitbox half-widths match the drawn sprites; tumbleweeds sway inside their own lane.
     CAR_HW: 0.8, OBST_HW: { cactus: 0.85, rock: 1.25, tumbleweed: 0.8, cone: 0.4 }, SWAY: 0.45,
     REACT_T: 0.45, SWITCH_T: 0.3, // seconds budgeted to notice a row and to cross one lane
     // Flight: point-mass glider with real gravity. Lift = G·CL·(V/LIFT_REF)² (capped at G_LIMIT g), pitch input sets CL,
     // gravity along the path trades height for speed (dive = faster, climb = slower), drag bleeds energy so every flight ends.
     G: 9.8, G_SKY: 20, LIFT_REF: 70, CL_N: 0.32, CL_UP: 1.55, CL_DN: -0.5, G_LIMIT: 3.2, V_STALL: 44, V_MIN_LIFT: 28,
-    DRAG0: 1.6, DRAG2: 0.00028, DRAG_I: 0.6, PITCH_RESP: 7, GAM_MIN: -1.25, GAM_MAX: 1.05, M_MAX: 180,
+    DRAG0: 1.6, DRAG2: 0.00028, DRAG_I: 0.6, DIVE_TUCK: 0.5, // stick held forward in a dive tucks the car: up to 50% less parasitic drag (never adds energy, so no climb/dive pump)
+    PITCH_RESP: 7, GAM_MIN: -1.25, GAM_MAX: 1.05, M_MAX: 195, // sky speed cap 702 km/h
     STEER_V: 20, STEER_RESP: 10,
-    BOOST_M: 20, BOOST_CD: 0.3, BOOST_POP: 0.06,
+    BOOST_M: 22, BOOST_CD: 0.3, BOOST_POP: 0.06,
+    // CHAIN: a boost fired within CHAIN_T of the previous one hits CHAIN_STEP harder per link (22 → 29 → 36, capped at
+    // CHAIN_MAX links), so a quick 3-chain is +87 m/s (that's the Mach move) while lone boosts stay ~what they were.
+    CHAIN_T: 0.8, CHAIN_STEP: 7, CHAIN_MAX: 2,
+    // DIVE BOOST: an AIR boost fired with the nose at least DIVE_BOOST_GAM below the horizon kicks DIVE_BOOST_K× harder (gravity is with you).
+    DIVE_BOOST_GAM: -0.3, DIVE_BOOST_K: 1.3,
     // Tricks feed an unbanked combo: pot × multiplier pays out only on a clean landing past the far rim.
     FLIP_T: 0.7, ROLL_T: 1.05, FLIP_PTS: 60, ROLL_PTS: 100, TRICK_CD: 0.2, TRICK_COST: 3, TRICK_MIN_AGL: 8, VARIETY: 1.5,
     MULT_STEP: 0.5, MULT_MAX: 6, NEAR_POT: 25, NEAR_MULT: 0.25, RING_POT: 50, RING_MULT: 0.25, RING_V: 8, RING_R: 3.2,
@@ -115,11 +121,11 @@
       z: 0, x: 0, y: 0, lane: 0, v: C.V0, vBase: C.V0, padBoost: 0, launchV: 0,
       // sky: m = airspeed, gam = flight-path angle (rad, + = climbing), pIn = smoothed pitch input (-1 dive .. +1 climb)
       m: 0, vy: 0, vx: 0, gam: 0, pIn: 0, gLoad: 1, air: C.AIR_START, rot: 0, trick: 0, trickKind: null, trickDir: 1, trickDur: 0, lastTrickEnd: -9, stabT: 0, stabDur: 0, stabCd: 0, stabRot0: 0, stabRot1: 0,
-      cmb: { pot: 0, mult: 1, n: 0, last: null }, bank: 0, boostCd: 0, boostT: 0, launchT: 0,
+      cmb: { pot: 0, mult: 1, n: 0, last: null }, bank: 0, boostCd: 0, chain: 0, lastBoostT: -9, boostT: 0, launchT: 0,
       obstacles: road.obstacles, pickups: road.pickups,
       sky: [], skyPickups: [], rings: [], skyChunk: 0,
       pts: { pickups: 0, tricks: 0, landing: 0, mach: 0 },
-      counts: { orbs: 0, air: 0, pads: 0, tricks: 0, flips: 0, rolls: 0, rings: 0, boosts: 0, nearMiss: 0, mach: 0, bestMult: 1, stabs: 0, autoFinish: 0 }, maxV: 0,
+      counts: { orbs: 0, air: 0, pads: 0, tricks: 0, flips: 0, rolls: 0, rings: 0, boosts: 0, nearMiss: 0, mach: 0, bestMult: 1, stabs: 0, autoFinish: 0, diveBoosts: 0 }, maxV: 0,
       maxAlt: 0, landGam: 0, onRoad: false, events: [],
     };
   }
@@ -192,7 +198,7 @@
       if (Math.abs(laneX(p.lane) - s.x) < 1.7) {
         p.taken = true;
         if (p.type === 'pad') { s.padBoost += C.PAD_BOOST; s.counts.pads++; s.events.push({ e: 'pad' }); }
-        else if (p.type === 'air') { if (s.air < C.AIR_MAX) s.air++; s.counts.air++; s.pts.pickups += C.AIR_PTS; s.events.push({ e: 'air' }); }
+        else if (p.type === 'air') { s.air++; s.counts.air++; s.pts.pickups += C.AIR_PTS; s.events.push({ e: 'air', n: s.air }); }
         else { s.counts.orbs++; s.pts.pickups += C.ORB_PTS; s.events.push({ e: 'orb' }); }
       }
     }
@@ -331,11 +337,15 @@
     const L = liftAccel(V, s.pIn), Lv = L * Math.cos(s.rot || 0);
     s.gLoad = L / C.G_SKY;
     g += (Lv - C.G_SKY * Math.cos(g)) / Math.max(V, 12) * dt;
-    V += (-C.G_SKY * Math.sin(g) - C.DRAG0 - C.DRAG2 * V * V - C.DRAG_I * s.gLoad * s.gLoad) * dt;
+    // Committed dive (stick forward, nose below the horizon): the car tucks and parasitic drag drops, so a dive banks real speed.
+    const tuck = s.pIn < 0 && g < 0 ? -s.pIn * C.DIVE_TUCK : 0;
+    V += (-C.G_SKY * Math.sin(g) - (C.DRAG0 + C.DRAG2 * V * V) * (1 - tuck) - C.DRAG_I * s.gLoad * s.gLoad) * dt;
     s.gam = clamp(g, C.GAM_MIN, C.GAM_MAX); s.m = clamp(V, 0, C.M_MAX);
     s.boostCd = Math.max(0, s.boostCd - dt); s.boostT = Math.max(0, s.boostT - dt);
     if (input.boostEdge && s.boostCd <= 0) {
-      if (s.air > 0) { s.air--; s.m = Math.min(C.M_MAX, s.m + C.BOOST_M); s.gam = Math.min(C.GAM_MAX, s.gam + C.BOOST_POP); s.boostCd = C.BOOST_CD; s.boostT = 0.4; s.counts.boosts++; s.events.push({ e: 'boost' }); }
+      if (s.air > 0) { const dive = s.gam <= C.DIVE_BOOST_GAM; s.chain = s.t - s.lastBoostT <= C.CHAIN_T ? Math.min(C.CHAIN_MAX, s.chain + 1) : 0; s.lastBoostT = s.t;
+        s.air--; s.m = Math.min(C.M_MAX, s.m + (C.BOOST_M + C.CHAIN_STEP * s.chain) * (dive ? C.DIVE_BOOST_K : 1)); if (!dive) s.gam = Math.min(C.GAM_MAX, s.gam + C.BOOST_POP);
+        s.boostCd = C.BOOST_CD; s.boostT = 0.4; s.counts.boosts++; if (dive) s.counts.diveBoosts++; s.events.push({ e: 'boost', dive, chain: s.chain, n: s.air }); }
       else s.events.push({ e: 'empty' });
     }
     if (input.trickEdge) startTrick(s, 'flip', 1);
@@ -381,7 +391,7 @@
       if (p.taken || p.z < z0 - 3 || p.z > s.z + 3) continue;
       if (Math.hypot(p.x - s.x, p.y - s.y) < 2.6 && Math.abs(p.z - s.z) < 3) {
         p.taken = true;
-        if (p.type === 'air') { if (s.air < C.AIR_MAX) s.air++; s.counts.air++; s.pts.pickups += C.AIR_PTS; s.events.push({ e: 'air', risky: !!p.risky }); }
+        if (p.type === 'air') { s.air++; s.counts.air++; s.pts.pickups += C.AIR_PTS; s.events.push({ e: 'air', risky: !!p.risky, n: s.air }); }
         else { s.counts.orbs++; s.pts.pickups += C.ORB_PTS; s.events.push({ e: 'orb' }); }
       }
     }
@@ -406,6 +416,7 @@
   /* Reference pilot: the ?autopilot preview and the balance tests fly with this. Dodges flagged threats, flies
      rings and risky AIR, manages energy (dive when slow, climb when fast), chains tricks when it is safe, and
      levels out before touching down. Deterministic: reads only sim state. */
+  const GOOD_LAUNCH = 100; // m/s (360 km/h): fast enough that a quick 3-boost chain can reach Mach 0.5
   function bot(s) {
     const i = {};
     if (s.phase === 'road') {
@@ -424,7 +435,7 @@
     let ty = landing ? 0 : clamp(20 + (s.m - 60) * 0.9, 25, 120);
     if (!pastRim) ty = Math.max(ty, 22);
     let tx = s.x;
-    const tgt = s.rings.concat(s.skyPickups.filter(p => p.type === 'air' && s.air < C.AIR_MAX)).filter(r => !r.taken && r.z > s.z + 10 && (r.z - s.z) / fwd < 2.2)
+    const tgt = s.rings.concat(s.skyPickups.filter(p => p.type === 'air')).filter(r => !r.taken && r.z > s.z + 10 && (r.z - s.z) / fwd < 2.2)
       .sort((a, b) => a.z - b.z)[0];
     if (tgt && !landing && (pastRim || tgt.y > 12)) { tx = tgt.x; ty = tgt.y; }
     const th = threats(s).filter(t => t.tt < 1.1)[0];
@@ -437,8 +448,8 @@
     if (!pastRim && h < 25 + Math.max(0, -s.vy)) gDes = Math.max(gDes, 0.15);
     i.pitch = clamp((gDes - s.gam) * 4 + (gDes > s.gam ? 0.15 : 0), -1, 1);
     if (s.m < 58 && h < 40) i.pitch = Math.max(i.pitch, 0.3);
-    // Mach run: launched at top speed with 4+ cans, chain them while the boost cooldown allows.
-    const machRun = !s.counts.mach && s.t - s.launchT < 3 && s.air >= 4 && s.launchV >= C.V_MAX - 1;
+    // Mach run: off a top-speed launch with 3+ cans, chain three boosts while the cooldown allows (commit once started).
+    const machRun = !s.counts.mach && s.t - s.launchT < 3 && s.air > 0 && s.counts.boosts < 3 && s.air + s.counts.boosts >= 3 && s.launchV >= GOOD_LAUNCH;
     if (machRun && s.boostCd <= 0) i.boostEdge = true;
     else if (s.air > 0 && s.boostCd <= 0 && s.tick % 12 === 0 && (s.m < 70 || (!pastRim && s.z > FAR_RIM() - 200 && s.m < 85))) i.boostEdge = true;
     // Final approach: thrusters if we're coming in steep, or a trick won't come round before touchdown.

@@ -173,7 +173,7 @@
   const fmtMult = m => (Math.round(m * 100) / 100).toString();
   const fmtPts = v => Math.round(v).toLocaleString('en-US');
   // One speed scale (m/s shown as km/h) for the road meter and the sky meter, with Mach 0.5 marked on both.
-  const SPEED_MAX = C.M_MAX, MACH_MARK = { at: C.MACH05, label: 'MACH 0.5' };
+  const SPEED_MAX = C.M_MAX, MACH_NEAR = 50 / 3.6, MACH_MARK = { at: C.MACH05, label: 'MACH 0.5', near: MACH_NEAR };
   function burst(x, y, n, colors, speed, life, grav, glow) {
     if (!G.q) n = Math.ceil(n * 0.5);
     for (let i = 0; i < n; i++) {
@@ -190,7 +190,7 @@
       if (r3) r3.event(ev, s);
       switch (ev.e) {
         case 'orb': A.sfx('orb', s.counts.orbs % 8); burst(cs.x, cs.y - 30, 8, ['#ffd34d', '#fff6c0'], 160, 0.5); popup('+50', '#ffd34d'); break;
-        case 'air': A.sfx('air'); burst(cs.x, cs.y - 30, 14, ['#5af0ff', '#ffffff'], 220, 0.6); popup(s.air >= C.AIR_MAX ? 'AIR FULL' : '+1 AIR', '#5af0ff'); break;
+        case 'air': A.sfx('air'); burst(cs.x, cs.y - 30, 14, ['#5af0ff', '#ffffff'], 220, 0.6); G.airPulse = 1; popup('+1 AIR', '#5af0ff', false, s.air > 1 ? `${s.air} cans` : null); break;
         case 'pad': A.sfx('pad'); G.fovKick = 0.8; burst(cs.x, cs.y, 16, ['#ff4fd8', '#ffd0f4', '#fff'], 260, 0.5, 200, true); G.shake = Math.max(G.shake, 6); G.flash = 0.25; G.flashColor = '#ff4fd8'; G.boostT = 0.6; popup('SPEED PAD', '#ff4fd8', true); break;
         case 'lane': A.sfx('lane'); break;
         case 'near': if (s.phase === 'sky') { A.sfx('whoosh', 1); G.shake = Math.max(G.shake, 5); popup('NEAR MISS', '#fff4e0', false, `×${fmtMult(ev.mult)}`); G.comboPulse = 1; } else { A.sfx('near'); popup('NEAR MISS', '#fff4e0'); } break;
@@ -204,9 +204,9 @@
         case 'rim': A.sfx('landed_trick', 2); G.flash = 0.3; G.flashColor = '#5af0ff'; G.banner = { text: 'CLEARED THE CANYON', sub: 'now ride the momentum', t: G.t, dur: 2.4, color: '#5af0ff' }; break;
         case 'splash': A.sfx('splash'); G.shake = 18; G.hitStop = 0.1; burst(cs.x, cs.y, 40, ['#2fc4c9', '#7fe8e4', '#fff'], 300, 1);
           if (s.phase === 'sky') G.banner = { text: 'INTO THE RIVER', sub: s.cmb.pot ? `combo lost (${fmtPts(s.cmb.pot * s.cmb.mult)})` : 'pull up sooner', t: G.t, dur: 2.8, color: '#ff5a78' }; break;
-        case 'boost': A.sfx('boost'); G.shake = Math.max(G.shake, 11); G.hitStop = Math.max(G.hitStop, 0.045); G.slowT = Math.max(G.slowT || 0, 0.08); G.camKick = 1; G.flash = Math.max(G.flash, 0.22); G.flashColor = '#5af0ff'; G.boostT = 0.9; G.fovKick = 1; burst(cs.x, cs.y + 20, 22, ['#5af0ff', '#b9fbff', '#7b55ff'], 300, 0.6, -40, true); popup('AIR BOOST', '#5af0ff'); break;
+        case 'boost': A.sfx('boost'); G.shake = Math.max(G.shake, 11); G.hitStop = Math.max(G.hitStop, 0.045); G.slowT = Math.max(G.slowT || 0, 0.08); G.camKick = 1; G.flash = Math.max(G.flash, 0.22); G.flashColor = '#5af0ff'; G.boostT = 0.9; G.fovKick = 1; burst(cs.x, cs.y + 20, 22, ['#5af0ff', '#b9fbff', '#7b55ff'], 300, 0.6, -40, true); popup(ev.dive ? 'DIVE BOOST' : 'AIR BOOST', '#5af0ff', ev.dive || ev.chain > 0, ev.chain > 0 ? `CHAIN ×${ev.chain + 1}` : null); G.airPulse = 0.6; break;
         case 'mach': A.sfx('mach'); G.machT = 1; G.flash = 0.9; G.flashColor = '#ffffff'; G.shake = 26; G.fovKick = 1; G.hitStop = 0.08;
-          G.banner = { text: 'MACH 0.5', sub: `${KMH(ev.v)} km/h  ·  +${C.MACH_BONUS}`, t: G.t, dur: 2.6, color: '#ffffff' };
+          G.banner = { text: 'MACH 0.5!', sub: `${KMH(ev.v)} km/h  ·  +${C.MACH_BONUS}`, t: G.t, dur: 2.6, color: '#ffffff' };
           burst(cs.x, cs.y - 10, 40, ['#ffffff', '#cfefff', '#9fd8ff'], 520, 0.7, 0, true); break;
         case 'empty': A.sfx('empty'); popup('NO AIR', '#ff5a78'); break;
         case 'stab': A.sfx('stab', ev.free ? 1 : 0); G.stabFx = 1; G.shake = 0; G.camKick = 0; G.trickKick = 0; G.flash = Math.max(G.flash, 0.12); G.flashColor = '#e8f6ff';
@@ -282,7 +282,7 @@
     G.bob = s.phase === 'road' ? Math.sin(G.t * 17) * 0.018 * Math.min(1, s.v / 60) + (Math.random() - 0.5) * 0.012 * Math.min(1, s.v / 80) : s.phase === 'sky' ? Math.sin(G.t * 2.2) * 0.04 : 0;
     if (G.screen === 'play' && !G.paused && !FORCE_Q) { G.fpsAcc = (G.fpsAcc || 0) + dt; G.fpsN = (G.fpsN || 0) + 1;
       if (G.fpsAcc > 2.5) { const avg = G.fpsAcc / G.fpsN; if (G.q && avg > 1 / 48) { G.q = 0; resize(); } G.fpsAcc = 0; G.fpsN = 0; } }
-    G.stabFx = Math.max(0, (G.stabFx || 0) - dt * 2.5); G.comboPulse = Math.max(0, (G.comboPulse || 0) - dt * 3); G.camKick = Math.max(0, (G.camKick || 0) - dt * 4); G.trickKick = Math.max(0, (G.trickKick || 0) - dt * 3);
+    G.airPulse = Math.max(0, (G.airPulse || 0) - dt * 3); G.stabFx = Math.max(0, (G.stabFx || 0) - dt * 2.5); G.comboPulse = Math.max(0, (G.comboPulse || 0) - dt * 3); G.camKick = Math.max(0, (G.camKick || 0) - dt * 4); G.trickKick = Math.max(0, (G.trickKick || 0) - dt * 3);
     G.machT = Math.max(0, (G.machT || 0) - dt * 0.9); G.shake *= Math.exp(-dt * 7); G.fovKick = Math.max(0, G.fovKick - dt * 2.2); G.flash = Math.max(0, G.flash - dt * 2); G.boostT = Math.max(0, G.boostT - dt);
     for (const p of G.particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= 0.98; }
     G.particles = G.particles.filter(p => p.life > 0);
@@ -390,8 +390,13 @@
     ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, Math.max(h, w * f), h, h / 2); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 2, Math.max(0, w * f - 6), h * 0.3, h * 0.15); ctx.fill();
     if (mark) { const mx = x + w * m; ctx.fillStyle = '#fff'; ctx.fillRect(mx - 1.5, y - 6, 3, h + 12); ctx.beginPath(); ctx.moveTo(mx - 6, y - 11); ctx.lineTo(mx + 6, y - 11); ctx.lineTo(mx, y - 5); ctx.fill(); }
-    if (extra) { const ex = x + w * Math.min(1, extra.at / max), hit = value >= extra.at; ctx.fillStyle = hit ? '#ffffff' : 'rgba(255,255,255,0.55)'; ctx.fillRect(ex - 1, y - 4, 2, h + 8);
-      text(extra.label, ex, y + h + 9, 9, hit ? '#ffffff' : 'rgba(255,233,240,0.75)', 'center', false, 800); }
+    if (extra) { const ex = x + w * Math.min(1, extra.at / max), hit = value >= extra.at || extra.done;
+      // Closing in (within MACH_NEAR): the bar glows white and pulses faster the closer you get, and the mark reads the gap.
+      const near = !hit && extra.near && value >= extra.at - extra.near, k = near ? 1 - (extra.at - value) / extra.near : 0;
+      if (near) { const pulse = 0.55 + 0.45 * Math.sin(G.t * (10 + k * 18)); ctx.save(); ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 8 + k * 18 * pulse;
+        ctx.strokeStyle = `rgba(255,255,255,${0.35 + 0.6 * k * pulse})`; ctx.lineWidth = 2 + k * 2; ctx.beginPath(); ctx.roundRect(x - 3, y - 3, w + 6, h + 6, (h + 6) / 2); ctx.stroke(); ctx.restore(); }
+      ctx.fillStyle = hit || near ? '#ffffff' : 'rgba(255,255,255,0.55)'; ctx.fillRect(ex - (near ? 1.5 : 1), y - (near ? 7 : 4), near ? 3 : 2, h + (near ? 14 : 8));
+      text(near ? `${extra.label}  −${Math.max(1, Math.ceil((extra.at - value) * 3.6))} km/h` : extra.label, ex, y + h + 9, near ? 10 : 9, hit || near ? '#ffffff' : 'rgba(255,233,240,0.75)', 'center', false, 800); }
     text(label, x, y - 16, T.body, '#fff', 'left', true, 800);
     if (sub && sub.text) text(sub.text, x + w, y - 16, w < 300 ? 10 : 12, sub.color, 'right', true, 800);
   }
@@ -411,15 +416,24 @@
     text(r.total.toLocaleString('en-US'), M.l + 12, M.t + 36, narrow ? 20 : T.value, '#fff', 'left');
     // buttons (right)
     iconBtn(hb.pause, 'pause'); iconBtn(hb.mute, 'mute');
-    // AIR cans: right of score on wide screens, under the buttons on narrow ones
-    const cw = 22, aw = 44 + C.AIR_MAX * cw, ax = narrow ? W - M.r - aw : hb.mute.x - aw - 10, ay = narrow ? M.t + 50 : M.t;
-    chip(ax, ay, aw, narrow ? 38 : 52);
-    text('AIR', ax + 10, ay + (narrow ? 19 : 26), T.label, '#5af0ff', 'left', false, 800);
-    for (let i = 0; i < C.AIR_MAX; i++) {
-      const x = ax + 38 + i * cw, y = ay + (narrow ? 8 : 15);
-      ctx.fillStyle = i < s.air ? '#5af0ff' : 'rgba(90,240,255,0.14)'; ctx.beginPath(); ctx.roundRect(x, y, 15, 22, 5); ctx.fill();
-      if (i < s.air) { ctx.fillStyle = '#fff'; ctx.fillRect(x + 5, y - 3, 5, 4); ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(x + 3, y + 4, 3, 12); }
+    // AIR cans (no cap): the first few as icons, then a ×N count, in a fixed-width chip so it never jumps around.
+    // Right of score on wide screens, under the buttons on narrow ones.
+    const K = narrow ? 3 : 5, cw = narrow ? 18 : 22, more = s.air > K, aw = 40 + K * cw + (narrow ? 34 : 44), ah = narrow ? 38 : 52;
+    const ax = narrow ? W - M.r - aw : hb.mute.x - aw - 10, ay = narrow ? M.t + 50 : M.t, ap = G.airPulse || 0;
+    chip(ax, ay, aw, ah);
+    if (ap > 0) { ctx.save(); ctx.globalAlpha = ap * 0.8; ctx.strokeStyle = '#5af0ff'; ctx.lineWidth = 2 + ap * 3; ctx.beginPath(); ctx.roundRect(ax + 1, ay + 1, aw - 2, ah - 2, 12); ctx.stroke(); ctx.restore(); }
+    text('AIR', ax + 10, ay + ah / 2, T.label, '#5af0ff', 'left', false, 800);
+    const iw = narrow ? 13 : 15, ih = narrow ? 19 : 22;
+    for (let i = 0; i < K; i++) {
+      const x = ax + 36 + i * cw, y = ay + (ah - ih) / 2 + 2, on = i < s.air;
+      if (!on && s.air > 0) break; // only the empty slot outline shows when you're out of cans
+      ctx.fillStyle = on ? '#5af0ff' : 'rgba(90,240,255,0.14)'; ctx.beginPath(); ctx.roundRect(x, y, iw, ih, 5); ctx.fill();
+      if (on) { ctx.fillStyle = '#fff'; ctx.fillRect(x + iw / 2 - 2.5, y - 3, 5, 4); ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(x + 3, y + 4, 3, ih - 10); }
+      if (!on) break;
     }
+    // Count: always shown once you have more than the icons can show, or none at all (×0, dimmed).
+    if (more || s.air === 0) { const sc = 1 + ap * 0.25, cx = ax + aw - 12; ctx.save(); ctx.translate(cx, ay + ah / 2 + 1); ctx.scale(sc, sc);
+      text(`×${s.air > 999 ? '999+' : s.air}`, 0, 0, narrow ? 17 : 20, s.air ? '#ffffff' : 'rgba(255,255,255,0.4)', 'right', true, 900); ctx.restore(); }
     if (G.screen === 'end') return;
     // centre strip: progress / altitude
     const pw = narrow ? W - M.l - M.r : Math.min(340, W * 0.34), px = W / 2 - pw / 2, py = narrow ? M.t + (G.portrait ? 96 : 60) : M.t;
@@ -456,7 +470,7 @@
       const warn = !s.over && landWarn(s);
       const status = s.stabT > 0 ? 'STABILIZING…' : s.trick > 0 ? (s.trickKind === 'roll' ? 'BARREL ROLL…' : 'KICKFLIP…') : stall ? (blink ? 'STALL: DIVE!' : '') : s.gam > 0.05 ? '▲ CLIMBING' : s.gam < -0.05 ? '▼ DIVING' : 'LEVEL';
       meter(mx, my, mw, 14, s.m, SPEED_MAX, C.V_STALL, '#ff7a1a', '#5af0ff', `${KMH(s.m)} km/h${s.counts.mach ? '  ·  MACH 0.5 ✓' : ''}`,
-        { text: status, color: s.stabT > 0 ? '#e8f6ff' : stall ? '#ff5a78' : s.gam < -0.05 ? '#5af0ff' : '#ffd23f' }, MACH_MARK);
+        { text: status, color: s.stabT > 0 ? '#e8f6ff' : stall ? '#ff5a78' : s.gam < -0.05 ? '#5af0ff' : '#ffd23f' }, s.counts.mach ? { ...MACH_MARK, done: true } : MACH_MARK);
       if (warn && s.stabT <= 0) { const big = warn === 'pull', wy = H * (G.portrait ? 0.42 : 0.4); ctx.globalAlpha = 0.55 + 0.45 * Math.sin(G.t * 20);
         text(big ? 'PULL UP!' : 'LEVEL OUT!', W / 2, wy, big ? 34 : 28, big ? '#ff3b5c' : '#ffd23f'); ctx.globalAlpha = 1;
         // hint the thrusters (they're the fix for both warnings)
@@ -465,7 +479,7 @@
       if (!s.over) attitude(s);
       const flipReady = s.trick <= 0 && s.t - s.lastTrickEnd >= C.TRICK_CD && S.agl(s) > C.TRICK_MIN_AGL;
       if (G.touch && !s.over) {
-        const b = BTN(); btn(b.boost, 'BOOST', '#5af0ff', s.air > 0 && s.boostCd <= 0, `${s.air}`); btn(b.trick, 'FLIP', '#ffd23f', flipReady && s.stabT <= 0); btn(b.roll, 'ROLL', '#ff4fd8', flipReady && s.stabT <= 0); stabBtn(b.stab, s);
+        const b = BTN(); btn(b.boost, s.gam <= C.DIVE_BOOST_GAM && s.air > 0 ? 'DIVE' : 'BOOST', '#5af0ff', s.air > 0 && s.boostCd <= 0, s.air > 99 ? '99+' : `${s.air}`); btn(b.trick, 'FLIP', '#ffd23f', flipReady && s.stabT <= 0); btn(b.roll, 'ROLL', '#ff4fd8', flipReady && s.stabT <= 0); stabBtn(b.stab, s);
         if (G.stickVis) { const v = G.stickVis; ctx.globalAlpha = 0.5; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(v.x0, v.y0, STICK_R, 0, 7); ctx.stroke();
           ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(v.x0 + v.dx * STICK_R, v.y0 + v.dy * STICK_R, 16, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
         else if (s.t - s.launchT < 3) text('drag left side: ▲▼ pitch  ◀▶ steer', W * 0.25, H - mg().b - 70, T.body, '#fff', 'center', true, 700);
@@ -534,10 +548,10 @@
   }
   const clampA = g => Math.max(-1.2, Math.min(0.9, g));
   function btn(b, label, color, on, badge) {
-    const pressed = G.btnFlash && G.btnFlash.k === label.toLowerCase().replace('flip', 'trick') && G.t - G.btnFlash.t < 0.12;
+    const pressed = G.btnFlash && G.btnFlash.k === label.toLowerCase().replace('flip', 'trick').replace('dive', 'boost') && G.t - G.btnFlash.t < 0.12;
     ctx.globalAlpha = on ? 0.95 : 0.35; ctx.fillStyle = pressed ? color : 'rgba(22,10,36,0.72)'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * (pressed ? 0.94 : 1), 0, 7); ctx.fill();
     ctx.lineWidth = 4; ctx.strokeStyle = color; ctx.stroke(); text(label, b.x, b.y, 15, pressed ? '#1a0d26' : color, 'center', false);
-    if (badge) { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(b.x + b.r * 0.7, b.y - b.r * 0.7, 11, 0, 7); ctx.fill(); text(badge, b.x + b.r * 0.7, b.y - b.r * 0.7, 12, '#1a0d26', 'center', false); }
+    if (badge) { const br = badge.length > 2 ? 15 : badge.length > 1 ? 13 : 11; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(b.x + b.r * 0.7, b.y - b.r * 0.7, br, 0, 7); ctx.fill(); text(badge, b.x + b.r * 0.7, b.y - b.r * 0.7, 12, '#1a0d26', 'center', false); }
     ctx.globalAlpha = 1;
   }
   function logo(y, size) {
@@ -557,7 +571,7 @@
     const steps = [
       ['STRAIGHTAWAY', G.touch ? 'Tap or swipe left / right to change lanes. Dodge everything, grab AIR cans and speed pads.' : '← / → or A / D to change lanes. Dodge everything, grab AIR cans and speed pads.', '#ffd23f'],
       ['LAUNCH', `Hit the ramp above the CLEAR line (${KMH(C.CLEAR_V)} km/h) or you drop into the canyon.`, '#ff4fd8'],
-      ['SKY', G.touch ? 'Left side = stick: up/down pitch (dive for speed, climb for height). BOOST, FLIP, ROLL build a combo. STABILIZE fires thrusters to level out: land past the far rim to cash it.' : '↑/↓ pitch: dive for speed, climb for height. ←/→ steer. Z boost, X kickflip, C barrel roll. SPACE / SHIFT stabilize to level out, then land past the far rim to cash the combo.', '#5af0ff'],
+      ['SKY', G.touch ? 'Left side = stick: up/down pitch (dive for speed, climb for height). BOOST spends an AIR can (chain 3 fast for MACH 0.5; boosting in a dive hits harder). FLIP, ROLL build a combo. STABILIZE fires thrusters to level out: land past the far rim to cash it.' : '↑/↓ pitch: dive for speed, climb for height. ←/→ steer. Z boost (chain 3 fast for MACH 0.5), X kickflip, C barrel roll. SPACE / SHIFT stabilize to level out, then land past the far rim to cash the combo.', '#5af0ff'],
     ];
     const cw = Math.min(880, W - M.l - M.r - 8), cx = W / 2 - cw / 2, cy = ly + size * 0.68 + 30, stack = cw < 640;
     ctx.font = font(13, 600);

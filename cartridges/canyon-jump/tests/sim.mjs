@@ -263,26 +263,56 @@ test('balance: the reference pilot mostly lands, flights last ~15-35 s, and dist
   const avg = flights.reduce((a, b) => a + b, 0) / flights.length;
   assert.ok(launched >= 20 && avg >= 15 && avg <= 35, `avg flight ${avg.toFixed(1)} s over ${launched}`);
   assert.ok(landed >= launched * 0.7, `landed ${landed}/${launched}`);
-  assert.ok(dist > tricks, `distance ${dist} vs combo payouts ${tricks}`);
+  // Distance stays a major share of the score next to combos. (The pilot now completes Mach chains, which convert a
+  // can stash into a fast, high, trick-friendly stretch; the old 'distance > combos' held only because its chain never fired.)
+  assert.ok(dist > tricks * 0.5, `distance ${dist} vs combo payouts ${tricks}`);
 });
 
-test('Mach 0.5 (617 km/h) is out of reach on the road and earned in the sky with a 4-boost chain off a top-speed launch, once per run', () => {
+test('Mach 0.5 (617 km/h): out of reach on the road; a quick 3-boost chain off a good launch reaches it, 2 level boosts do not, 2 boosts in a committed dive do; once per run', () => {
   assert.ok(Math.abs(C.MACH05 * 3.6 - 617) < 1e-9);
   assert.ok(C.V_MAX < C.MACH05, 'road top speed stays under Mach 0.5');
-  assert.ok(C.M_MAX > C.MACH05, 'sky momentum can exceed it');
-  const chain = (n) => { // launch at the road's top speed (pads kept stacked), then chain n boosts as fast as allowed
-    const s = emptyRoad(30); while (s.phase === 'road') { s.padBoost = 60; S.step(s, {}); }
-    assert.equal(Math.round(s.launchV), C.V_MAX); quiet(s); s.air = n; let used = 0, events = 0;
-    for (let i = 0; i < 120 * 6 && !s.over; i++) { const b = s.boostCd <= 0 && used < n; if (b) used++; S.step(s, { boostEdge: b }); for (const e of s.events) if (e.e === 'mach') events++; s.events.length = 0; }
+  assert.ok(C.M_MAX > C.MACH05 + 15, 'sky momentum can go well past it');
+  // Launch at v (pads held), then chain n boosts as fast as the cooldown allows, hands off the stick.
+  const chain = (v, n, gap = C.BOOST_CD) => {
+    const s = emptyRoad(30); while (s.phase === 'road') { s.padBoost = v - s.vBase; S.step(s, {}); }
+    assert.ok(Math.abs(s.launchV - Math.min(v, C.V_MAX)) < 0.5); quiet(s); s.air = n; let used = 0, events = 0, last = -9;
+    for (let i = 0; i < 120 * 6 && !s.over; i++) { const b = s.boostCd <= 0 && used < n && s.t - last >= gap - 1e-9; if (b) { used++; last = s.t; } S.step(s, { boostEdge: b }); for (const e of s.events) if (e.e === 'mach') events++; s.events.length = 0; }
     return { s, events };
   };
-  const three = chain(3); assert.equal(three.s.counts.mach, 0, 'three boosts are not enough');
-  const four = chain(4); assert.equal(four.s.counts.mach, 1); assert.equal(four.events, 1, 'fires once');
+  for (const v of [C.V_MAX, 100]) assert.equal(chain(v, 3).s.counts.mach, 1, `3-chain off a ${Math.round(v * 3.6)} km/h launch reaches Mach 0.5`);
+  assert.equal(chain(C.V_MAX, 3, 0.55).s.counts.mach, 1, 'a human-speed chain (taps 0.55 s apart) off a top-speed launch still makes it');
+  assert.equal(chain(C.CLEAR_V, 3).s.counts.mach, 0, 'a bare-minimum launch needs a 4th can (or a dive)');
+  assert.equal(chain(C.V_MAX, 2).s.counts.mach, 0, 'two boosts in level flight are not enough');
+  assert.equal(chain(C.V_MAX, 3, C.CHAIN_T + 0.2).s.counts.mach, 0, 'three spaced-out boosts (no chain) are not enough');
+  // Committed dive: at altitude, stick fully forward, and fire 2 boosts once the nose is down (dive boosts kick harder).
+  const dive = (n, push = true) => {
+    const s = launchAt(110, 40); s.z = C.ROAD_LEN + C.CANYON_W + 100; s.y = 120; s.m = 110; s.gam = 0; s.air = n; let used = 0;
+    for (let i = 0; i < 120 * 10 && !s.over && S.agl(s) > 25; i++) { const b = s.boostCd <= 0 && used < n && (!push || s.gam <= C.DIVE_BOOST_GAM); if (b) used++; S.step(s, { pitch: push ? -1 : 0, boostEdge: b }); }
+    return s;
+  };
+  const d2 = dive(2); assert.equal(d2.counts.mach, 1, `2 boosts in a dive: top ${Math.round(d2.maxV * 3.6)} km/h`); assert.equal(d2.counts.diveBoosts, 2);
+  assert.equal(dive(2, false).counts.mach, 0, 'same 2 boosts without the dive fall short');
+  assert.equal(dive(1).counts.mach, 0, 'one boost and a dive is not enough');
+  const four = chain(C.V_MAX, 4); assert.equal(four.s.counts.mach, 1); assert.equal(four.events, 1, 'fires once');
   assert.equal(four.s.pts.mach, C.MACH_BONUS);
   const r = S.score(four.s); assert.equal(r.mach05, 1); assert.ok(r.topKmh >= 617);
   assert.equal(r.total, r.distance + r.pickups + r.tricks + r.landing + r.mach);
   // Determinism holds with the new state.
-  assert.deepEqual(S.score(chain(4).s), S.score(chain(4).s));
+  assert.deepEqual(S.score(chain(C.V_MAX, 4).s), S.score(chain(C.V_MAX, 4).s));
+});
+
+test('AIR cans have no cap: every can you grab is kept (road and sky), and boosts spend them one at a time', () => {
+  assert.equal(C.AIR_MAX, undefined, 'no AIR_MAX');
+  const s = emptyRoad(5);
+  for (let k = 0; k < 12; k++) s.pickups.push({ type: 'air', lane: 0, z: 200 + k * 60, taken: false });
+  while (s.phase === 'road' && !s.over) { s.padBoost = 105 - s.vBase; S.step(s, {}); }
+  assert.equal(s.phase, 'sky'); assert.equal(s.counts.air, 12); assert.equal(s.air, C.AIR_START + 12);
+  quiet(s); s.y = 90; s.gam = 0;
+  s.skyPickups.push = Array.prototype.push; s.skyPickups.push({ type: 'air', x: s.x, y: s.y, z: s.z + 2, taken: false });
+  for (let i = 0; i < 12; i++) S.step(s, {});
+  assert.equal(s.air, C.AIR_START + 13, 'sky cans stack past the old 5-can limit too');
+  let used = 0; for (let i = 0; i < 120 * 6 && !s.over; i++) { const b = s.boostCd <= 0; S.step(s, { boostEdge: b, pitch: 0.2 }); if (b) used++; }
+  assert.ok(s.counts.boosts >= 10 && s.air === C.AIR_START + 13 - s.counts.boosts, `boosts ${s.counts.boosts}, air ${s.air}`);
 });
 
 /* ---------- STABILIZE (cold-gas thrusters) and landing forgiveness ---------- */
