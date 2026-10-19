@@ -341,7 +341,9 @@ function finishRun() {
   r.at = G8.time;
   G8.res = r; G8.screen = 'results';
   window.TokenArcade?.complete({ result: 'completed', primaryMetric: r.days,
-    secondaryMetrics: { peak: r.peak, skips: r.skips, perfects: r.perfects, bestStreak: r.bestStreak, gems: r.gems, elapsedMs: Math.round(run.t * 1000) },
+    secondaryMetrics: { peak: r.peak, skips: r.skips, perfects: r.perfects, bestStreak: r.bestStreak, gems: r.gems, elapsedMs: Math.round(run.t * 1000),
+      ...(!G8.rec ? { earnedGwei: r.earned, missionGwei: r.missionGwei, walletGwei: save.gwei, rocksOwned: save.rocks.length,
+        earningsMultiplier: mult, balanceVersion: run.balanceV2 ? 2 : 1, ...Object.fromEntries(Object.entries(save.up).map(([key, value]) => ['upgrade_' + key, value])) } : {}) },
     ...(G8.rec && G8.rec.angle !== null ? { proof: { v: 1, seed: run.seed, loadout: 'standard-v1', angle: G8.rec.angle, power: G8.rec.power, input: G8.rec.input } } : {}) });
   if (r.done.length) setTimeout(() => Audio8.sfx('mission'), 500);
 }

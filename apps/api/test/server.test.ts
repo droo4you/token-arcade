@@ -16,6 +16,37 @@ const store = new ArcadeStore(":memory:", true);
 const server = createArcadeServer({ store, authSettings: { localDemoMode: true }, staticRoot: "nonexistent-build" });
 let base = "";
 
+test("funded raid administration requires admin and claims require player authentication", async () => {
+  assert.equal((await api("/api/admin/raids/missing/funded/rules")).status, 401);
+  assert.equal((await api("/api/admin/raids/missing/funded/rules", { auth: "player" })).status, 403);
+  assert.equal((await api("/api/raids/missing/claim")).status, 401);
+});
+
+test("Free Play summaries support guests and accounts without awarding competitive progress", async () => {
+  const now = new Date().toISOString();
+  const result = { runId: "summary-guest", gameId: "skip-to-10k", gameVersion: "1.0.0", mode: "free", objective: "distance", primaryMetric: 123,
+    result: "completed", startedAt: now, finishedAt: now, secondaryMetrics: { earnedGwei: 50, rocksOwned: 3 }, proof: { ignored: true } };
+  const body = { guestId: "12345678-1234-1234-1234-123456789012", result };
+  assert.equal((await api("/api/free-play/summaries", { method: "POST", body })).status, 200);
+  assert.equal((await api("/api/free-play/summaries", { method: "POST", body })).status, 200);
+  const player = store.getOrCreatePassport("local-demo:summary-player");
+  const before = JSON.stringify(player);
+  assert.equal((await api("/api/free-play/summaries", { method: "POST", auth: "summary-player", body: { ...body, result: { ...result, runId: "summary-account" } } })).status, 200);
+  assert.equal(JSON.stringify(store.getPassport(player.playerId)), before);
+  assert.equal((await api("/api/admin/free-play/summaries")).status, 401);
+  assert.equal((await api("/api/admin/free-play/summaries", { auth: "summary-player" })).status, 403);
+  const report = await api("/api/admin/free-play/summaries?gameId=skip-to-10k", { auth: "admin" });
+  assert.equal(report.body.summaries.length, 2);
+  assert.equal(report.body.summaries.find((r: any) => r.runId === "summary-account").playerId, player.playerId);
+  assert.equal(report.body.summaries.find((r: any) => r.runId === "summary-guest").playerId, null);
+  assert.equal(report.body.summaries[0].proof, undefined);
+  assert.equal(report.body.summaries[0].verified, false);
+  for (const patch of [{ mode: "ranked" }, { primaryMetric: "oops" }, { secondaryMetrics: { bad: "value" } }, { gameId: "unknown" }]) {
+    const response = await api("/api/free-play/summaries", { method: "POST", body: { ...body, result: { ...result, ...patch } } });
+    assert.ok(response.status >= 400);
+  }
+});
+
 before(async () => {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

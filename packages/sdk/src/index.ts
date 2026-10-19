@@ -119,6 +119,7 @@ export interface GameVerifier {
 }
 
 export interface Raid {
+  funding?: { chainId: 10143; vault: string; chainRaidId: string; rulesHash: string; gameVersion: string; prizeWei: string };
   id: string;
   name: string;
   gameId: string;
