@@ -82,6 +82,7 @@ const SIM = (() => {
       goodKeep: 0.89 + 0.015 * L('rock'),
       perfectKeep: 0.968 + 0.005 * L('rock'),
       window: 0.11 + 0.018 * L('hands'),
+      supportWindow: 0.055 + 0.005 * L('hands'),
       turn: 1.8 + 0.3 * L('aero'),
       liftK: 0.0003 + 0.00022 * L('aero'),
       gas: 8 + 3 * L('aero'),
@@ -170,7 +171,7 @@ const SIM = (() => {
     const s = stats(up);
     const run = {
       seed: seed >>> 0, s, t: 0, balanceV2, gas: s.gas,
-      supportHits: { broke5k: 0, broke10k: 0 }, lastTap: -9,
+      lastTap: -9,
       x: DOCK_X, alt: DOCK_ALT, vx: 0, vy: 0, spin: 0,
       phase: 'aim', // aim -> fly -> sink -> done
       bounces: s.bounces, rc: s.rc, rcT: 0,
@@ -203,7 +204,8 @@ const SIM = (() => {
   function skipOff(run, kind) {
     const s = run.s;
     const impact = Math.atan2(-run.vy, Math.max(1, run.vx)) * 180 / Math.PI;
-    const early = run.t - run.pressT <= s.window;
+    const timingWindow = run.balanceV2 && kind === 'support' ? s.supportWindow : s.window;
+    const early = run.t - run.pressT <= timingWindow;
     let perfect = early || kind === 'frog' || kind === 'farm';
     if (run.vx < SINK && kind !== 'yacht') {
       if (kind === 'support') { run.alt -= 1; emit(run, 'text', 'SUPPORT LOST', '#ff6b6b'); return false; }
@@ -223,13 +225,13 @@ const SIM = (() => {
       run.vx *= s.perfectKeep * entropy(run);
       run.vy = Math.max(85, -run.vy * 0.72);
       run.perfects++; run.streak++; run.bestStreak = Math.max(run.bestStreak, run.streak);
-      if (run.streak % 5 === 0 && !(run.balanceV2 && kind === 'support')) { run.vx += 25; emit(run, 'text', run.streak + 'X STREAK', '#ffe066'); }
+      if (run.streak % 5 === 0) { run.vx += 25; emit(run, 'text', run.streak + 'X STREAK', '#ffe066'); }
       emit(run, 'skip', perfect && kind === 'water' ? 'PERFECT' : null, '#ffe066');
     } else {
       run.vx *= s.goodKeep * entropy(run);
       run.vy = Math.max(60, -run.vy * 0.55);
       run.streak = 0;
-      run.pendingPerfect = s.window; // a late tap still counts
+      run.pendingPerfect = timingWindow; // support uses the same tight window before and after contact
       emit(run, 'skip', null);
     }
     if (kind === 'crab') { run.vy = Math.min(run.vy, 95); emit(run, 'text', 'CHOP', '#ff9f6b'); }
@@ -382,13 +384,6 @@ const SIM = (() => {
           emit(run, 'rejected', 'REJECTED', '#ff6b6b');
         }
       } else if (prevAlt >= line && run.alt < line && run[key] && run.vy < 0) {
-        if (run.balanceV2) {
-          if (run.supportHits[key] >= 3) continue;
-          run.supportHits[key]++;
-          // Liquidity is finite for the whole run, including later recrossings.
-          run.vx *= 1 - run.supportHits[key] * 0.08;
-          emit(run, 'text', run.supportHits[key] === 3 ? label + ' SUPPORT BREAKS' : label + ' SUPPORT ' + (3 - run.supportHits[key]) + '/3', '#ffcf70');
-        }
         run.alt = line; skipOff(run, 'support');
       }
     }

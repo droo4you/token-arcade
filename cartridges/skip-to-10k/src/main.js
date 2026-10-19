@@ -685,7 +685,7 @@ function drawHUD() {
     drawText(ctx, 'GAS ' + Math.ceil(run.gas) + '/' + run.s.gas, 6, 24, run.gas > 0 ? '#7be08a' : '#ff6b6b');
     px(ctx, '#322443', 6, 34, 64, 4);
     px(ctx, '#7be08a', 6, 34, 64 * run.gas / run.s.gas, 4);
-    drawText(ctx, '5K ' + (3 - run.supportHits.broke5k) + '/3  10K ' + (3 - run.supportHits.broke10k) + '/3', 6, 41, '#ffcf70');
+    drawText(ctx, 'SUPPORT: TIME YOUR TAPS', 6, 41, '#ffcf70');
   }
   if (G8.screen === 'fly') {
     drawText(ctx, 'II', W - 16, 7, '#fff');
