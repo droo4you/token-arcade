@@ -27,8 +27,8 @@ export function saguaro(c, seed = 1, scale = 1, lod = 1) { // lod 0 = cheap road
   const g = merge(parts); if (scale !== 1) g.scale(scale, scale, scale); return g;
 }
 /* Sandstone boulder: noise-displaced icosahedron, flat shaded, banded. Radius ≈ 1.25. */
-export function sandstone(c, seed = 3, rad = 1.25, flat = 0.72) {
-  const g = new THREE.IcosahedronGeometry(1, 2), p = g.attributes.position, base = new THREE.Color(c), tmp = new THREE.Color();
+export function sandstone(c, seed = 3, rad = 1.25, flat = 0.72, detail = 2) { // detail 1 = roadside scenery (80 vs 320 tris)
+  const g = new THREE.IcosahedronGeometry(1, detail), p = g.attributes.position, base = new THREE.Color(c), tmp = new THREE.Color();
   const r = rng(seed), ox = r() * 50, oy = r() * 50, colors = new Float32Array(p.count * 3);
   for (let i = 0; i < p.count; i++) {
     const v = new THREE.Vector3().fromBufferAttribute(p, i); const n = 0.78 + 0.42 * noise2(v.x * 1.7 + ox, v.y * 1.7 + v.z * 1.3 + oy);
@@ -86,9 +86,9 @@ export function padTexture() {
   const t = new THREE.CanvasTexture(cv); t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 /* Roadside scenery */
-export function scrub(seed = 2) {
+export function scrub(seed = 2, n = 6) {
   const r = rng(seed), parts = [];
-  for (let i = 0; i < 6; i++) parts.push(tint(xf(new THREE.IcosahedronGeometry(0.35 + r() * 0.3, 0), { x: (r() - 0.5) * 0.9, y: 0.2 + r() * 0.2, z: (r() - 0.5) * 0.9, sy: 0.7 }), r() < 0.5 ? '#8b7b46' : '#6f6a3a', 0.25, seed + i));
+  for (let i = 0; i < n; i++) parts.push(tint(xf(new THREE.IcosahedronGeometry(0.35 + r() * 0.3, 0), { x: (r() - 0.5) * 0.9, y: 0.2 + r() * 0.2, z: (r() - 0.5) * 0.9, sy: 0.7 }), r() < 0.5 ? '#8b7b46' : '#6f6a3a', 0.25, seed + i));
   return merge(parts);
 }
 export function pole(c, h = 9) {

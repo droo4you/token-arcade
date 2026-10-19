@@ -63,7 +63,7 @@ export function terrainHeight(level, x, z) {
 }
 
 function groundPatch(level, z0, z1, mat) {
-  const size = level.terrain.size, segX = 150, segZ = Math.max(24, Math.round((z1 - z0) / 24));
+  const size = level.terrain.size, segX = 110, segZ = Math.max(24, Math.round((z1 - z0) / 24));
   const g = new THREE.PlaneGeometry(size, z1 - z0, segX, segZ); g.rotateX(-Math.PI / 2);
   const p = g.attributes.position, cols = new Float32Array(p.count * 3), pal = level.palette;
   const sand = new THREE.Color(pal.sand), dark = new THREE.Color(pal.sandDark), light = new THREE.Color(pal.sandLight), sh = new THREE.Color(pal.shoulder), c = new THREE.Color();
@@ -78,7 +78,7 @@ function groundPatch(level, z0, z1, mat) {
     cols.set([c.r, c.g, c.b], i * 3);
   }
   g.setAttribute('color', new THREE.BufferAttribute(cols, 3)); g.computeVertexNormals();
-  const m = new THREE.Mesh(g, mat); m.receiveShadow = true; return m;
+  const m = new THREE.Mesh(g, mat); m.receiveShadow = true; m.userData.tag = 'ground'; return m;
 }
 
 function roadTexture(level) {
@@ -179,26 +179,35 @@ export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
   const roadFar = new THREE.Mesh(new THREE.PlaneGeometry(14, farLen), new THREE.MeshStandardMaterial({ map: farTex, roughness: 0.82, bumpMap: farTex, bumpScale: 0.6 }));
   roadFar.rotation.x = -Math.PI / 2; roadFar.position.set(0, 0.015, -(C.ROAD_LEN + C.CANYON_W + farLen / 2)); roadFar.receiveShadow = true; scene.add(roadFar);
   const gorge = buildCanyon(level, S, terrainHeight); scene.add(gorge.group);
+  const gorgeProps = []; gorge.group.traverse(o => { if (o.userData.tag === 'canyonProps') gorgeProps.push(o); });
   const mesaMesh = new THREE.Mesh(mesas(level, C), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }));
   scene.add(mesaMesh);
 
   // roadside scatter (instanced): cacti, boulders, scrub; keeps clear of the lanes and the gorge
   const sc2 = level.terrain.scatter, r = rng(sc2.seed), pal = level.palette, gap = [C.ROAD_LEN - 10, C.ROAD_LEN + C.CANYON_W + 10];
   const place = (n, minX, spread, zMin, zMax) => { const out = []; let guard = 0; while (out.length < n && guard++ < n * 5) { const side = r() < 0.5 ? -1 : 1, x = side * (minX + Math.pow(r(), 1.6) * spread), z = zMin + r() * (zMax - zMin); if (z > gap[0] && z < gap[1]) continue; out.push([x, z]); } return out; };
-  const inst = (geo, mat, pts, sFn, cast) => {
-    const m = new THREE.InstancedMesh(geo, mat, pts.length), o = new THREE.Object3D();
-    pts.forEach(([x, z], i) => { o.position.set(x, terrainHeight(level, x, z) - 0.05, -z); o.rotation.set(0, r() * TAU, 0); o.scale.setScalar(sFn()); o.updateMatrix(); m.setMatrixAt(i, o.matrix); });
-    m.castShadow = !!cast; m.receiveShadow = true; scene.add(m); return m;
+  // Scatter is split into z-chunks (one InstancedMesh each, with a real bounding sphere) so three.js frustum-culls
+  // them, the shadow pass only draws the chunk(s) inside the ±34 m sun frustum, and setDrawDistance() can drop far chunks.
+  const CHUNK = 240, chunks = [];
+  const inst = (geo, mat, pts, sFn, cast, tag) => {
+    const o = new THREE.Object3D(), mats = pts.map(([x, z]) => { o.position.set(x, terrainHeight(level, x, z) - 0.05, -z); o.rotation.set(0, r() * TAU, 0); o.scale.setScalar(sFn()); o.updateMatrix(); return [z, o.matrix.clone()]; });
+    const by = new Map(); for (const [z, m] of mats) { const k = Math.floor(z / CHUNK); if (!by.has(k)) by.set(k, []); by.get(k).push(m); }
+    for (const [k, list] of by) {
+      const m = new THREE.InstancedMesh(geo, mat, list.length); list.forEach((mx, i) => m.setMatrixAt(i, mx));
+      m.computeBoundingSphere(); m.castShadow = !!cast; m.receiveShadow = true; m.userData.tag = tag; m.userData.z0 = k * CHUNK; m.userData.z1 = (k + 1) * CHUNK;
+      scene.add(m); chunks.push(m);
+    }
   };
   const vc = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
   const vcFlat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
-  inst(P.saguaro(pal.cactus, 21, 1, 0), vc, place(sc2.cactus, sc2.minX + 2, sc2.spread, -300, C.ROAD_LEN + C.CANYON_W + 2500), () => 0.8 + r() * 0.7, true);
-  inst(P.sandstone(pal.rock, 31, 1.6), vcFlat, place(sc2.rock, sc2.minX + 3, sc2.spread, -300, C.ROAD_LEN + C.CANYON_W + 2500), () => 0.6 + r() * 2.2, false);
-  inst(P.scrub(7), vcFlat, place(sc2.scrub, sc2.minX - 1, sc2.spread * 0.6, -300, C.ROAD_LEN + C.CANYON_W + 2500), () => 0.7 + r() * 0.9, false);
+  const zEnd = C.ROAD_LEN + C.CANYON_W + 2500;
+  inst(P.saguaro(pal.cactus, 21, 1, 0), vc, place(sc2.cactus, sc2.minX + 2, sc2.spread, -300, zEnd), () => 0.8 + r() * 0.7, true, 'scatter');
+  inst(P.sandstone(pal.rock, 31, 1.6, 0.72, 1), vcFlat, place(sc2.rock, sc2.minX + 3, sc2.spread, -300, zEnd), () => 0.6 + r() * 2.2, false, 'scatter');
+  inst(P.scrub(7, 4), vcFlat, place(sc2.scrub, sc2.minX - 1, sc2.spread * 0.6, -300, zEnd), () => 0.7 + r() * 0.9, false, 'scatter');
   // telephone poles + sagging wires
   const PL = level.terrain.poles, polePts = []; for (let z = -200; z < C.ROAD_LEN - 30; z += PL.spacing) polePts.push([PL.side * PL.offset, z]);
   for (let z = C.ROAD_LEN + C.CANYON_W + 40; z < C.ROAD_LEN + C.CANYON_W + 2400; z += PL.spacing) polePts.push([PL.side * PL.offset, z]);
-  const poleM = new THREE.InstancedMesh(P.pole(pal.pole, PL.height), vc, polePts.length), o = new THREE.Object3D();
+  const poleM = new THREE.InstancedMesh(P.pole(pal.pole, PL.height), vc, polePts.length), o = new THREE.Object3D(); poleM.userData.tag = 'poles';
   polePts.forEach(([x, z], i) => { o.position.set(x, 0, -z); o.rotation.set(0, 0, 0); o.scale.setScalar(1); o.updateMatrix(); poleM.setMatrixAt(i, o.matrix); });
   poleM.castShadow = true; scene.add(poleM);
   const wire = []; for (let i = 0; i < polePts.length - 1; i++) { const [x, z0] = polePts[i], z1 = polePts[i + 1][1]; if (z1 - z0 > PL.spacing + 1) continue; for (const wx of [-1, 1]) for (let k = 0; k < 8; k++) { const a = k / 8, b = (k + 1) / 8, sag = q => Math.sin(q * Math.PI) * 1.1; wire.push(x + wx, PL.height - 0.4 - sag(a), -(z0 + (z1 - z0) * a), x + wx, PL.height - 0.4 - sag(b), -(z0 + (z1 - z0) * b)); } }
@@ -217,5 +226,9 @@ export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
     for (const sx of [-1.8, 1.8]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 4.2, 0.14), new THREE.MeshStandardMaterial({ color: '#8d8a86', metalness: 0.6, roughness: 0.4 })); post.position.set(sx, 2.1, -0.05); post.castShadow = true; grp.add(post); }
     grp.position.set(-10.5, 0, -sg.at); grp.rotation.y = 0.12; scene.add(grp);
   }
-  return { scene, sky, sun, sunDir, hemi, envRT, roadMat, groundMat, update: t => gorge.update(t) };
+  // Far scenery culling (render-only): chunks more than `dist` m ahead of / 140 m behind the camera are hidden.
+  let drawDist = 1e9;
+  const cull = camZ => { for (const m of chunks) m.visible = m.userData.z1 > camZ - 140 && m.userData.z0 < camZ + drawDist;
+    for (const m of gorgeProps) m.visible = camZ > C.ROAD_LEN - drawDist * 0.6 && camZ < C.ROAD_LEN + C.CANYON_W + 400; }; // river boulders / scrub only near the gorge
+  return { scene, sky, sun, sunDir, hemi, envRT, roadMat, groundMat, chunks, setDrawDistance(d) { drawDist = d; }, update: (t, camZ) => { gorge.update(t); if (camZ != null) cull(camZ); } };
 }

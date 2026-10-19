@@ -107,12 +107,12 @@ function floorAndRiver(level, S, group, seed) {
   const bould = new THREE.InstancedMesh(P.sandstone(level.palette.rock, 41, 1.5), vcFlat, 100);
   for (let i = 0; i < 100; i++) { const x = (r() * 2 - 1) * 1200, side = r() < 0.5 ? -1 : 1, z = mid + meander(x) + side * (rw * 0.5 + 6 + r() * 70);
     o.position.set(x, -D - 0.3, -z); o.rotation.set(0, r() * TAU, 0); o.scale.setScalar(0.6 + r() * 3); o.updateMatrix(); bould.setMatrixAt(i, o.matrix); }
-  bould.receiveShadow = true; group.add(bould);
+  bould.receiveShadow = true; bould.userData.tag = 'canyonProps'; group.add(bould);
   const scrubMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true, color: '#9fd27a' });
   const bush = new THREE.InstancedMesh(P.scrub(13), scrubMat, 130);
   for (let i = 0; i < 130; i++) { const x = (r() * 2 - 1) * 1300, side = r() < 0.5 ? -1 : 1, z = mid + meander(x) + side * (rw * 0.5 + 1 + r() * 9);
     o.position.set(x, -D - 0.2, -z); o.rotation.set(0, r() * TAU, 0); o.scale.setScalar(1 + r() * 1.8); o.updateMatrix(); bush.setMatrixAt(i, o.matrix); }
-  group.add(bush);
+  bush.userData.tag = 'canyonProps'; group.add(bush);
   const spireParts = [];
   for (let i = 0; i < 9; i++) {
     const side = r() < 0.5 ? -1 : 1, x = side * (90 + r() * 700), z = mid + (r() - 0.5) * 120, h = 45 + r() * 50, rad = 6 + r() * 9;
