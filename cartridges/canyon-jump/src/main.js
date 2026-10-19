@@ -31,7 +31,7 @@
   if (safeProbe.style) safeProbe.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
   document.body?.appendChild?.(safeProbe);
   function resize() {
-    const cw = innerWidth, ch = innerHeight; dpr = Math.min(G.q ? 2 : 1.25, devicePixelRatio || 1);
+    const cw = innerWidth, ch = innerHeight; dpr = Math.min(G.q || glCanvas ? 2 : 1.25, devicePixelRatio || 1);
     G.portrait = ch > cw * 1.05;
     // Portrait fills the screen with a taller logical canvas instead of letterboxing a landscape one.
     if (G.portrait) { W = 432; H = Math.round(Math.min(1000, W * ch / cw)); }
@@ -39,6 +39,8 @@
     const scale = Math.min(cw / W, ch / H);
     canvas.style.width = Math.round(W * scale) + 'px'; canvas.style.height = Math.round(H * scale) + 'px';
     if (glCanvas && glCanvas.style) { glCanvas.style.width = canvas.style.width; glCanvas.style.height = canvas.style.height; }
+    // HUD backing store is capped at ~3.7 MP (2560x1440): a 4K / Retina window would otherwise clear and redraw 8+ MP of 2D canvas every frame.
+    dpr = Math.min(dpr, Math.sqrt(3.7e6 / Math.max(1, W * scale * H * scale)));
     canvas.width = Math.round(W * scale * dpr); canvas.height = Math.round(H * scale * dpr);
     G.pxScale = scale * dpr;
     G.vh = Math.min(H, W * (G.portrait ? 0.85 : 0.62)); G.fb = G.vh * 1.1; // view band + focal base: keeps framing sane in portrait
@@ -280,7 +282,7 @@
     // Wheel spin, suspension bob and the auto quality fallback (visual only; never touches the sim).
     const wheelV = s.phase === 'road' ? s.v : (G.wheelV || 0) * Math.exp(-dt * 0.8); G.wheelV = wheelV; G.spin = (G.spin || 0) + wheelV * dt * 1.6;
     G.bob = s.phase === 'road' ? Math.sin(G.t * 17) * 0.018 * Math.min(1, s.v / 60) + (Math.random() - 0.5) * 0.012 * Math.min(1, s.v / 80) : s.phase === 'sky' ? Math.sin(G.t * 2.2) * 0.04 : 0;
-    if (G.screen === 'play' && !G.paused && !FORCE_Q) { G.fpsAcc = (G.fpsAcc || 0) + dt; G.fpsN = (G.fpsN || 0) + 1;
+    if (G.screen === 'play' && !G.paused && !FORCE_Q && !R3()) { // 2D renderer only: the 3D one has its own governor G.fpsAcc = (G.fpsAcc || 0) + dt; G.fpsN = (G.fpsN || 0) + 1;
       if (G.fpsAcc > 2.5) { const avg = G.fpsAcc / G.fpsN; if (G.q && avg > 1 / 48) { G.q = 0; resize(); } G.fpsAcc = 0; G.fpsN = 0; } }
     G.airPulse = Math.max(0, (G.airPulse || 0) - dt * 3); G.stabFx = Math.max(0, (G.stabFx || 0) - dt * 2.5); G.comboPulse = Math.max(0, (G.comboPulse || 0) - dt * 3); G.camKick = Math.max(0, (G.camKick || 0) - dt * 4); G.trickKick = Math.max(0, (G.trickKick || 0) - dt * 3);
     G.machT = Math.max(0, (G.machT || 0) - dt * 0.9); G.shake *= Math.exp(-dt * 7); G.fovKick = Math.max(0, G.fovKick - dt * 2.2); G.flash = Math.max(0, G.flash - dt * 2); G.boostT = Math.max(0, G.boostT - dt);
@@ -341,13 +343,30 @@
     ctx.restore();
     // vignette + flash
     const vr = Math.max(W, H);
-    if (!(r3 && G.q)) { // the 3D post chain has its own vignette
+    if (!(r3 && r3.post)) { // the 3D post chain has its own vignette
     const vg = ctx.createRadialGradient(W / 2, H / 2, vr * 0.3, W / 2, H / 2, vr * 0.75);
     vg.addColorStop(0, 'rgba(20,0,30,0)'); vg.addColorStop(1, 'rgba(20,0,30,0.5)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); }
     if (G.flash > 0) { ctx.globalAlpha = G.flash * 0.6; ctx.fillStyle = G.flashColor; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
     if (G.screen === 'title') drawTitle();
     else { drawHud(s); if (G.screen === 'end') drawEnd(); }
     if (G.paused) drawPause();
+    if (DEBUG) drawDebug(r3);
+  }
+  /* ?debug=1: FPS / quality-level overlay (bottom left). */
+  const DEBUG = params.get('debug') === '1';
+  function drawDebug(r3) {
+    const st = r3 && r3.stats, now = performance.now();
+    G.dbgN = (G.dbgN || 0) + 1; if (!G.dbgT) G.dbgT = now; if (now - G.dbgT > 500) { G.dbgFps = G.dbgN * 1000 / (now - G.dbgT); G.dbgN = 0; G.dbgT = now; }
+    const lines = st ? [
+      `${(G.dbgFps || 0).toFixed(0)} fps  ${st.frameMs.toFixed(1)} ms  ${st.fixed ? '(pinned)' : 'auto'}`,
+      `${st.level}  ${st.buf} = ${st.mpx.toFixed(2)} MP  pr ${st.pr.toFixed(2)}  post ${r3.post ? 'on' : 'off'}`,
+      `${st.calls} calls  ${(st.tris / 1000).toFixed(0)}k tris  ${st.particles || 0} particles`,
+      `start ${st.start.why}: ${String(st.start.gpu).slice(0, 48)}`,
+      ...st.log.slice(-3),
+    ] : [`${(G.dbgFps || 0).toFixed(0)} fps  2D renderer${window.CJRender3D && window.CJRender3D.why ? ': ' + window.CJRender3D.why : ''}`, `HUD ${canvas.width}x${canvas.height}`];
+    const w = 360, h = 12 + lines.length * 15, x = 12 + G.safe.l, y = 72 + G.safe.t; // under the score chip
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(x, y, w, h);
+    lines.forEach((ln, i) => text(ln, x + 8, y + 13 + i * 15, 11, i ? '#cfe' : '#7f7', 'left', false, 700));
   }
   // Sonic-boom vapor cone: a bright condensation disc that blooms around the car, then expanding shock rings.
   function vaporCone(cs, a) {

@@ -1,8 +1,13 @@
 /* Canyon Jump 3D renderer (three.js / WebGL). A pure view of sim state: main.js keeps the sim, input,
    HUD, audio and arcade bridge, and calls CJRender3D.render() once per frame with the same state the
    2D renderer used. Loaded as an ES module; publishes window.CJRender3D = { ready | failed }.
-   Quality tiers: q=1 full (pixel ratio <= 1.75, 2k shadows, MSAA, bloom, vignette/grade);
-   q=0 mid-phone (pixel ratio <= 1, no shadow map, no post: direct render + blob shadow). */
+   Quality: a ladder of levels (LEVELS below) picked by an adaptive governor that watches real frame times and steps
+   down (render scale -> bloom -> shadows -> MSAA/post -> clouds/particles -> draw distance) under ~50 fps, and back
+   up when there is sustained headroom. The drawing buffer is always capped (pixel ratio <= 1.5 and ~2.1 MP), so a
+   Retina / 4K window never renders 6+ MP. Render-only: the sim never sees any of this.
+   ?q=1 pins the top level, ?q=0 the old mid-phone look (no shadows / post, 1x); ?ql=N pins level N; ?debug=1 shows
+   an FPS / level overlay (drawn by main.js from CJRender3D.stats). If WebGL2, a shader or the context fails, or the
+   lowest level still can't hold ~20 fps, CJRender3D flips to { failed } and main.js falls back to the 2D renderer. */
 import * as THREE from '../vendor/three/three.module.min.js';
 import { EffectComposer } from '../vendor/three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/three/addons/postprocessing/RenderPass.js';
@@ -18,16 +23,50 @@ import { clamp, damp, lerp, smooth, rng } from './3d/util.js';
 const S = window.CJSim, C = S.C, LV = window.CJLevels;
 const params = new URLSearchParams(location.search);
 
-function fail(why) { window.CJRender3D = { failed: true, why }; console.warn('[canyon-jump] 3D renderer unavailable, using 2D:', why); }
+function fail(why) {
+  window.CJRender3D = { failed: true, why }; console.warn('[canyon-jump] 3D renderer unavailable, using 2D:', why);
+  const c = document.getElementById('gl'); if (c && c.style) c.style.display = 'none';
+}
+
+/* Quality ladder, cheapest first. px = drawing-buffer pixel budget, pr = max pixel ratio, msaa = samples (post only),
+   post = composer (grade/vignette + MSAA), shadow = sun shadow map size (0 = blob only), clouds/fx = fraction of cloud
+   puffs / particle emission, dist = roadside scenery draw distance (m). */
+export const LEVELS = [
+  { name: 'L0 min', px: 0.5e6, pr: 1, msaa: 0, bloom: 0, post: 0, shadow: 0, clouds: 0.3, fx: 0.4, dist: 800 },
+  { name: 'L1 low', px: 0.9e6, pr: 1, msaa: 0, bloom: 0, post: 0, shadow: 0, clouds: 0.45, fx: 0.5, dist: 1100 },
+  { name: 'L2 mid', px: 1.0e6, pr: 1.5, msaa: 4, bloom: 0, post: 1, shadow: 1024, clouds: 0.6, fx: 0.8, dist: 1400 },
+  { name: 'L3 high-', px: 1.0e6, pr: 1.5, msaa: 4, bloom: 1, post: 1, shadow: 2048, clouds: 0.75, fx: 1, dist: 1700 },
+  { name: 'L4 high', px: 1.45e6, pr: 1.5, msaa: 4, bloom: 1, post: 1, shadow: 2048, clouds: 0.85, fx: 1, dist: 1700 },
+  { name: 'L5 full', px: 2.1e6, pr: 1.5, msaa: 4, bloom: 1, post: 1, shadow: 2048, clouds: 1, fx: 1, dist: 1700 },
+];
+const TOP = LEVELS.length - 1;
+/* Starting level from GPU / device hints (the governor corrects it within a few seconds either way). */
+function startLevel(renderer) {
+  let gpu = '';
+  try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); } catch (e) { /* hidden */ }
+  const g = gpu.toLowerCase(), touch = (navigator.maxTouchPoints || 0) > 0 && Math.min(screen.width, screen.height) < 900;
+  let lv = 3, why = 'default';
+  if (/swiftshader|llvmpipe|software|softpipe|microsoft basic/.test(g)) { lv = 0; why = 'software GL'; }
+  else if (touch) { lv = 3; why = 'phone/tablet'; }
+  else if (/nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|amd radeon\(tm\) rx|arc a/.test(g)) { lv = TOP; why = 'discrete GPU'; }
+  else if (/apple m\d|apple gpu|apple/.test(g)) { lv = 4; why = 'Apple GPU'; }
+  else if (/intel|iris|uhd|hd graphics|mali|adreno|powervr|radeon/.test(g)) { lv = 2; why = 'integrated GPU'; }
+  return { lv, why, gpu };
+}
 
 function init() {
   const canvas = document.getElementById('gl');
   if (!canvas) return fail('no #gl canvas');
   let renderer;
   try {
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, alpha: false });
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, alpha: false, failIfMajorPerformanceCaveat: params.get('ql') == null && params.get('q') == null });
   } catch (e) { return fail(String(e && e.message || e)); }
   if (!renderer.capabilities.isWebGL2) return fail('WebGL2 required');
+  // Half-float render targets (bloom / MSAA composer) need a renderable float format; without one, post is skipped.
+  const floatRT = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
+  let dead = null; // set when the context is lost or a shader fails: main.js then draws the 2D world
+  renderer.debug.onShaderError = (gl, program, vs, fs) => { dead = 'shader compile/link failed'; try { console.error('[canyon-jump] shader error', gl.getProgramInfoLog(program), gl.getShaderInfoLog(vs), gl.getShaderInfoLog(fs)); } catch (e) { /* ignore */ } };
+  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); dead = 'WebGL context lost'; }, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.info.autoReset = false;
@@ -159,24 +198,75 @@ function init() {
         gl_FragColor = vec4(c, 1.0);
       }`,
   };
-  let composer = null, bloom = null, grade = null, tier = -1, prCap = 1;
-  function buildComposer(w, h, pr) {
-    const rt = new THREE.WebGLRenderTarget(w * pr, h * pr, { type: THREE.HalfFloatType, samples: 4 });
+  let composer = null, bloom = null, grade = null, tier = -1, prNow = 1;
+  function buildComposer(w, h, pr, L) {
+    const rt = new THREE.WebGLRenderTarget(Math.round(w * pr), Math.round(h * pr), { type: THREE.HalfFloatType, samples: L.msaa });
     composer = new EffectComposer(renderer, rt); composer.setPixelRatio(pr); composer.setSize(w, h);
     composer.addPass(new RenderPass(scene, camera));
-    bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.55, 1.0); composer.addPass(bloom);
+    bloom = L.bloom ? new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.55, 1.0) : null; if (bloom) composer.addPass(bloom);
     grade = new ShaderPass(GradeShader); composer.addPass(grade);
     composer.addPass(new OutputPass());
   }
-  function applyTier(q, w, h) {
-    tier = q; prCap = q ? 1.75 : 1;
-    const pr = Math.min(window.devicePixelRatio || 1, prCap);
-    renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
-    sun.castShadow = !!q; renderer.shadowMap.enabled = !!q;
-    scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
-    if (composer) { composer.renderTarget1.dispose(); composer.renderTarget2.dispose(); composer = null; }
-    if (q) buildComposer(w, h, pr);
+  function disposeComposer() {
+    if (!composer) return;
+    composer.renderTarget1.dispose(); composer.renderTarget2.dispose();
+    for (const p of composer.passes) p.dispose?.();
+    composer = null; bloom = null; grade = null;
   }
+  const cloudTotal = clouds.mesh.geometry.instanceCount;
+  let shadowOn = null, shadowSize = 0;
+  function applyLevel(lv, w, h) {
+    const L = LEVELS[lv], prevTier = tier; tier = lv;
+    // Drawing-buffer cap: pixel ratio <= L.pr and total pixels <= L.px, whatever the window size or devicePixelRatio.
+    const pr = Math.max(0.35, Math.min(window.devicePixelRatio || 1, L.pr, Math.sqrt(L.px / Math.max(1, w * h))));
+    prNow = pr; renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
+    const sh = L.shadow > 0;
+    if (sh !== shadowOn) { // toggling shadows recompiles the lit materials: only do it when it actually changes
+      shadowOn = sh; sun.castShadow = sh; renderer.shadowMap.enabled = sh;
+      scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
+    }
+    if (sh && L.shadow !== shadowSize) { shadowSize = L.shadow; sun.shadow.mapSize.set(L.shadow, L.shadow); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+    disposeComposer();
+    if (L.post && floatRT) buildComposer(w, h, pr, L);
+    clouds.mesh.geometry.instanceCount = Math.max(1, Math.round(cloudTotal * L.clouds));
+    world.setDrawDistance(L.dist);
+    stats.level = L.name; stats.pr = pr; stats.buf = `${renderer.domElement.width}x${renderer.domElement.height}`; stats.mpx = renderer.domElement.width * renderer.domElement.height / 1e6;
+    if (prevTier !== lv) stats.log.push(`${(performance.now() / 1000).toFixed(1)}s ${prevTier < 0 ? 'start' : prevTier > lv ? 'down' : 'up'} -> ${L.name} (${stats.buf})`);
+    if (stats.log.length > 8) stats.log.shift();
+  }
+
+  /* ---------- adaptive quality governor (render-only) ----------
+     Frame times come from the render loop's own clock. After a level change it waits 1.2 s (shader compiles, resized
+     targets), then judges 1.5 s windows by a trimmed mean (slowest 5% of frames dropped, so one hitch isn't a verdict).
+     < 50 fps: step down (two steps under 32 fps), and that level becomes the ceiling. >= 58 fps for 8 s straight: step
+     up one, never above the ceiling. Two steps in a row that buy nothing (e.g. a 30 Hz low-power cap or a CPU-bound
+     machine) are undone and the governor stops. Still under 20 fps at the bottom for two windows: 2D fallback. */
+  const sl = startLevel(renderer);
+  const qp = params.get('q'), qlp = params.get('ql');
+  const fixedLv = qlp != null && qlp !== '' && isFinite(+qlp) ? clamp(Math.round(+qlp), 0, TOP) : qp != null ? (+qp ? TOP : 1) : null;
+  const qsp = params.get('qs'); // testing: governed, but start at level N
+  if (qsp != null && isFinite(+qsp)) { sl.lv = clamp(Math.round(+qsp), 0, TOP); sl.why = '?qs'; }
+  const gov = { lv: fixedLv ?? sl.lv, fixed: fixedLv != null, ceil: TOP, settle: 1.2, buf: [], acc: 0, good: 0, long: 0, noGain: 0, lastFps: 0, lastDir: 0, slowBottom: 0, stopped: false, fps: 0 };
+  function govern(ms) {
+    if (gov.fixed || ms <= 0) return;
+    // A lone long frame (tab switch, shader compile) is not a sample; three in a row means the machine really is that slow.
+    if (ms > 250) { if (++gov.long < 3) return; ms = Math.min(ms, 1000); } else gov.long = 0;
+    if (gov.settle > 0) { gov.settle -= ms / 1000; return; }
+    gov.buf.push(ms); gov.acc += ms; if (gov.acc < 1500) return;
+    const sorted = gov.buf.slice().sort((x, y) => x - y), keep = sorted.slice(0, Math.max(1, Math.floor(sorted.length * 0.95)));
+    const fps = 1000 / (keep.reduce((x, y) => x + y, 0) / keep.length); gov.fps = fps; gov.buf.length = 0; gov.acc = 0;
+    if (gov.lastDir < 0) { // did the last step down help?
+      if (fps < gov.lastFps * 1.06) gov.noGain++; else gov.noGain = 0;
+      if (gov.noGain >= 2 && !gov.stopped && fps >= 25) { gov.stopped = true; set(Math.min(gov.ceil, gov.lv + 2), 0); stats.log.push('no gain from lower levels: holding'); return; }
+    }
+    gov.lastDir = 0; gov.lastFps = fps;
+    if (gov.lv === 0 && fps < 20) { if (++gov.slowBottom >= 2) dead = `under 20 fps at the lowest 3D level (${fps.toFixed(0)} fps)`; } else gov.slowBottom = 0;
+    if (gov.stopped) return;
+    if (fps < 50 && gov.lv > 0) { gov.ceil = Math.min(gov.ceil, gov.lv - 1); set(Math.max(0, gov.lv - (fps < 32 ? 2 : 1)), -1); gov.good = 0; }
+    else if (fps >= 58) { gov.good += 1.5; if (gov.good >= 8 && gov.lv < gov.ceil) { set(gov.lv + 1, 1); gov.good = 0; } }
+    else gov.good = 0;
+  }
+  function set(lv, dir) { gov.lv = lv; gov.lastDir = dir; gov.settle = 1.2; gov.buf.length = 0; gov.acc = 0; }
 
   /* ---------- camera ---------- */
   const cam = { x: 0, y: 2.4, offZ: -7, fov: 60, lookY: 1, init: false, frozenZ: null, lastPhase: '' };
@@ -233,13 +323,17 @@ function init() {
   let carPrev = null; const carVel = { x: 0, y: 0, z: 0 };
   let lastT = null, cssW = 0, cssH = 0, emitAcc = 0, prevPhase = '';
   const proj = new THREE.Vector3();
-  const stats = { frames: 0, cpuMs: 0, calls: 0, tris: 0, tier: 1 };
+  const stats = { frames: 0, cpuMs: 0, calls: 0, tris: 0, tier: 1, level: '', pr: 1, buf: '', mpx: 0, fps: 0, frameMs: 0, log: [], start: sl, fixed: gov.fixed, floatRT };
+  let lastWall = 0, emaMs = 16.7;
   function render(s, view, G, W, H) {
+    if (dead) { api.ready = false; fail(dead); return null; }
     const t0 = performance.now(); renderer.info.reset();
+    if (lastWall) { const ms = t0 - lastWall; govern(ms); emaMs += (Math.min(ms, 1000) - emaMs) * 0.05; } lastWall = t0;
+    stats.frameMs = emaMs; stats.fps = 1000 / emaMs; stats.gov = gov.fps ? Math.round(gov.fps) : null;
     const t = G.t, dt = lastT == null ? 1 / 60 : clamp(t - lastT, 0, 0.1); lastT = t;
     const cw = canvas.clientWidth || W, ch = canvas.clientHeight || H;
-    const q = G.q ? 1 : 0;
-    if (cw !== cssW || ch !== cssH || q !== tier) { cssW = cw; cssH = ch; applyTier(q, cw, ch); }
+    if (cw !== cssW || ch !== cssH || gov.lv !== tier) { cssW = cw; cssH = ch; applyLevel(gov.lv, cw, ch); }
+    const L = LEVELS[tier], q = L.post ? 1 : 0; G.q = tier >= 2 ? 1 : 0; api.post = !!composer;
     // car
     const onGround = s.phase === 'road' || (s.over && s.reason === 'road') || (s.over && s.reason === 'landed');
     car.group.position.set(s.x, (s.y || 0) + (onGround ? (view.bob || 0) : 0), -s.z);
@@ -261,16 +355,16 @@ function init() {
     updateCamera(s, view, G, dt, W, H);
     if (api.debugCam) { const d = api.debugCam; camera.position.set(s.x + d.p[0], (s.y || 0) + d.p[1], -(s.z + d.p[2])); camera.lookAt(s.x + d.l[0], (s.y || 0) + d.l[1], -(s.z + d.l[2])); if (d.fov) { camera.fov = d.fov; camera.updateProjectionMatrix(); } }
     sky.position.copy(camera.position);
-    updateDynamic(s, t); world.update(t);
+    updateDynamic(s, t); world.update(t, -camera.position.z);
     // dust: rear-wheel spray on the road, faster = more
     if (s.phase === 'road' && !s.over && G.screen !== 'end') {
-      emitAcc += dt * (6 + s.v * 0.5) * (q ? 1 : 0.5);
+      emitAcc += dt * (6 + s.v * 0.5) * L.fx;
       while (emitAcc > 1) { emitAcc -= 1; const sx = Math.random() < 0.5 ? -0.85 : 0.85;
         fx.emit({ x: s.x + sx, y: 0.1, z: -(s.z - 1.3), vx: sx * 1.4 + (s.bank || 0) * -4, vy: 0.5, vz: 1 + s.v * 0.08, jitter: 1.4, jitterY: 0.8, life: 0.7, s0: 0.2, s1: 1.1, color: pal.sandLight, alpha: 0.2, drag: 1.6, grav: -0.15 }); }
       if (G.boostT > 0.05) fx.emit({ x: s.x + (Math.random() - 0.5) * 1.5, y: 0.7, z: -(s.z - 2.2), vz: 6, jitter: 0.6, life: 0.35, s0: 0.25, s1: 0.05, color: level.pickups.air, hdr: 3, alpha: 0.9, drag: 0.5 }, 2);
     }
     // STABILIZE: white cold-gas jets from the car's four corners and both sides while the thrusters burn.
-    if (s.phase === 'sky' && s.stabT > 0 && !s.over) thrusters(s, dt * (q ? 1 : 0.5));
+    if (s.phase === 'sky' && s.stabT > 0 && !s.over) thrusters(s, dt * L.fx);
     // Wind streaks stream past at airspeed (sky) or at high road speed; clouds and fog open up with altitude.
     const spdNow = s.phase === 'road' ? s.v : s.m, inSky = s.phase === 'sky' && !s.over;
     streaks.material.uniforms.travel.value += dt * spdNow * 0.9;
@@ -281,14 +375,15 @@ function init() {
     const alt = s.phase === 'sky' ? clamp(s.y / 200, 0, 1) : 0;
     scene.fog.near = level.time.fog.near * (1 + alt * 1.5); scene.fog.far = level.time.fog.far * (1 + alt * 1.2);
     fx.update(dt);
-    fx.material.uniforms.scale.value = (ch * renderer.getPixelRatio()) / (2 * Math.tan(camera.fov * Math.PI / 360));
+    fx.material.uniforms.scale.value = (ch * prNow) / (2 * Math.tan(camera.fov * Math.PI / 360));
     prevPhase = s.phase;
     // render
-    if (composer) {
+    try { if (composer) {
       grade.uniforms.time.value = t % 100; grade.uniforms.boost.value = clamp((G.boostT || 0) + (G.fovKick || 0) * 0.5, 0, 1.5); grade.uniforms.aspect.value = cw / ch;
-      bloom.strength = 0.5 + (G.boostT || 0) * 0.35 + (G.machT || 0) * 0.6;
+      if (bloom) bloom.strength = 0.5 + (G.boostT || 0) * 0.35 + (G.machT || 0) * 0.6;
       composer.render(dt);
-    } else renderer.render(scene, camera);
+    } else renderer.render(scene, camera); } catch (e) { dead = 'render error: ' + (e && e.message || e); console.error(e); }
+    if (renderer.getContext().isContextLost()) dead = 'WebGL context lost';
     // projection for the 2D HUD / particles / warnings
     const k0 = (H / 2) / Math.tan(camera.fov * Math.PI / 360);
     const p = (x, y, z) => {
@@ -321,7 +416,7 @@ function init() {
       for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; fx.emit({ x: cx + Math.cos(a) * 1.1, y: cy + 0.5 + Math.sin(a) * 0.5, z: cz, vx: carVel.x + Math.cos(a) * 10, vy: carVel.y + Math.sin(a) * 6, vz: carVel.z * 0.95, jitter: 2, life: 0.4, s0: 0.25, s1: 1.2, color: '#ffffff', hdr: 1.6, alpha: 0.75, drag: 0.8 }); } }
     else if (ev.e === 'boost' || ev.e === 'mach') fx.emit({ x, y: y + 0.6, z: z + 2.2, vz: 10, jitter: 5, jitterY: 3, life: 0.6, s0: 0.5, s1: 0.1, color: ev.e === 'mach' ? '#ffffff' : level.pickups.air, hdr: 3, drag: 2 }, ev.e === 'mach' ? 60 : 26);
   }
-  const api = { ready: true, render, event, stats, level, renderer, scene, camera, car, debugCam: null, reset() { fx.clear(); cam.init = false; carPrev = null; } };
+  const api = { ready: true, post: false, levels: LEVELS, gov, render, event, stats, level, renderer, scene, camera, car, debugCam: null, reset() { fx.clear(); cam.init = false; carPrev = null; } };
   window.CJRender3D = api;
 }
 
