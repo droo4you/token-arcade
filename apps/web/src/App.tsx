@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
+import { formatEther } from "viem";
 import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, Gamepad2, LockKeyhole, Menu, Play, Plus, RotateCcw, Settings2, ShieldCheck, Sparkles, Ticket, Trophy, UserRound, X } from "lucide-react";
 import type { CommunityAsset, GameManifest, GameRecord, GameRunConfig, GameRunResult, Passport, Raid } from "../../../packages/sdk/src/index";
 import { CartridgeHost } from "../../../packages/sdk/src/host";
 import { api, ApiError, messageFor, type CompleteResponse, type GameResponse, type GamesResponse, type Health, type LeaderboardEntry, type LeaderboardResponse, type PassportResponse, type RaidResponse, type RaidsResponse, type RunResponse } from "./api";
 import { useArcadeAuth } from "./auth";
+import { recordFreePlay } from "./freePlay";
 import { createClientCartridge, hasClientCartridge } from "./cartridges";
 import { gameHref, getCatalog, getGame, playHref, type ArcadeGame } from "./catalog";
 import { CreatorPortal } from "./CreatorPortal";
@@ -333,7 +335,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   const complete = async (runResult: GameRunResult) => {
     const generation = completionGeneration.current;
     setResult(runResult); setVerified(false); setError("");
-    if (mode === "free") return;
+    if (mode === "free") { void recordFreePlay(runResult, token.current); return; }
     setLoading(true);
     try {
       const response = await api<CompleteResponse>(`/api/runs/${encodeURIComponent(runResult.runId)}/complete`, token.current, { method: "POST", body: runResult });
@@ -358,11 +360,11 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
     {result && <div className="result-panel"><div className="result-medal"><Trophy size={31} /></div><div>
       <span>{result.result === "failed" ? "RUN FINISHED" : mode === "free" ? "LOCAL RESULT" : loading ? "VERIFYING RESULT" : verified ? "VERIFIED RESULT" : "RESULT NOT VERIFIED"}</span>
        <h2>{metricText(result.primaryMetric, result.objective)}</h2><span className="result-metric">{result.objective.replaceAll("_", " ")}</span>
-      <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "This result stays local. Competitive scores are available only in a cabinet’s enabled Passport Play or Community Raid mode." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
+      <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "Run summaries help us improve game balance. Progress saves on this device; competitive scores require Passport Play or Community Raid." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
       {result.secondaryMetrics && <dl className="result-details">{Object.entries(result.secondaryMetrics).filter(([key]) => !["ticks", "elapsedMs"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1")}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl>}
     </div><button className="action action-lime" disabled={loading} onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
     {game.record?.manifest.controls?.orientation === "landscape" && <p className="orientation-note">On a phone, turn sideways for the full playfield.</p>}
-    <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. Local scores are for fun." : "Competitive results follow the cabinet’s issued rules and verifier before they reach its leaderboard."}</p></div>
+    <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. We collect run summaries for game balance, linked to your Passport when signed in or a random browser ID when playing as a guest." : "Competitive results follow the cabinet’s issued rules and verifier before they reach its leaderboard."}</p></div>
   </main>;
 }
 
@@ -372,6 +374,24 @@ function RaidIndex({ raids }: { raids: Raid[] }) {
     const label = raidDisplayStatus(raid, now);
     return <Link href={`/raids/${encodeURIComponent(raid.id)}`} className="raid-list-item" key={raid.id}><span className="raid-list-mark">✳</span><span><StatusBadge tone={label === "open" ? "good" : "wait"}>{label}</StatusBadge><strong>{raid.name}</strong><small>{raid.maxAttempts} attempts · Ends {formatDate(raid.endsAt)}</small></span><ArrowUpRight size={24} /></Link>;
   })}</div> : <div className="empty-page"><span className="big-doodle">✳</span><h2>No raids on the board yet.</h2><p>When a community opens a challenge, its rules and leaderboard will appear here.</p><ActionLink href="/">Explore games</ActionLink></div>}</main>;
+}
+
+function RaidPrizeClaim({ raid }: { raid: Raid }) {
+  const auth = useArcadeAuth();
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const claim = async () => {
+    setBusy(true); setMessage("");
+    try {
+      const response = await api<{ claimed: boolean; wallet?: string; transaction?: { to: string; data: string; chainId: number; value: string } }>(`/api/raids/${encodeURIComponent(raid.id)}/claim`, auth.getToken);
+      if (response.claimed) { setMessage("Prize claimed on Monad testnet."); return; }
+      if (!response.wallet || !response.transaction) throw new Error("Claim details unavailable.");
+      await auth.claimTestnetPrize(response.transaction, response.wallet);
+      setMessage("Claim submitted. Check again after confirmation.");
+    } catch (reason) { setMessage(messageFor(reason)); }
+    finally { setBusy(false); }
+  };
+  return <div><button className="action action-lime" disabled={busy} onClick={() => void claim()}>{busy ? "Checking prize…" : "Claim testnet prize"}</button><p aria-live="polite">{message || "Confirm in Privy when prompted. Your winning wallet needs test MON for gas."}</p></div>;
 }
 
 function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
@@ -401,7 +421,7 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
   const attemptsLeft = data.attemptsRemaining;
   const playable = isRaidOpen(raid, now) && game?.playable && game.record?.status === "published" && game.record.manifest.supportedModes.includes("raid") && (attemptsLeft === undefined || attemptsLeft > 0);
   const reward = raid.reward as Raid["reward"] & { type: string; asset?: string; tokenId?: string; amount?: string };
-  const prizeLabel = !reward || reward.type === "none" ? "No prize · community challenge" : reward.type === "erc721" ? "NFT prize" : `${reward.type.toUpperCase()} prize`;
+  const prizeLabel = raid.funding ? `${formatEther(BigInt(raid.funding.prizeWei))} test WMON` : !reward || reward.type === "none" ? "No prize · community challenge" : reward.type === "erc721" ? "NFT prize" : `${reward.type.toUpperCase()} prize`;
   const entryLabel = raid.entry ? `${raid.entry.amount} ${raid.entry.asset}` : "Free entry";
   const countdown = now < Date.parse(raid.startsAt) ? `Opens in ${timeLeft(raid.startsAt, now).replace(" left", "")}` : timeLeft(raid.endsAt, now);
   let unavailable = "The game adapter is not ready for play.";
@@ -411,7 +431,7 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
     <Link href="/raids" className="back-link"><ArrowLeft size={17} /> All raids</Link>
     <GuideLink topic="raids">How raids work</GuideLink>
     {error && <ErrorNote error={`Standings could not refresh. Showing the last received results. ${error}`} />}
-    {raid.finalResult && <section className="result-panel" aria-live="polite"><Trophy size={31} /><div><span>FINAL RESULT</span><h2>{leaderboard[0] ? `${leaderboard[0].displayName} wins!` : "No qualifying runs"}</h2><p>{leaderboard[0] ? `Winning result: ${metricText(leaderboard[0].primaryMetric, raid.objective)}. Final standings are saved below.` : "This raid ended without an accepted result."} This community challenge has no prize.</p></div></section>}
+    {raid.finalResult && <section className="result-panel" aria-live="polite"><Trophy size={31} /><div><span>FINAL RESULT</span><h2>{leaderboard[0] ? `${leaderboard[0].displayName} wins!` : "No qualifying runs"}</h2><p>{leaderboard[0] ? `Winning result: ${metricText(leaderboard[0].primaryMetric, raid.objective)}. Final standings are saved below.` : "This raid ended without an accepted result."} {raid.funding ? "The testnet prize becomes claimable after on-chain settlement." : "This community challenge has no prize."}</p>{raid.funding && data.playerId === leaderboard[0]?.playerId && <RaidPrizeClaim raid={raid} />}</div></section>}
     <div className="raid-hero">
       <div><StatusBadge tone={isRaidOpen(raid, now) ? "good" : "wait"}>Raid {raidDisplayStatus(raid, now)}</StatusBadge><h1>{raid.name}</h1><p>Same course. Same rules. Put your best run on the board.</p>
         <div className="raid-quickfacts"><div><Clock3 size={19} /><span>{countdown}</span></div><div><Ticket size={19} /><span>{entryLabel}</span></div><div><Trophy size={19} /><span>{prizeLabel}</span></div></div>

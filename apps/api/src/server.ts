@@ -15,6 +15,7 @@ import { AdapterRegistry, normalizeRunRules } from "./verifiers.ts";
 import { MinicoinDeployer, MinicoinError, type MinicoinSettings } from "./minicoin.ts";
 import { createCoindleHandler } from "./coindle.ts";
 import { TestnetMinicoinService } from "./testnet-minicoin.ts";
+import { FundedRaids, FundedRaidError } from "./fundedRaids.ts";
 
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses"]);
 const MODES = new Set(["free", "ranked", "raid"]);
@@ -221,7 +222,7 @@ function raidBlockers(raid: Raid, store: ArcadeStore, adapters: AdapterRegistry)
     if (!adapter?.verifier) blockers.push("Game-specific score verifier is not registered");
   }
   if (raid.entry) blockers.push("Onchain entry collection is not configured");
-  if (raid.reward.type !== "none") blockers.push("Onchain prize custody is not verified");
+  if (raid.reward.type !== "none" && !raid.funding) blockers.push("Onchain prize custody is not verified");
   return blockers;
 }
 
@@ -374,6 +375,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   });
   const store = options.store ?? new ArcadeStore(process.env.ARCADE_DB_PATH || undefined, auth.localDemoMode);
   const adapters = options.adapters ?? new AdapterRegistry();
+  const fundedRaids = new FundedRaids(store);
   const verifyingRaids = new Map<string, number>();
   const publicRaid = (raid: Raid): Raid => {
     if (!verifyingRaids.get(raid.id)) {
@@ -412,6 +414,64 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       const path = url.pathname;
       const method = request.method ?? "GET";
       if (!path.startsWith("/api/")) return serveStatic(request, response, path, staticRoot);
+      const fundedRoute = path.match(/^\/api\/admin\/raids\/([^/]+)\/funded\/(rules|bind|settlement)$/);
+      if (fundedRoute) {
+        requireAdmin(await auth.authenticate(request));
+        const saved = store.getRaid(decodeURIComponent(fundedRoute[1]));
+        if (!saved) fail(404, "NOT_FOUND", "Raid not found");
+        if (method === "GET" && fundedRoute[2] === "rules") return respond(response, 200, fundedRaids.rules(saved));
+        if (method === "GET" && fundedRoute[2] === "settlement") return respond(response, 200, fundedRaids.settlement(publicRaid(saved)));
+        if (method === "POST" && fundedRoute[2] === "bind") {
+          const blockers = raidBlockers({ ...saved, reward: { type: "none" } }, store, adapters);
+          if (blockers.length) fail(409, "NOT_READY", "Game is not ready for a funded raid", blockers);
+          const body = await readJson(request);
+          const chainRaidId = requiredString(body.chainRaidId, "chainRaidId", 66);
+          if (!/^0x[a-fA-F0-9]{64}$/.test(chainRaidId)) fail(400, "INVALID_INPUT", "Invalid chain raid ID");
+          return respond(response, 200, { raid: await fundedRaids.bind(saved, chainRaidId as `0x${string}`) });
+        }
+        fail(405, "METHOD_NOT_ALLOWED", "Unsupported funded raid action");
+      }
+      if (method === "GET" && /^\/api\/raids\/[^/]+\/claim$/.test(path)) {
+        const identity = await auth.authenticate(request);
+        const saved = store.getRaid(decodeURIComponent(path.split("/")[3]));
+        if (!saved) fail(404, "NOT_FOUND", "Raid not found");
+        return respond(response, 200, await fundedRaids.claim(publicRaid(saved), store.getOrCreatePassport(identity.id)));
+      }
+      if (method === "POST" && path === "/api/free-play/summaries") {
+        const body = await readJson(request);
+        const guestId = requiredString(body.guestId, "guestId", 36);
+        if (!/^[a-f0-9-]{36}$/i.test(guestId)) fail(400, "INVALID_INPUT", "Invalid guest ID");
+        const candidate = body.result;
+        if (!isRecord(candidate) || candidate.mode !== "free") fail(400, "INVALID_INPUT", "Expected a Free Play result");
+        const gameId = requiredString(candidate.gameId, "gameId", 64);
+        const game = store.getGame(gameId);
+        if (!game || game.status !== "published") fail(404, "NOT_FOUND", "Game not found");
+        const runId = requiredString(candidate.runId, "runId", 100);
+        const gameVersion = requiredString(candidate.gameVersion, "gameVersion", 80);
+        if (!game.manifest.supportedObjectives.includes(candidate.objective as GameObjective)) fail(400, "INVALID_INPUT", "Unknown objective");
+        const checked = validateRunResultShape(candidate as unknown as GameRunConfig, candidate);
+        if (!checked.valid) fail(400, "INVALID_INPUT", checked.reason);
+        const metrics = checked.result.secondaryMetrics ?? {};
+        if (Object.keys(metrics).length > 50 || Object.entries(metrics).some(([key, value]) => !/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key) || Math.abs(value) > 1e12) || Math.abs(checked.result.primaryMetric) > 1e12) fail(400, "INVALID_INPUT", "Metrics exceed summary limits");
+        const identity = request.headers.authorization ? await auth.authenticate(request) : null;
+        const playerId = identity ? store.getOrCreatePassport(identity.id).playerId : null;
+        const now = new Date().toISOString();
+        const cutoff = new Date(Date.now() - 60_000).toISOString();
+        const recent = store.db.prepare("SELECT COUNT(*) AS n FROM free_play_summaries WHERE received_at > ? AND (guest_id = ? OR player_id = ?)").get(cutoff, guestId, playerId) as { n: number };
+        if (recent.n >= 30) fail(429, "RATE_LIMITED", "Too many run summaries; try again later");
+        // Store only bounded summary fields, never input proofs or client-supplied identity.
+        const summary = { runId, gameId, gameVersion, mode: "free", verified: false, objective: candidate.objective,
+          result: checked.result.result, primaryMetric: checked.result.primaryMetric, secondaryMetrics: metrics,
+          startedAt: isoDate(candidate.startedAt, "startedAt"), finishedAt: isoDate(candidate.finishedAt, "finishedAt") };
+        store.db.prepare("INSERT OR IGNORE INTO free_play_summaries VALUES (?,?,?,?,?,?)").run(runId, gameId, playerId, guestId, now, JSON.stringify(summary));
+        return respond(response, 200, { recorded: true, verified: false });
+      }
+      if (method === "GET" && path === "/api/admin/free-play/summaries") {
+        requireAdmin(await auth.authenticate(request));
+        const gameId = url.searchParams.get("gameId");
+        const rows = store.db.prepare("SELECT player_id, guest_id, received_at, json FROM free_play_summaries WHERE (? IS NULL OR game_id = ?) ORDER BY received_at DESC LIMIT 500").all(gameId, gameId) as { player_id: string | null; guest_id: string; received_at: string; json: string }[];
+        return respond(response, 200, { summaries: rows.map(row => ({ ...JSON.parse(row.json), playerId: row.player_id, guestId: row.guest_id, receivedAt: row.received_at })) });
+      }
       const coindleReply = await coindle(request, url);
       if (coindleReply) return respond(response, coindleReply.status, coindleReply.body);
 
@@ -436,7 +496,8 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       if (method === "GET" && path === "/api/health") {
         return respond(response, 200, {
           ok: true, auth: { privy: auth.privyReady, localDemo: auth.localDemoMode, localDemoAdmin },
-          settlement: { ready: false, reason: "Paid entry and prize settlement are not configured", minicoin: { ready: minicoin.ready, ...(!minicoin.ready ? { reason: minicoin.reason } : {}), reconcileReady: minicoin.reconcileReady, rehearsalReady, rehearsalReconcileReady } },
+          settlement: { ready: false, reason: "General paid entry and prize settlement are not configured", testnetRaid: { configured: Boolean(fundedRaids.vault), chainId: 10143 }, minicoin: { ready: minicoin.ready, ...(!minicoin.ready ? { reason: minicoin.reason } : {}), reconcileReady: minicoin.reconcileReady, rehearsalReady, rehearsalReconcileReady } },
+          release: process.env.RENDER_GIT_COMMIT ?? null,
           cartridge: { installed: store.listGames(true).filter((game) => game.manifest.id !== WARMUP_GAME_ID).map((game) => game.manifest.id), verifierAdapters: adapters.keys() },
         });
       }
@@ -659,6 +720,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           if (blockers.length) fail(409, "RAID_NOT_READY", "Raid cannot issue runs", blockers);
         }
         const issuedRules = mode === "raid" ? raid?.rules : adapter.rankedRules;
+        if (raid?.funding) fundedRaids.snapshotWallet(raid, passport);
         const config: GameRunConfig = {
           runId: randomUUID(), gameId, gameVersion: game.manifest.version, mode,
           objective: raid?.objective ?? game.manifest.supportedObjectives[0],
@@ -919,6 +981,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       if (error instanceof HttpError) return respond(response, error.status, { error: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) } });
       if (error instanceof AuthError) return respond(response, error.status, { error: { code: error.code, message: error.message } });
       if (error instanceof MinicoinError) return respond(response, error.status, { error: { code: error.code, message: error.message } });
+      if (error instanceof FundedRaidError) return respond(response, error.status, { error: { code: error.code, message: error.message } });
       console.error("API request failed", error);
       respond(response, 500, { error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
     }

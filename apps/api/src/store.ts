@@ -42,6 +42,15 @@ export class ArcadeStore {
     this.db.exec("PRAGMA foreign_keys = ON");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, json TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS funded_raid_players (
+        raid_id TEXT NOT NULL, player_id TEXT NOT NULL, wallet TEXT NOT NULL,
+        PRIMARY KEY (raid_id, player_id)
+      );
+      CREATE TABLE IF NOT EXISTS free_play_summaries (
+        run_id TEXT PRIMARY KEY, game_id TEXT NOT NULL, player_id TEXT,
+        guest_id TEXT, received_at TEXT NOT NULL, json TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS free_play_received ON free_play_summaries(received_at);
       CREATE TABLE IF NOT EXISTS raids (id TEXT PRIMARY KEY, game_id TEXT NOT NULL, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, identity_id TEXT NOT NULL UNIQUE, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS run_sessions (
@@ -301,7 +310,7 @@ export class ArcadeStore {
     try {
       const raid = this.getRaid(id);
       if (raid && !raid.finalResult && ["open", "closed"].includes(raid.status) &&
-          !raid.entry && raid.reward.type === "none" && Date.now() >= Date.parse(raid.endsAt)) {
+          !raid.entry && (raid.reward.type === "none" || raid.funding?.chainId === 10143) && Date.now() >= Date.parse(raid.endsAt)) {
         raid.finalResult = { finalizedAt: new Date().toISOString(), entries: entries() };
         raid.status = "closed";
         const winner = raid.finalResult.entries[0];
