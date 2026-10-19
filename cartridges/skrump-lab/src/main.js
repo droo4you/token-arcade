@@ -275,8 +275,8 @@
     cx.fillText(tc, pad, H - pad); cx.textAlign = 'right'; cx.fillText(`LAB-07 · CAM ${r.fig + 2}`, W - pad, H - pad);
     cx.fillStyle = '#ff3b5c'; cx.beginPath(); cx.arc(W - pad - cx.measureText(`LAB-07 · CAM ${r.fig + 2}`).width - fs * 0.7, H - pad - fs * 0.33, fs * 0.28, 0, 6.29); cx.fill();
     // score
-    const sc_ = S.score(r); cx.textAlign = 'right'; cx.fillStyle = 'rgba(255,255,255,0.8)'; cx.font = `bold ${fs + 2}px ${MONO}`;
-    cx.fillText(`SCORE ${sc_.total}`, (G.btnMute ? G.btnMute[0] : W - pad) - fs, pad + fs * 1.6);
+    const sc_ = S.score(r); cx.textAlign = 'center'; cx.fillStyle = 'rgba(255,255,255,0.8)'; cx.font = `bold ${fs + 2}px ${MONO}`;
+    cx.fillText(`SCORE ${sc_.total}`, W * 0.52, pad + fs * 1.2);
     cx.restore();
     // conclude button
     G.btnConclude = null;
