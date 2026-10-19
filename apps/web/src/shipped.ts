@@ -40,7 +40,9 @@ export const shippedSections: ShippedSection[] = [
     title: "Shipped after the deadline",
     intro: "Confirmed live updates appear here with release dates and source evidence. Open PRs and development branches are not shipped releases.",
     items: [
-      { title: "Free raid final results and recovery", when: "Live deployment verified Oct 15, 2026", detail: "Finished free, no-prize raids save final standings and a winner, award one Passport win, and recover accepted submissions after a lost response. The lobby refreshes and shows your place. The three-player live pilot is still pending.", links: [commit("921bc979f251284fde6f293564c1f60f9bd93d58"), { label: "Release PR #2", href: `${REPO_URL}/pull/2` }] },
+      { title: "Free raid final results and recovery", when: "Live deployment verified Oct 15, 2026", detail: "Finished free, no-prize raids save final standings and a winner, award one Passport win, and recover accepted submissions after a lost response. The lobby refreshes and shows your place.", links: [commit("921bc979f251284fde6f293564c1f60f9bd93d58"), { label: "Release PR #2", href: `${REPO_URL}/pull/2` }] },
+      { title: "Three-player Skrumpey Slide pilot", when: "Finalized Oct 19, 2026, 12:13 AM PT", detail: "playhouse, droober and willllliam completed verified runs. The raid closed with frozen standings: playhouse won with 51,538 points. This was a free, no-prize gameplay test.", links: [{ label: "Final raid results", href: "/raids/1089c46e-2b8b-41d6-b4ae-b355467d06a0" }] },
+      { title: "Funded testnet raid integration and Free Play summaries", when: "Both services verified live Oct 19, 2026", detail: "Website raids can bind to a funded Monad testnet vault, preserve entrants' prize wallets and prepare settlement from verified final standings. A Privy claim button is deployed; a real player payout still needs live testing. Guests and signed-in players now send unverified Free Play summaries for balancing, including Skip earnings and progression. Device saves are not yet synced to Passports.", links: [commit("d02f99a7a048c044dec114bab49c60feaa3cc6f4"), { label: "Release PR #8", href: `${REPO_URL}/pull/8` }] },
     ],
   },
   {
@@ -49,8 +51,7 @@ export const shippedSections: ShippedSection[] = [
     title: "Up next",
     intro: "Planned work, not shipped features or promised dates. Priorities can change; completed items move into the release log with evidence.",
     items: [
-      { title: "Next: three-player free raid pilot", detail: "Run Skrumpey Slide with three real players and confirm score submission, final standings and the winner's Passport update." },
-      { title: "Next: funded testnet raid", detail: "Connect the website raid and verified winner to onchain settlement and a player claim. Align game rules and timing before opening a funded event." },
+      { title: "Next: funded testnet player pilot", detail: "Verify Privy signing with the Passport wallet, then run a 30-minute funded event with real players. Confirm the verified winner's settlement, prize claim and matching Envio record. The earlier operator-only contract rehearsal is not this player test." },
       { title: "Power Play", detail: "Design stage: MiniCoin entry, verified ticket-orb draw entries and community-asset rewards. Randomness, prices, payout limits and launch requirements remain unresolved." },
       { title: "Mainnet", detail: "Target a paired Uppers/eMONAD and Skrumpey Slide/Skrumpeys launch after the reward flow is proven. Deployment, funding and asset-specific reward handling remain to be completed." },
       { title: "After Power Play: friend 1v1s", detail: "Challenge a friend using MiniCoins, with community-asset rewards. Funding and match rules still need design." },
