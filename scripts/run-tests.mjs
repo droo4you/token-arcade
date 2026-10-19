@@ -18,6 +18,6 @@ for (const file of [...files("packages"), ...files("apps")]) {
 }
 // Native-game bridge tests use each source's module format and load the real
 // game scripts in a VM; no browser subprocess is needed for this CI gate.
-for (const file of ["cartridges/emonad-cabinet/tools/arcade-bridge.test.js", "cartridges/two-places/tests/arcade-bridge.mjs"]) {
+for (const file of ["cartridges/emonad-cabinet/tools/arcade-bridge.test.js", "cartridges/two-places/tests/arcade-bridge.mjs", "cartridges/skrump-lab/tests/sim.mjs", "cartridges/skrump-lab/tests/arcade-bridge.mjs"]) {
   await import(pathToFileURL(resolve(file)).href);
 }
