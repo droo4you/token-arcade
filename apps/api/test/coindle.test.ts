@@ -63,3 +63,61 @@ test("Coindle does not return fabricated data or upstream secrets on errors", as
   const handler = createCoindleHandler({ apiKey: "test-only", fetch: (async () => { throw new Error("sensitive upstream detail"); }) as typeof fetch });
   assert.deepEqual(await handler(get, url("prices")), { status: 502, body: { error: "Pyth data is temporarily unavailable" } });
 });
+
+const quiet = { sleep: async () => {}, log: () => {}, random: () => 0 };
+const tsOf = (input: unknown) => Number(new URL(String(input)).pathname.split("/").pop());
+
+test("Coindle history skips failed points, retries 429s and caches a partial series briefly", async () => {
+  let clock = now();
+  const seen = new Map<number, number>();
+  const sleeps: number[] = [];
+  let calls = 0;
+  const handler = createCoindleHandler({ apiKey: "test-only", now: () => clock, ...quiet, sleep: async (ms) => { sleeps.push(ms); },
+    fetch: (async (input) => {
+      calls++;
+      const ts = tsOf(input);
+      const n = (seen.get(ts) ?? 0) + 1; seen.set(ts, n);
+      const index = (ts - (Date.parse("2026-10-09T00:00:00Z") / 1000 - 90 * 86400)) / (3 * 86400);
+      if (index === 0) return new Response("unauthorized", { status: 403 }); // permanent failure: skipped
+      if (index === 1 && n === 1) return new Response("slow down", { status: 429, headers: { "Retry-After": "1" } }); // retried
+      if (index === 2) return new Response("busy", { status: 429 }); // always 429: skipped after retries
+      return Response.json({ parsed: [sample] });
+    }) as typeof fetch });
+  const history = await handler(get, url("history?ticker=BTC"));
+  assert.equal(history?.status, 200);
+  const points = (history?.body as { points: unknown[] }).points;
+  assert.equal(points.length, 29);
+  assert.ok(sleeps.includes(1000), "honours Retry-After");
+  assert.equal(seen.get(Date.parse("2026-10-09T00:00:00Z") / 1000 - 84 * 86400), 3, "429 retried up to the cap");
+  const before = calls;
+  clock += 5 * 60_000;
+  await handler(get, url("history?ticker=BTC"));
+  assert.equal(calls, before, "partial series cached for a few minutes");
+  clock += 6 * 60_000;
+  await handler(get, url("history?ticker=BTC"));
+  assert.ok(calls > before, "partial series expires after ~10 min");
+});
+
+test("Coindle history returns 502 only when every point fails, and does not cache it", async () => {
+  let calls = 0;
+  const handler = createCoindleHandler({ apiKey: "test-only", now, ...quiet, fetch: (async () => { calls++; return new Response("x", { status: 500 }); }) as typeof fetch });
+  assert.deepEqual(await handler(get, url("history?ticker=BTC")), { status: 502, body: { error: "Pyth data is temporarily unavailable" } });
+  const first = calls;
+  await handler(get, url("history?ticker=BTC"));
+  assert.equal(calls, first * 2);
+});
+
+test("Coindle history nudges to a nearby timestamp on 404, dedupes in-flight requests and logs without secrets", async () => {
+  const logs: string[] = [];
+  let calls = 0;
+  const handler = createCoindleHandler({ apiKey: "test-only", now, ...quiet, log: (m) => logs.push(m), fetch: (async (input) => {
+    calls++;
+    return tsOf(input) % 86400 === 0 ? new Response("not found", { status: 404 }) : Response.json({ parsed: [sample] });
+  }) as typeof fetch });
+  const [a, b] = await Promise.all([handler(get, url("history?ticker=BTC")), handler(get, url("history?ticker=BTC"))]);
+  assert.equal((a?.body as { points: unknown[] }).points.length, 31);
+  assert.deepEqual(a, b);
+  assert.equal(calls, 62);
+  assert.ok(logs.some((m) => m.includes("status=404") && m.includes("/v2/updates/price/")));
+  assert.equal(logs.join("\n").includes("test-only"), false);
+});
