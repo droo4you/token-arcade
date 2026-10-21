@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { PrivyProvider, useCreateWallet, usePrivy, useSendTransaction } from "@privy-io/react-auth";
+import { PrivyProvider, useCreateWallet, usePrivy, useSendTransaction, useSignMessage } from "@privy-io/react-auth";
 import { mainnet, monadTestnet } from "viem/chains";
+import { checkWalletSigning } from "./walletSigning";
 
 export type DemoRole = "player" | "admin" | null;
 
@@ -16,6 +17,7 @@ type AuthState = {
   logout: () => Promise<void>;
   createArcadeWallet: () => Promise<void>;
   getToken: () => Promise<string | null>;
+  checkArcadeWalletSigning: (wallet: string) => Promise<void>;
   claimTestnetPrize: (transaction: { to: string; data: string; chainId: number; value: string }, wallet: string) => Promise<string>;
   setDemoRole: (role: DemoRole) => void;
 };
@@ -23,7 +25,7 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 const appId = import.meta.env.VITE_PRIVY_APP_ID?.trim();
 
-function AuthShell({ children, privy, createWallet, sendTransaction }: { children: ReactNode; privy?: ReturnType<typeof usePrivy>; createWallet?: ReturnType<typeof useCreateWallet>["createWallet"]; sendTransaction?: ReturnType<typeof useSendTransaction>["sendTransaction"] }) {
+function AuthShell({ children, privy, createWallet, sendTransaction, signMessage }: { children: ReactNode; privy?: ReturnType<typeof usePrivy>; createWallet?: ReturnType<typeof useCreateWallet>["createWallet"]; sendTransaction?: ReturnType<typeof useSendTransaction>["sendTransaction"]; signMessage?: ReturnType<typeof useSignMessage>["signMessage"] }) {
   const [demoRole, setDemoRole] = useState<DemoRole>(null);
   const privyAuthenticated = Boolean(privy?.ready && privy.authenticated);
   const activeDemoRole = privyAuthenticated ? null : demoRole;
@@ -57,6 +59,10 @@ function AuthShell({ children, privy, createWallet, sendTransaction }: { childre
       if (activeDemoRole) return `local-demo:${activeDemoRole}`;
       return null;
     },
+    checkArcadeWalletSigning: async (wallet) => {
+      if (!privyAuthenticated || !signMessage) throw new Error("Sign in with Privy to check your arcade wallet.");
+      await checkWalletSigning(wallet, window.location.origin, signMessage);
+    },
     claimTestnetPrize: async (transaction, wallet) => {
       if (!privyAuthenticated || !sendTransaction) throw new Error("Sign in with Privy to claim.");
       if (transaction.chainId !== 10143 || transaction.value !== "0") throw new Error("Expected a zero-value Monad testnet claim.");
@@ -64,7 +70,7 @@ function AuthShell({ children, privy, createWallet, sendTransaction }: { childre
       return result.hash;
     },
     setDemoRole: (role) => { if (!privyAuthenticated) setDemoRole(role); },
-  }), [activeDemoRole, privy, privyAuthenticated, authenticated, identityKey, hasEmbeddedWallet, createWallet, sendTransaction]);
+  }), [activeDemoRole, privy, privyAuthenticated, authenticated, identityKey, hasEmbeddedWallet, createWallet, sendTransaction, signMessage]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
@@ -72,7 +78,8 @@ function PrivyAuthShell({ children }: { children: ReactNode }) {
   const privy = usePrivy();
   const { createWallet } = useCreateWallet();
   const { sendTransaction } = useSendTransaction();
-  return <AuthShell privy={privy} createWallet={createWallet} sendTransaction={sendTransaction}>{children}</AuthShell>;
+  const { signMessage } = useSignMessage();
+  return <AuthShell privy={privy} createWallet={createWallet} sendTransaction={sendTransaction} signMessage={signMessage}>{children}</AuthShell>;
 }
 
 export function ArcadeAuthProvider({ children }: { children: ReactNode }) {
