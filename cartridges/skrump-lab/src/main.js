@@ -361,32 +361,85 @@
   }
   function draw() {
     cx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    if (G.screen === 'title' || !G.run) { drawTitle(); return; }
+    if (G.screen === 'title' || !G.run) { drawTitle(); drawRotate(); return; }
     const r = G.run;
     cx.save(); if (G.shake > 0) cx.translate((rr() - 0.5) * G.shake * 30, (rr() - 0.5) * G.shake * 30);
     drawLab(); drawBooth(); drawBoxes(r); drawLauncher(r); drawBodies(r); drawParts(); drawAim(r); nearCubes();
     cx.restore();
     corners(); drawHUD(r); drawIntroCard(r); drawCaption(); drawMute();
     if (G.screen === 'end') drawEnd();
+    drawPull(); drawRotate();
+  }
+  /* slingshot rubber band from the touch point to the finger (screen space) */
+  function drawPull() {
+    if (!drag || !drag.live || G.screen !== 'aim') return;
+    cx.save(); cx.strokeStyle = 'rgba(255,95,168,0.85)'; cx.lineWidth = 3; cx.setLineDash([8, 6]);
+    cx.beginPath(); cx.moveTo(drag.x, drag.y); cx.lineTo(drag.cx, drag.cy); cx.stroke(); cx.setLineDash([]);
+    cx.fillStyle = 'rgba(255,255,255,0.25)'; cx.beginPath(); cx.arc(drag.x, drag.y, 14, 0, 6.29); cx.fill();
+    cx.fillStyle = PINK; cx.beginPath(); cx.arc(drag.cx, drag.cy, 10, 0, 6.29); cx.fill(); cx.restore();
+  }
+  /* landscape-first: phones in portrait get a full-screen rotate card */
+  const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600;
+  let rotateDismissed = false;
+  const needRotate = () => PHONE && !rotateDismissed && H > W;
+  function drawRotate() {
+    G.btnPlayPortrait = null; if (!needRotate()) return;
+    cx.save(); drawLab(); corners();
+    const fs = Math.max(14, Math.min(22, W * 0.05)); cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.font = `${Math.round(fs * 0.7)}px ${MONO}`; cx.fillStyle = 'rgba(255,255,255,0.5)'; cx.fillText('LAB-07 · WEAPONS DIVISION', W / 2, H * 0.2);
+    cx.font = `900 ${Math.round(fs * 2)}px system-ui, sans-serif`; cx.fillStyle = '#f2f0f7'; cx.shadowColor = PINK; cx.shadowBlur = 20; cx.fillText('SKRUMP LAB', W / 2, H * 0.28); cx.shadowBlur = 0;
+    // phone glyph rotating
+    const a = Math.min(1, (G.t % 2.4) / 1.2) * 1.5708, pw = W * 0.18, ph = pw * 1.9;
+    cx.save(); cx.translate(W / 2, H * 0.47); cx.rotate(-a); cx.strokeStyle = PINK; cx.lineWidth = 4; cx.strokeRect(-pw / 2, -ph / 2, pw, ph);
+    cx.fillStyle = 'rgba(255,95,168,0.25)'; cx.fillRect(-pw / 2 + 6, -ph / 2 + 10, pw - 12, ph - 20); cx.restore();
+    sprite('3', 0, 0, 0, 0); // warm the cache
+    const im = IMG['3']; if (im && im.naturalWidth) { const s = W * 0.16; cx.drawImage(im, W / 2 - s / 2, H * 0.62, s, s * im.naturalHeight / im.naturalWidth); }
+    cx.font = `bold ${Math.round(fs * 1.1)}px ${MONO}`; cx.fillStyle = '#fff'; cx.fillText('ROTATE YOUR PHONE', W / 2, H * 0.76);
+    cx.font = `${Math.round(fs * 0.75)}px ${MONO}`; cx.fillStyle = 'rgba(255,255,255,0.55)'; cx.fillText('the lab is landscape only', W / 2, H * 0.8);
+    const bw = W * 0.5, bh = fs * 2.2, bx = W / 2 - bw / 2, by = H * 0.87; G.btnPlayPortrait = [bx, by, bw, bh];
+    cx.strokeStyle = 'rgba(255,255,255,0.4)'; cx.lineWidth = 1.5; cx.strokeRect(bx, by, bw, bh); cx.font = `${Math.round(fs * 0.75)}px ${MONO}`; cx.fillStyle = 'rgba(255,255,255,0.7)'; cx.fillText('play in portrait anyway', W / 2, by + bh / 2);
+    cx.restore();
+  }
+  function tryLandscape() { // needs a user gesture; Android wants fullscreen first; iOS has no lock: fail silently
+    try { const el = document.documentElement, lock = () => { try { const o = screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => {}); } catch (e) { /* no */ } };
+      if (!(TA && TA.embedded) && !document.fullscreenElement && el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).then(lock, lock); else lock(); } catch (e) { /* no */ }
   }
 
   /* ---------- input ---------- */
   const inBtn = (b, x, y) => b && x >= b[0] && x <= b[0] + b[2] && y >= b[1] && y <= b[1] + b[3];
   let drag = null;
   function maxDrag() { return Math.max(90, Math.min(W, H) * 0.32); }
-  cv.addEventListener('pointerdown', e => {
-    e.preventDefault(); cv.focus(); const x = e.clientX, y = e.clientY;
+  const DEAD = 18; // px of pull before an aim registers
+  function pos(e) { const b = cv.getBoundingClientRect(); return [(e.clientX - b.left) * W / (b.width || W), (e.clientY - b.top) * H / (b.height || H)]; }
+  function aimFrom(cxp, cyp) { const dx = drag.x - cxp, dy = cyp - drag.y; drag.cx = cxp; drag.cy = cyp;
+    if (!drag.live && dx * dx + dy * dy < DEAD * DEAD) return; drag.live = true; const m = maxDrag(); const [qx, qy] = S.clampQ(dx / m * 100, dy / m * 100); G.aim = { qx, qy }; }
+  function press(id, x, y) {
+    if (needRotate()) { if (inBtn(G.btnPlayPortrait, x, y)) rotateDismissed = true; else tryLandscape(); return; }
     if (inBtn(G.btnMute, x, y)) { A.setMuted(!A.muted); if (!A.muted) A.init(); return; }
     if (G.paused) return;
     if (G.screen === 'title') { if (!(TA && TA.embedded) || TA.active) startRun(); return; }
     if (G.screen === 'end') { if (G.t - G.endT > 1.2) startRun(); return; }
     if (G.screen === 'aim' && inBtn(G.btnConclude, x, y)) { conclude(); return; }
-    if (G.screen === 'aim' && !AUTOPILOT) { drag = { id: e.pointerId, x, y }; G.aim = { qx: 0, qy: 0 }; try { cv.setPointerCapture(e.pointerId); } catch (er) { /* ok */ } }
-  });
-  cv.addEventListener('pointermove', e => { if (!drag || e.pointerId !== drag.id || G.screen !== 'aim') return; const m = maxDrag();
-    const [qx, qy] = S.clampQ((drag.x - e.clientX) / m * 100, (e.clientY - drag.y) / m * 100); G.aim = { qx, qy }; });
-  const up = e => { if (!drag || e.pointerId !== drag.id) return; drag = null; const a = G.aim; if (G.screen === 'aim' && a && Math.hypot(a.qx, a.qy) >= 12) fire(a.qx, a.qy); else G.aim = null; };
-  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', e => { drag = null; G.aim = null; });
+    // slingshot from wherever the finger lands; also arm during the intro card so an early grab isn't dead
+    if ((G.screen === 'aim' || G.screen === 'intro') && !AUTOPILOT) { drag = { id, x, y, cx: x, cy: y, live: false }; G.aim = null; return true; }
+  }
+  function move(id, x, y) { if (!drag || id !== drag.id) return; if (G.screen !== 'aim') { drag.cx = x; drag.cy = y; return; } aimFrom(x, y); }
+  function release(id) { if (!drag || id !== drag.id) return; const d = drag; drag = null; const a = G.aim;
+    if (G.screen === 'aim' && d.live && a && Math.hypot(a.qx, a.qy) >= 12) fire(a.qx, a.qy); else G.aim = null; }
+  // Pointer Events with capture; move/up also on window so a lost capture can't strand the pull.
+  // Touch Events path (passive:false + preventDefault) for browsers that scroll/zoom or cancel pointers in portrait.
+  let usingTouch = false;
+  cv.addEventListener('pointerdown', e => { if (e.pointerType === 'touch' && usingTouch) return; e.preventDefault(); cv.focus(); const [x, y] = pos(e);
+    if (press(e.pointerId, x, y)) try { cv.setPointerCapture(e.pointerId); } catch (er) { /* ok */ } });
+  addEventListener('pointermove', e => { if (e.pointerType === 'touch' && usingTouch) return; const [x, y] = pos(e); move(e.pointerId, x, y); });
+  addEventListener('pointerup', e => { if (e.pointerType === 'touch' && usingTouch) return; release(e.pointerId); });
+  addEventListener('pointercancel', e => { if (e.pointerType === 'touch' && usingTouch) return; if (drag && drag.id === e.pointerId) { drag = null; G.aim = null; } });
+  const tid = t => 't' + t.identifier;
+  cv.addEventListener('touchstart', e => { usingTouch = true; e.preventDefault(); const t = e.changedTouches[0]; const [x, y] = pos(t); press(tid(t), x, y); }, { passive: false });
+  addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) { const [x, y] = pos(t); move(tid(t), x, y); } }, { passive: false });
+  addEventListener('touchend', e => { for (const t of e.changedTouches) release(tid(t)); }, { passive: false });
+  addEventListener('touchcancel', e => { for (const t of e.changedTouches) if (drag && drag.id === tid(t)) release(tid(t)); }, { passive: false });
+  addEventListener('gesturestart', e => e.preventDefault()); // iOS pinch
   const kd = e => {
     if (G.paused) return;
     if (G.screen === 'title' || (G.screen === 'end' && G.t - G.endT > 1.2)) { if (e.key === 'Enter' || e.key === ' ') { if (!(TA && TA.embedded) || TA.active) startRun(); } return; }
@@ -404,7 +457,7 @@
   function frame(now) {
     if (G.destroyed) return; G.raf = requestAnimationFrame(frame);
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    if (!G.paused) update(dt); draw();
+    if (!G.paused && !needRotate()) update(dt); else if (needRotate()) G.t += dt; draw();
   }
   G.raf = requestAnimationFrame(t => { last = t; frame(t); });
   if (AUTOPILOT && !(TA && TA.embedded)) setTimeout(() => { if (G.screen === 'title') startRun(); }, 1200);
