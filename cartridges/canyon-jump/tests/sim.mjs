@@ -56,14 +56,14 @@ function quiet(s) { s.sky.push = () => 0; s.rings.push = () => 0; s.skyPickups.p
 function launchAt(v, seed = 4) { const s = emptyRoad(seed); while (s.phase === 'road') { s.padBoost = v - s.vBase; S.step(s, {}); } return quiet(s); }
 const energy = s => s.m * s.m / 2 + C.G_SKY * s.y;
 
-test('a launch at or above the clear line clears the gorge hands-off and lands past the rim for a bonus', () => {
-  for (const v of [C.CLEAR_V, 100, C.V_MAX]) {
-    const s = launchAt(v); assert.equal(s.phase, 'sky'); assert.ok(Math.abs(s.launchV - v) < 0.1, `launch ${s.launchV}`);
-    while (!s.over) S.step(s, {});
-    const r = S.score(s);
-    assert.equal(r.reason, 'landed', `launch ${v}: ${r.reason}`); assert.ok(r.landing >= C.LANDING_BONUS); assert.ok(r.pastRim > 0);
-    assert.equal(r.total, r.distance + r.pickups + r.tricks + r.landing + r.mach);
-  }
+test('the wide gorge: a top-speed launch clears it hands-off; a minimum launch needs some flying (a pull-up or one boost)', () => {
+  const fly = (v, input, air = 0) => { const s = launchAt(v); assert.equal(s.phase, 'sky'); assert.ok(Math.abs(s.launchV - v) < 0.1, `launch ${s.launchV}`);
+    quiet(s); s.air = air; while (!s.over) S.step(s, { ...input, boostEdge: s.air > 0 && s.boostCd <= 0 }); return S.score(s); };
+  const top = fly(C.V_MAX, {});
+  assert.equal(top.reason, 'landed'); assert.ok(top.landing >= C.LANDING_BONUS && top.pastRim > 0);
+  assert.equal(top.total, top.distance + top.pickups + top.tricks + top.landing + top.mach);
+  assert.equal(fly(C.CLEAR_V, {}).reason, 'short', 'a bare minimum launch, hands off, no longer makes it');
+  for (const r of [fly(C.CLEAR_V, { pitch: 0.4 }), fly(C.CLEAR_V, {}, 1), fly(100, { pitch: 0.2 })]) { assert.equal(r.reason, 'landed'); assert.ok(r.pastRim > 0); }
 });
 
 test('weight: heavy gravity, a real ballistic arc off the lip, and a hard fall once lift is gone', () => {
@@ -135,9 +135,11 @@ test('landing mid-trick or in a steep dive crashes and loses the combo', () => {
   assert.equal(d.reason, 'botched'); assert.ok(d.landGam < -C.LAND_MAX_DIVE); assert.equal(S.score(d).tricks, 0);
 });
 
-test('tricks cost height: a roll tilts the lift vector', () => {
-  const run = trick => { const s = launchAt(105); s.y = 100; s.gam = 0; s.m = 100; if (trick) S.step(s, { trickEdge: true }); for (let i = 0; i < 90; i++) S.step(s, {}); return s.y; };
-  assert.ok(run(true) < run(false) - 1.5, 'flipping drops you');
+test('tricks are nearly pitch-neutral: a flip or roll costs a tiny dip, never a nosedive', () => {
+  const run = (k) => { const s = launchAt(105); s.y = 100; s.gam = 0; s.m = 100; if (k) S.step(s, { [k]: true }); for (let i = 0; i < 140; i++) S.step(s, {}); return s; };
+  const base = run(null);
+  for (const k of ['trickEdge', 'rollEdge']) { const t = run(k); const dy = base.y - t.y;
+    assert.ok(dy > 0.05 && dy < 1.5, `${k} dip ${dy.toFixed(2)} m`); assert.ok(base.gam - t.gam < 0.05, `${k} nose drop ${(base.gam - t.gam).toFixed(3)} rad`); }
 });
 
 test('rings give speed and combo; risky rewards hug hazards but never overlap a hitbox anywhere they sway', () => {
@@ -251,6 +253,13 @@ test('sky traffic lives in altitude bands and is never stacked into a wall', () 
   for (const a of s.sky) for (const b of s.sky) if (a !== b && Math.abs(a.z - b.z) < 25) assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= a.r + b.r + 9, `stacked ${a.type}/${b.type}`);
 });
 
+test('distance is king: on every Mach 0.5 run the distance score beats the trick payout', () => {
+  let n = 0;
+  for (let seed = 1; seed <= 60; seed++) { const s = S.newRun(seed); while (!s.over && s.tick < 300 * 120) { S.step(s, S.bot(s)); s.events.length = 0; }
+    const r = S.score(s); if (!r.mach05) continue; n++; assert.ok(r.distance > r.tricks, `seed ${seed}: distance ${r.distance} vs tricks ${r.tricks}`); }
+  assert.ok(n >= 30, `mach runs ${n}`);
+});
+
 test('balance: the reference pilot mostly lands, flights last ~15-35 s, and distance still matters next to combos', () => {
   const flights = []; let landed = 0, launched = 0, dist = 0, tricks = 0;
   for (let seed = 1; seed <= 30; seed++) {
@@ -265,7 +274,7 @@ test('balance: the reference pilot mostly lands, flights last ~15-35 s, and dist
   assert.ok(landed >= launched * 0.7, `landed ${landed}/${launched}`);
   // Distance stays a major share of the score next to combos. (The pilot now completes Mach chains, which convert a
   // can stash into a fast, high, trick-friendly stretch; the old 'distance > combos' held only because its chain never fired.)
-  assert.ok(dist > tricks * 0.5, `distance ${dist} vs combo payouts ${tricks}`);
+  assert.ok(dist > tricks, `distance ${dist} vs combo payouts ${tricks}`);
 });
 
 test('Mach 0.5 (617 km/h): out of reach on the road; a quick 3-boost chain off a good launch reaches it, 2 level boosts do not, 2 boosts in a committed dive do; once per run', () => {

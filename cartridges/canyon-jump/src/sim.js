@@ -4,13 +4,15 @@
   'use strict';
   const C = Object.freeze({
     DT: 1 / 120,
-    ROAD_LEN: 2000,      // canyon rim (ramp lip) at this z
-    CANYON_W: 300,       // far rim at ROAD_LEN + CANYON_W
+    ROAD_LEN: 2300,      // canyon rim (ramp lip) at this z
+    CANYON_W: 520,       // far rim at ROAD_LEN + CANYON_W
     CANYON_DEPTH: 110,   // river level below the rim
     RAMP_LEN: 44, RAMP_H: 6, // kicker at the lip
     LANE_W: 3.4,
     V0: 36, ACCEL: 1.25, V_NATURAL: 72, V_MAX: 110,
     PAD_BOOST: 7, PAD_DECAY: 0.6,
+    // Coins (orbs) give a tiny permanent speed bump (+1.26 km/h each, road and sky) so clean lines pay off in speed too.
+    COIN_V: 0.35, COIN_DECAY: 0.8,
     CLEAR_V: 90,         // launch speed needed to clear the canyon
     AIR_START: 1,        // AIR cans stack without limit (no cap): hoard them for a Mach run or spend them to stabilize
     // Straightaway fairness: hitbox half-widths match the drawn sprites; tumbleweeds sway inside their own lane.
@@ -29,10 +31,12 @@
     // DIVE BOOST: an AIR boost fired with the nose at least DIVE_BOOST_GAM below the horizon kicks DIVE_BOOST_K× harder (gravity is with you).
     DIVE_BOOST_GAM: -0.3, DIVE_BOOST_K: 1.3,
     // Tricks feed an unbanked combo: pot × multiplier pays out only on a clean landing past the far rim.
-    FLIP_T: 0.7, ROLL_T: 1.05, FLIP_PTS: 60, ROLL_PTS: 100, TRICK_CD: 0.2, TRICK_COST: 3, TRICK_MIN_AGL: 8, VARIETY: 1.5,
-    MULT_STEP: 0.5, MULT_MAX: 6, NEAR_POT: 25, NEAR_MULT: 0.25, RING_POT: 50, RING_MULT: 0.25, RING_V: 8, RING_R: 3.2,
+    FLIP_T: 0.7, ROLL_T: 1.05, FLIP_PTS: 30, ROLL_PTS: 50, TRICK_CD: 0.2, TRICK_COST: 3,
+    // Tricks are nearly pitch-neutral: mid-spin the car loses at most TRICK_DIP of its lift (a tiny dip, not a nosedive).
+    TRICK_DIP: 0.12, TRICK_MIN_AGL: 8, VARIETY: 1.5,
+    MULT_STEP: 0.5, MULT_MAX: 3, NEAR_POT: 25, NEAR_MULT: 0.25, RING_POT: 50, RING_MULT: 0.25, RING_V: 8, RING_R: 4.4,
     // Gorge wall profile shared by the sim and the 3D walls: [depth below the rim, inset into the gap] (m). Cliff bands,
-    // benches and an inner gorge: the canyon narrows as it deepens, from 300 m at the rim to ~212 m at the river.
+    // benches and an inner gorge: the canyon narrows as it deepens, from 520 m at the rim to ~432 m at the river.
     WALL: [[0, 0], [4, 0.5], [30, 3], [34, 14], [68, 18], [74, 30], [104, 34], [110, 44]],
     // Landing forgiveness: nose-down up to 32° still sticks, and a trick at least 85% done at touchdown auto-finishes.
     LAND_MAX_DIVE: 0.56, TRICK_AUTO: 0.85, ROAD_BONUS: 150, ROAD_HW: 7,
@@ -96,7 +100,7 @@
       const reach = free.filter(lanesIn);
       const lane = reach[Math.floor(r() * reach.length)];
       const roll = r();
-      const padChance = 0.12 + progress * 0.16;
+      const padChance = 0.15 + progress * 0.18;
       if (roll < padChance) { pickups.push({ type: 'pad', lane, z: z + 8, taken: false }); pads++; }
       else if (roll < padChance + 0.24) pickups.push({ type: 'air', lane, z: z + 6, taken: false });
       else for (let k = 0; k < 4; k++) pickups.push({ type: 'orb', lane, z: z - 10 + k * 7, taken: false });
@@ -105,7 +109,7 @@
       const gapT = C.REACT_T + C.SWITCH_T * (r() < 0.35 ? 2 : 1) + 0.12 + r() * 0.25 - progress * 0.08;
       z += Math.max(46, gapT * vEstAt(z));
     }
-    if (pads < 8) for (let i = 0; i < 8 - pads; i++) pickups.push({ type: 'pad', lane: (i % 3) - 1, z: 300 + i * 180, taken: false });
+    if (pads < 10) for (let i = 0; i < 10 - pads; i++) pickups.push({ type: 'pad', lane: (i % 3) - 1, z: 300 + i * 180, taken: false });
     pickups.push({ type: 'pad', lane: 0, z: C.ROAD_LEN - 70, taken: false });
     pickups.push({ type: 'pad', lane: -1, z: C.ROAD_LEN - 210, taken: false });
     pickups.push({ type: 'pad', lane: 1, z: C.ROAD_LEN - 210, taken: false });
@@ -118,7 +122,7 @@
     const road = buildRoad(seed);
     return {
       seed, t: 0, tick: 0, phase: 'road', over: false, reason: null,
-      z: 0, x: 0, y: 0, lane: 0, v: C.V0, vBase: C.V0, padBoost: 0, launchV: 0,
+      z: 0, x: 0, y: 0, lane: 0, v: C.V0, vBase: C.V0, padBoost: 0, coinBoost: 0, launchV: 0,
       // sky: m = airspeed, gam = flight-path angle (rad, + = climbing), pIn = smoothed pitch input (-1 dive .. +1 climb)
       m: 0, vy: 0, vx: 0, gam: 0, pIn: 0, gLoad: 1, air: C.AIR_START, rot: 0, trick: 0, trickKind: null, trickDir: 1, trickDur: 0, lastTrickEnd: -9, stabT: 0, stabDur: 0, stabCd: 0, stabRot0: 0, stabRot1: 0,
       cmb: { pot: 0, mult: 1, n: 0, last: null }, bank: 0, boostCd: 0, chain: 0, lastBoostT: -9, boostT: 0, launchT: 0,
@@ -180,7 +184,8 @@
     s.x += step; s.bank = clamp(step / dt / 18, -1, 1);
     s.vBase = Math.min(C.V_NATURAL, s.vBase + C.ACCEL * dt);
     s.padBoost = Math.max(0, s.padBoost - C.PAD_DECAY * dt);
-    s.v = Math.min(C.V_MAX, s.vBase + s.padBoost);
+    s.coinBoost = Math.max(0, s.coinBoost - C.COIN_DECAY * dt);
+    s.v = Math.min(C.V_MAX, s.vBase + s.padBoost + s.coinBoost);
     const z0 = s.z; s.z += s.v * dt;
     s.y = rampY(s.z);
     for (const o of s.obstacles) {
@@ -199,7 +204,7 @@
         p.taken = true;
         if (p.type === 'pad') { s.padBoost += C.PAD_BOOST; s.counts.pads++; s.events.push({ e: 'pad' }); }
         else if (p.type === 'air') { s.air++; s.counts.air++; s.pts.pickups += C.AIR_PTS; s.events.push({ e: 'air', n: s.air }); }
-        else { s.counts.orbs++; s.pts.pickups += C.ORB_PTS; s.events.push({ e: 'orb' }); }
+        else { s.counts.orbs++; s.coinBoost += C.COIN_V; s.pts.pickups += C.ORB_PTS; s.events.push({ e: 'orb' }); }
       }
     }
     if (s.z >= C.ROAD_LEN) {
@@ -331,10 +336,10 @@
     s.x = clamp(s.x + s.vx * dt, -C.SKY_X, C.SKY_X);
     if (Math.abs(s.x) >= C.SKY_X) s.vx = 0;
     s.bank = clamp(s.vx / 14, -1, 1);
-    // Pitch -> lift. A roll in progress tilts the lift vector, so tricks cost height (only its vertical share holds you up).
+    // Pitch -> lift. A trick in progress costs a sliver of lift (max TRICK_DIP mid-spin), so it barely dips the nose.
     s.pIn = lerpRate(s.pIn, sy, C.PITCH_RESP, dt);
     let V = s.m, g = s.gam;
-    const L = liftAccel(V, s.pIn), Lv = L * Math.cos(s.rot || 0);
+    const L = liftAccel(V, s.pIn), Lv = L * (1 - C.TRICK_DIP * (1 - Math.cos(s.rot || 0)) / 2);
     s.gLoad = L / C.G_SKY;
     g += (Lv - C.G_SKY * Math.cos(g)) / Math.max(V, 12) * dt;
     // Committed dive (stick forward, nose below the horizon): the car tucks and parasitic drag drops, so a dive banks real speed.
@@ -392,7 +397,7 @@
       if (Math.hypot(p.x - s.x, p.y - s.y) < 2.6 && Math.abs(p.z - s.z) < 3) {
         p.taken = true;
         if (p.type === 'air') { s.air++; s.counts.air++; s.pts.pickups += C.AIR_PTS; s.events.push({ e: 'air', risky: !!p.risky, n: s.air }); }
-        else { s.counts.orbs++; s.pts.pickups += C.ORB_PTS; s.events.push({ e: 'orb' }); }
+        else { s.counts.orbs++; s.m = Math.min(C.M_MAX, s.m + C.COIN_V); s.pts.pickups += C.ORB_PTS; s.events.push({ e: 'orb' }); }
       }
     }
     const gy = groundY(s.z);

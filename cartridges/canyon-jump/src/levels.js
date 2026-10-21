@@ -15,7 +15,7 @@
     name: 'Red Rock Canyon',
     tagline: 'Mojave sunset',
     // Gameplay numbers (meters, m/s). Must equal CJSim.C until the sim takes a level.
-    sim: { ROAD_LEN: 2000, CANYON_W: 300, CANYON_DEPTH: 110, CLEAR_V: 90, RAMP_LEN: 44, RAMP_H: 6, LANE_W: 3.4 },
+    sim: { ROAD_LEN: 2300, CANYON_W: 520, CANYON_DEPTH: 110, CLEAR_V: 90, RAMP_LEN: 44, RAMP_H: 6, LANE_W: 3.4 },
     time: {
       // Sun direction in degrees: elevation above the horizon, azimuth from straight down the road (+ = right).
       sun: { elevation: 9, azimuth: 24, color: '#ffc08a', intensity: 3.4, disk: 0.032, glow: '#ff8c5a', glowStrength: 0.9 },
@@ -44,7 +44,7 @@
       scatter: { cactus: 320, rock: 260, scrub: 700, spread: 260, minX: 10, seed: 5 },
       poles: { side: 1, spacing: 46, offset: 12, height: 9 },
       reflectors: { spacing: 26, offset: 7.4 },
-      signs: [{ at: 1000, text: 'CANYON 1 KM' }, { at: 1500, text: 'CANYON 500 M' }, { at: 1820, text: 'JUMP AHEAD' }],
+      signs: [{ at: 1300, text: 'CANYON 1 KM' }, { at: 1800, text: 'CANYON 500 M' }, { at: 2120, text: 'JUMP AHEAD' }],
     },
     canyon: {
       strata: ['#e9ad7e', '#cf6a45', '#b2463a', '#e08a58', '#93352f', '#c2603f', '#7a2a2c', '#5d2028'],
