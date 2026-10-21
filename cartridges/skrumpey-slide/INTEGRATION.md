@@ -39,3 +39,7 @@ Before approval: finish founder controls/feel review and phone gameplay checks, 
 
 The founder supplied an updated ZIP before submission. It adds pixel fonts, UI icons and How to Play/scoring calculator screens. The scoring formulas were extracted into helpers. A comparison of eight seeds with idle, held and native bot inputs (24 full runs) matched both versions at every tick for score, position and termination, and matched every final result field. Updated source and assets were imported and the cartridge regenerated. The version remains 1.0.0 because no artifact has been submitted or published yet. Founder feel approval covered the earlier revision; the updated menu and host handshake are checked separately.
 
+
+## Rules 1.1.0: longer lane sprint
+
+Playtest feedback: the lane runner was the favourite part. Each lane sprint is now three stages (150 / 170 / 190 m at 36 / 42 / 48 m/s, barrier density 0.55 / 0.7 / 0.85) separated by stage gates, with new patterns (full-width hurdles, corridors, slaloms, splits with a rare nut) mixed in from stage 2. Daylight drains at 3/4 speed inside a sprint. Reference-bot averages over 40 seeds: lane time 10.7 s → 31.7 s per run, lane strip 218 m → 498 m, total run 63 s → 74 s, mean score 11.9k → 28.0k. Because world generation and score scale changed, the rules version is 1.1.0 (`SIM.RULES_VERSION`, stamped into the replay proof). The API keeps a frozen 1.0.0 sim (`apps/api/src/legacy/`) and verifies each session with the sim of its own gameVersion; boards filter by gameVersion so the two never mix.

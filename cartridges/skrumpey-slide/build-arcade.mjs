@@ -19,7 +19,7 @@ replace('function start(m){ac();', "function start(m){if(hosted){if(!TA.active||
 replace("const seed=params.get('seed')?", "const seed=hosted&&TA.config.mode!=='free'?SIM.dailySeed(String(TA.config.seed)):params.get('seed')?");
 replace("if(mode==='ranked'){const all=lb();", "if(!hosted&&mode==='ranked'){const all=lb();");
 replace("$('oBoard').innerHTML=board;$('over').classList.remove('hid');}", `$('oBoard').innerHTML=board;$('over').classList.remove('hid');
- if(hosted) TA.complete({result:'completed',primaryMetric:r.score,durationMs:Math.round(r.endTick*SIM.DT*1000),secondaryMetrics:{distance:r.distance,bestCombo:r.bestCombo,perfects:r.perfects,collectibles:r.gems,kills:r.kills,hits:r.hits,falls:r.falls,rescued:r.rescued,trainBest:r.trainBest,ticks:r.endTick},...(TA.config.mode!=='free'?{proof:{v:1,seed:r.seed,input:r.replay}}:{})});
+ if(hosted) TA.complete({result:'completed',primaryMetric:r.score,durationMs:Math.round(r.endTick*SIM.DT*1000),secondaryMetrics:{distance:r.distance,bestCombo:r.bestCombo,perfects:r.perfects,collectibles:r.gems,kills:r.kills,hits:r.hits,falls:r.falls,rescued:r.rescued,trainBest:r.trainBest,ticks:r.endTick},...(TA.config.mode!=='free'?{proof:{v:1,rules:SIM.RULES_VERSION,seed:r.seed,input:r.replay}}:{})});
 }`);
 replace('function frame(t){requestAnimationFrame(frame);', 'function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame);if(arcadePaused){last=t;acc=0;return;}');
 replace('requestAnimationFrame(t=>{last=t;frame(t);});', 'frameId=requestAnimationFrame(t=>{last=t;frame(t);});');
@@ -30,7 +30,7 @@ replace('</script></body></html>', `
   $('bRanked').hidden=true;
   $('bRanked').disabled=true;
 if(hosted){
-  TA.register({version:'1.0.0',capabilities:{touch:true},
+  TA.register({version:SIM.RULES_VERSION,capabilities:{touch:true},
     async mount(config){
       if(config.mode!=='free'&&!config.seed)throw new Error('Passport Play needs a server-issued seed.');
       muted=Boolean(config.muted ?? true);updateAudioButton();

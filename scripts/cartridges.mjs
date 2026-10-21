@@ -25,7 +25,7 @@ export function createCartridgeServer() {
       let file;
       if (url.pathname === '/sdk/bridge.js') file = resolve('packages/sdk/browser/bridge.js');
       else {
-        const match = /^\/([a-z0-9-]+)\/v\/1\.0\.0\/(.*)$/.exec(decodeURIComponent(url.pathname));
+        const match = /^\/([a-z0-9-]+)\/v\/(?:1\.0\.0|1\.1\.0)\/(.*)$/.exec(decodeURIComponent(url.pathname));
         if (!match || !/^[a-z0-9-]+$/.test(match[1])) { res.writeHead(404); res.end('Cartridge not found'); return; }
         const gameRoot = resolve(root, match[1], match[1] === 'coindle' ? 'arcade-dist' : '.');
         const requested = match[2] || (match[1] === 'coindle' ? 'index.html' : 'arcade.html');

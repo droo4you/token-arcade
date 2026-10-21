@@ -1,9 +1,9 @@
-// Skrumpey Slide v2 deterministic sim. Pure: no DOM, no wall clock. Fixed 60 Hz, seeded RNG, input replay.
+// Skrumpey Slide deterministic sim (rules 1.1.0: multi-stage lane sprint). Pure: no DOM, no wall clock. Fixed 60 Hz, seeded RNG, input replay.
 // Terrain = authored chunk templates (control points joined by cosine curves -> zero slope at joints)
 // stitched procedurally per seed, grouped into biomes. Entities (collectibles, power-ups, enemies) are spawned with the chunk.
 (function(root){
 const DT=1/60, PIT=-400;
-const P={g:24,gPress:140,startV:22,minV:13,maxV:80,friction:0.004,perfectAng:0.5,badAng:0.85,perfectBoost:1.14,badKeep:0.8,diveAccel:14,trainMultStep:0.2,trainMultCap:1.5,trainSpacing:3.6,laneW:3.5,laneLen:230,laneSpeed:32,laneJumpV:15,frenzyNeed:45,frenzyTicks:300,frenzyEvery:10,frenzyMagnet:9,buddyR:4.2,trainGap:9,trainHitKeep:0.9,starSynergy:1.5,rearRange:22,launchPeriod:90,launchMinPull:8,launchAuto:600,launchAngle:0.55,perfectLaunchQ:0.9,jumpV:17,jumpStart:3,jumpMax:5,jumpComboEvery:5,perfectMaxSlope:0.1,terrainStretch:1.15,launchKick:2,launchSlope:0.18,
+const P={g:24,gPress:140,startV:22,minV:13,maxV:80,friction:0.004,perfectAng:0.5,badAng:0.85,perfectBoost:1.14,badKeep:0.8,diveAccel:14,trainMultStep:0.2,trainMultCap:1.5,trainSpacing:3.6,laneW:3.5,laneLen:230,laneSpeed:32,laneStages:[{len:150,speed:36,density:0.55},{len:170,speed:42,density:0.7},{len:190,speed:48,density:0.85}],laneEase:0.05,laneDayDrain:0.75,laneRow:20,laneJumpV:15,frenzyNeed:45,frenzyTicks:300,frenzyEvery:10,frenzyMagnet:9,buddyR:4.2,trainGap:9,trainHitKeep:0.9,starSynergy:1.5,rearRange:22,launchPeriod:90,launchMinPull:8,launchAuto:600,launchAngle:0.55,perfectLaunchQ:0.9,jumpV:17,jumpStart:3,jumpMax:5,jumpComboEvery:5,perfectMaxSlope:0.1,terrainStretch:1.15,launchKick:2,launchSlope:0.18,
   dayTicks:60*60,perfectDaylight:30,airPtsPerSec:20,heightPts:4,distPts:1,
   pr:1.4, starTicks:6*60, beamTicks:9*60, beamEvery:24, beamRange:34, hitKeep:0.6, invulnTicks:70, stompBounce:15,bashSpeed:24,
   pts:{gem:10,stomp:50,beamKill:30,starKill:40,power:100}};
@@ -29,12 +29,29 @@ function makeWorld(seed){
       crystal:['rollers','gap','bigRamp','plateau','rollers'],clouds:['gap','gap','bigRamp','rollers','plateau']}[BIOMES[b]];
       kind=pool[Math.floor(r()*pool.length)];}
     const by=0;
-    if(kind==='lane'){ // 3-lane sprint: flat strip; barriers / lane nuts / one stranded Skrumpey; theme = biome
-      const y0=L().y;add(30,by);const xa=L().x;add(P.laneLen/K,by);const xb=L().x;add(40,by-A*0.6);lanes.push({x0:xa+6,x1:xb-6,biome:b});
-      let lastFree=0;for(let x=xa+30,row=0;x<xb-20;x+=20,row++){const free=Math.max(-1,Math.min(1,lastFree+(r()<0.5?-1:1)*(r()<0.6?1:0)));
-        for(let l=-1;l<=1;l++){if(l===free)continue;if(r()<0.75)ent('barrier',x,0,{lane:l});}
-        for(let i=0;i<3;i++)ent('gem',x+5+i*4,0,{lane:free,laneGem:true});
-        if(row===2||row===6)ent('buddy',x+10,0,{lane:free,bi:(buddyN++)%BUDDY_TRAITS.length});lastFree=free;}}
+    if(kind==='lane'){ // multi-stage 3-lane sprint: flat strip split into stages of rising speed and density; theme = biome
+      add(30,by);const xa=L().x;const stages=[];let sx=xa;
+      for(const st of P.laneStages){stages.push({x0:sx,x1:sx+st.len,speed:st.speed,density:st.density});sx+=st.len;}
+      add((sx-xa)/K,by);const xb=L().x;add(40,by-A*0.6);lanes.push({x0:xa+6,x1:xb-6,biome:b,stages});
+      let free=0;
+      const row=(x,blocked,d)=>{for(const l of blocked)if(r()<d)ent('barrier',x,0,{lane:l});};
+      const nuts=(x,l,n)=>{for(let i=0;i<n;i++)ent('gem',x+i*4,0,{lane:l,laneGem:true});};
+      const others=f=>[-1,0,1].filter(l=>l!==f);
+      const step1=()=>{free=Math.max(-1,Math.min(1,free+(r()<0.5?-1:1)*(r()<0.6?1:0)));};
+      // pattern library; each returns the x after it. Stage 1 uses the gentle ones only.
+      const PAT={
+        zigzag(x,d){step1();row(x,others(free),d+0.2);nuts(x+5,free,3);return x+P.laneRow;},
+        hurdle(x){for(let l=-1;l<=1;l++)ent('barrier',x,0,{lane:l});ent('gem',x,0,{lane:free,laneGem:true,hop:true});return x+P.laneRow*1.6;},
+        corridor(x){const n=3+Math.floor(r()*2);for(let i=0;i<n;i++){const xx=x+i*12;for(const l of others(free))ent('barrier',xx,0,{lane:l});nuts(xx+4,free,2);}return x+n*12+P.laneRow*0.8;},
+        slalom(x){let f=r()<0.5?-1:1;for(let i=0;i<3;i++){for(const l of others(f))ent('barrier',x+i*26,0,{lane:l});nuts(x+i*26+6,f,2);f=-f;}free=-f;return x+3*26+P.laneRow*0.6;},
+        split(x){for(let i=0;i<3;i++)ent('barrier',x+i*12,0,{lane:0});const bonus=r()<0.5?-1:1;nuts(x+2,bonus,5);ent('gem',x+24,0,{lane:bonus,laneGem:true,rare:true});free=bonus;return x+3*12+P.laneRow;},
+      };
+      const pools=[['zigzag','zigzag','corridor'],['zigzag','hurdle','corridor','slalom'],['zigzag','hurdle','slalom','split','corridor']];
+      let rowN=0;
+      stages.forEach((st,si)=>{let x=st.x0+(si?14:30);const end=st.x1-(si===stages.length-1?20:10);
+        if(si>0)ent('gate',st.x0,0,{stage:si});
+        while(x<end-12){const pool=pools[si];const k=rowN<2?'zigzag':pool[Math.floor(r()*pool.length)];const x1=x;x=PAT[k](x,st.density);
+          if(rowN===2||rowN===7||rowN===13)ent('buddy',x1+10,0,{lane:free,bi:(buddyN++)%BUDDY_TRAITS.length});rowN++;}});}
     else if(kind==='start'){add(40,by+2);add(50,by-8);add(45,by+2);add(45,by-10);gemArc(x0+K*50,x0+K*90,3);}
     else if(kind==='rest'){add(60,by);add(60,by+2);add(60,by);ent('landmark',x0+K*60,0,{biome:b});gemArc(x0+K*30,x0+K*90,2);
       // power-up as a reward on the rest zone, alternating star / beam
@@ -50,7 +67,7 @@ function makeWorld(seed){
     if(kind==='rest'){buddy(x0+K*70);buddy(x0+K*150);}else if(kind==='plateau')buddy(x0+K*40);
     chunks.push({x0,x1:L().x,kind,biome:b});lastBiome=b;chunkN++;
     // resolve entity heights (y relative to ground where not set)
-    for(const e of ents)if(e._res!==true&&e.x<=L().x){const g=evalH(e.x);if(e.laneGem)e.y=g+1.2;else if(e.type!=='gem')e.y=e.arc!==undefined?e.arc:(g<=PIT+1?evalH(e.x+30):g)+(e.air||0);e.y0=e.y;e._res=true;}
+    for(const e of ents)if(e._res!==true&&e.x<=L().x){const g=evalH(e.x);if(e.laneGem)e.y=g+(e.hop?3.2:1.2);else if(e.type!=='gem')e.y=e.arc!==undefined?e.arc:(g<=PIT+1?evalH(e.x+30):g)+(e.air||0);e.y0=e.y;e._res=true;}
     // Templates emit by type, but collision, bot and rendering scans stop at
     // the first distant entity. Keep spatial order after every generated chunk.
     // x0 is stable even when walkers move around their spawn point.
@@ -69,8 +86,9 @@ function makeWorld(seed){
 
 function create(seed){const W=makeWorld(seed);const s={seed,T:W,W,tick:0,x:0,y:W.h(0),vx:P.startV,vy:0,ground:true,air:0,airMax:0,
   combo:1,bestCombo:1,perfects:0,bads:0,score:0,bonus:0,daylight:P.dayTicks,over:false,lastLanding:null,inputs:[],maxAlt:0,
-  inLane:null,lane:0,laneZ:0,lanePrevPress:false,lanesRun:0,nutMeter:0,frenzyT:0,frenzies:0,phase:'launch',pull:0,launchQ:0,train:[],trainBest:0,rescued:0,trainLost:0,hist:[],power:null,powerT:0,jumps:P.jumpStart,jumpsUsed:0,biomeSeen:0,invuln:0,gems:0,kills:0,hits:0,falls:0,ev:[],entLo:0};return s;}
+  inLane:null,lane:0,laneZ:0,lanePrevPress:false,lanesRun:0,laneStage:-1,laneStagesBest:0,nutMeter:0,frenzyT:0,frenzies:0,phase:'launch',pull:0,launchQ:0,train:[],trainBest:0,rescued:0,trainLost:0,hist:[],power:null,powerT:0,jumps:P.jumpStart,jumpsUsed:0,biomeSeen:0,invuln:0,gems:0,kills:0,hits:0,falls:0,ev:[],entLo:0};return s;}
 
+function laneStage(l,x){let i=0;while(i<l.stages.length-1&&x>=l.stages[i+1].x0)i++;return i;}
 function TM(s){return 1+Math.min(P.trainMultCap,P.trainMultStep*s.train.length);}
 // scoring helpers (used by step() and by the How-to-Play calculator)
 function flightPts(airTicks,airMax,combo,tm){return airTicks>20?Math.round(tm*(Math.round((airTicks/60*P.airPtsPerSec+airMax*P.heightPts)*combo))):0;}
@@ -94,10 +112,11 @@ function step(s,input){if(s.over)return;const bits=input===true?1:input===false?
     const sp=P.startV*(0.6+0.6*q)+(perfect?8:0);s.vx=sp*Math.cos(P.launchAngle);s.vy=sp*Math.sin(P.launchAngle)+4+q*6;s.y+=1;s.ground=false;
     s.phase='run';s.launchQ=q;s.ev.push({t:'sling',q,perfect,x:s.x,y:s.y});return;}
   // lane sprint segment
-  const ln=W.laneAt(s.x);if(ln&&!s.inLane){s.inLane=ln;s.lane=0;s.lanesRun++;s.ev.push({t:'laneIn',biome:ln.biome});}else if(!ln&&s.inLane){s.inLane=null;s.lane=0;s.ev.push({t:'laneOut'});}
+  const ln=W.laneAt(s.x);if(ln&&!s.inLane){s.inLane=ln;s.lane=0;s.laneStage=-1;s.lanesRun++;s.ev.push({t:'laneIn',biome:ln.biome});}else if(!ln&&s.inLane){s.inLane=null;s.lane=0;s.ev.push({t:'laneOut'});}
   if(s.inLane){if(bits&4)s.lane=Math.max(-1,s.lane-1);if(bits&8)s.lane=Math.min(1,s.lane+1);
     const tap=press&&!s.lanePrevPress;if((jump||tap)&&s.ground){s.vy=P.laneJumpV;s.y+=0.05;s.ground=false;s.ev.push({t:'jump',x:s.x,y:s.y,lane:true});}
-    const sp=Math.hypot(s.vx,s.vy);if(sp<P.laneSpeed){const k=P.laneSpeed/(sp||1);s.vx*=k;s.vy*=k;}}
+    const st=laneStage(s.inLane,s.x);if(st!==s.laneStage){s.laneStage=st;s.laneStagesBest=Math.max(s.laneStagesBest,st+1);if(st>0)s.ev.push({t:'laneStage',stage:st,of:s.inLane.stages.length});}
+    const sp=Math.hypot(s.vx,s.vy),want=s.inLane.stages[st].speed,nsp=sp<want*0.7?want*0.7:sp+(want-sp)*P.laneEase;if(sp>0){const k=nsp/sp;s.vx*=k;s.vy*=k;}}
   s.lanePrevPress=press;s.laneZ+=((s.inLane?s.lane*P.laneW:0)-s.laneZ)*0.22;
   s.hist.push(s.x,s.y,s.laneZ);if(s.hist.length>1800)s.hist.splice(0,600);
   // limited jump: only from the ground, uses a charge, kicks along the surface normal
@@ -127,7 +146,7 @@ function step(s,input){if(s.over)return;const bits=input===true?1:input===false?
   if(s.power){s.powerT--;if(s.powerT<=0){s.ev.push({t:'powerEnd',p:s.power});s.power=null;}}
   const ents=W.ents;while(s.entLo<ents.length&&ents[s.entLo].x<s.x-40)s.entLo++;
   let beamTarget=null;const beamFire=s.power==='beam'&&s.powerT%P.beamEvery===0;
-  for(let i=s.entLo;i<ents.length;i++){const e=ents[i];if(e.x>s.x+P.beamRange+10)break;if(e.dead||e.type==='landmark')continue;
+  for(let i=s.entLo;i<ents.length;i++){const e=ents[i];if(e.x>s.x+P.beamRange+10)break;if(e.dead||e.type==='landmark'||e.type==='gate')continue;
     entPos(s,e);const dx=e.x-s.x,dy=(e.y+(e.type==='gem'||e.type==='star'||e.type==='beam'?0:1.2))-(s.y+1.2),d2=dx*dx+dy*dy;
     const enemy=e.type==='walker'||e.type==='flyer'||e.type==='spike';
     if(beamFire&&enemy&&!beamTarget&&dx>2&&Math.abs(dy)<12)beamTarget=e;
@@ -152,7 +171,7 @@ function step(s,input){if(s.over)return;const bits=input===true?1:input===false?
   if(beamTarget){s.ev.push({t:'beam',x:s.x,y:s.y+1.6,tx:beamTarget.x,ty:beamTarget.y+1});kill(s,beamTarget,'beam');}
   const bi=Math.floor(Math.max(0,s.x)/BIOME_LEN);if(bi>s.biomeSeen){s.biomeSeen=bi;if(s.jumps<P.jumpMax){s.jumps++;s.ev.push({t:'jumpRefill',why:'biome'});}}
   if(s.lastLanding==='perfect'&&s.combo%P.jumpComboEvery===0&&s.jumps<P.jumpMax){s.jumps++;s.ev.push({t:'jumpRefill',why:'combo'});}
-  s.daylight--;s.score=Math.floor(s.x*P.distPts)+s.bonus;if(s.daylight<=0)s.over=true;}
+  s.daylight-=s.inLane?P.laneDayDrain:1;s.score=Math.floor(s.x*P.distPts)+s.bonus;if(s.daylight<=0)s.over=true;}
 
 function result(s,mode){return {mode,seed:s.seed,score:s.score,distance:Math.floor(s.x),bestCombo:s.bestCombo,perfects:s.perfects,bads:s.bads,gems:s.gems,kills:s.kills,hits:s.hits,falls:s.falls,maxAlt:+s.maxAlt.toFixed(1),endTick:s.tick,jumpsUsed:s.jumpsUsed,train:s.train.slice(),trainBest:s.trainBest,rescued:s.rescued,lanesRun:s.lanesRun,frenzies:s.frenzies,launchQ:+s.launchQ.toFixed(2),replay:s.inputs.join('')};}
 function replay(seed,str){const s=create(seed);for(const c of str)step(s,c.charCodeAt(0)-48);return result(s,'replay');}
@@ -176,6 +195,7 @@ function botInput(s){if(s.inLane)return botLane(s);if(s.phase==='launch')return 
   else if(s.power!=='star'){const sp=Math.hypot(s.vx,s.vy);for(let i=s.entLo;i<s.W.ents.length;i++){const e=s.W.ents[i];const dx=e.x-s.x;if(dx>sp*0.45)break;
     if(!e.dead&&dx>sp*0.25&&(e.type==='spike'||(e.type==='walker'&&sp<P.bashSpeed))){b=2;break;}}}}
   return b;}
-const API={flightPts,nutPts,killPts,powerPts,rainPts,BUDDY_TRAITS,launchMeter,TM,DT,P,PIT,BIOMES,BIOME_LEN,rng,makeWorld,create,step,result,replay,dailySeed,botInput};
+const RULES_VERSION='1.1.0'; // bump whenever world generation or scoring changes; the server verifies each version with its own frozen sim
+const API={RULES_VERSION,flightPts,nutPts,killPts,powerPts,rainPts,BUDDY_TRAITS,launchMeter,TM,DT,P,PIT,BIOMES,BIOME_LEN,rng,makeWorld,create,step,result,replay,dailySeed,botInput};
 if(typeof module!=='undefined')module.exports=API;else root.SIM=API;
 })(this);
