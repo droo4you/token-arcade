@@ -8,7 +8,7 @@
 (function (root) {
   'use strict';
   const WP = (typeof module !== 'undefined' && module.exports) ? require('./weapons.js') : root.SkrumpWeapons;
-  const SIM_VERSION = 3, HZ = 120, DT = 1 / HZ, G = 18, ITER = 4, MAX_SHOT_TICKS = HZ * 9;
+  const SIM_VERSION = 4, HZ = 120, DT = 1 / HZ, G = 18, ITER = 4, MAX_SHOT_TICKS = HZ * 9;
   const SUBJ_R = 0.5, DISPLACE_D = 1.0, OUT = { x0: -12, x1: 90, y0: -10 };
   const PTS = { perSubject: 100, clear: 500, unusedShell: 250, overkill: 300, wasted: 100 };
   // A FIG = one weapon from the registry, flattened for the sim. Legacy fields (id, shots, vk) kept for the scorer and tests.
@@ -73,15 +73,20 @@
     f.shotsFired++;
     if (F.rules.ceasefire) f.ceasefire = f.shotsFired === 1 ? 'none' : 'denied';
     run.shot = { t: 0, proj: null, projs: [], q: [qx, qy], round: 0, before: f.displaced, overkill, maxX: F.launcher.x, events: [] };
-    spawnRound(run);
+    spawnDue(run);
     run.phase = 'flight';
     return true;
   }
-  function spawnRound(run) { // one round of the current shell; burst weapons call this every fire.gap ticks
+  function spawnDue(run) { // pattern weapons spawn every round whose tick has come; others spawn one round now
+    const F = run.lineup[run.fig], P = F.fire.pattern, sh = run.shot;
+    if (!P) { spawnRound(run); return; }
+    while (sh.round < P.length && P[sh.round].t <= sh.t) spawnRound(run, P[sh.round]);
+  }
+  function spawnRound(run, pt) { // one round of the current shell; burst weapons call this every fire.gap ticks
     const F = run.lineup[run.fig], P = F.proj, sh = run.shot, [qx, qy] = sh.q, k = F.fire.spread[sh.round % F.fire.spread.length];
-    let vx = qx * F.vk, vy = qy * F.vk; if (k) { const ox = -vy * k, oy = vx * k; vx += ox; vy += oy; }
+    let vx = qx * F.vk, vy = qy * F.vk; if (pt) { vx *= pt.p; vy *= pt.p; if (pt.k) { const ox = -vy * pt.k, oy = vx * pt.k; vx += ox; vy += oy; } } else if (k) { const ox = -vy * k, oy = vx * k; vx += ox; vy += oy; }
     const L = sh.round === 0 && F.fire.lead, r = L ? L.r : P.r, m = L ? L.m : P.m;
-    const b = { id: run.bodies.length, kind: 'proj', x: F.launcher.x, y: F.launcher.y, vx, vy, g: F.g, r, inv: 1 / m, sleep: false, still: 0, out: false, round: sh.round };
+    const b = { id: run.bodies.length, kind: 'proj', x: F.launcher.x + (pt ? pt.dx : 0), y: F.launcher.y + (pt ? pt.dy : 0), vx, vy, g: F.g, r, inv: 1 / m, sleep: false, still: 0, out: false, round: sh.round };
     run.bodies.push(b); sh.projs.push(b); if (!sh.proj) sh.proj = b; sh.round++;
   }
   function conclude(run) {
@@ -137,7 +142,7 @@
   function step(run) {
     if (run.phase !== 'flight') return;
     const sh = run.shot, F = run.lineup[run.fig]; sh.t++; run.tick++;
-    if (sh.round < F.fire.burst && sh.t % F.fire.gap === 0) spawnRound(run);
+    if (F.fire.pattern) spawnDue(run); else if (sh.round < F.fire.burst && sh.t % F.fire.gap === 0) spawnRound(run);
     const B = run.bodies, n = B.length;
     for (let i = 0; i < n; i++) { const b = B[i]; if (b.sleep || b.out) continue; b.vy -= b.g * DT; b.vx *= 0.9995; b.vy *= 0.9995; b.x += b.vx * DT; b.y += b.vy * DT; }
     for (let it = 0; it < ITER; it++) {
@@ -152,7 +157,7 @@
       if (b.sleep) continue;
       awake++;
       const s2 = b.vx * b.vx + b.vy * b.vy;
-      if (s2 < 0.09) { if (++b.still > 30) { b.sleep = true; b.vx = 0; b.vy = 0; } } else b.still = 0;
+      if (s2 < 0.09) { if (++b.still > 30) { b.sleep = true; b.vx = 0; b.vy = 0; if (b.kind === 'proj' && F.fire.despawn) { b.out = true; b.gone = true; } } } else b.still = 0;
     }
     for (const p of sh.projs) if (p.x > sh.maxX) sh.maxX = p.x;
     tally(run);

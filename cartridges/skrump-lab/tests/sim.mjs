@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 const S = createRequire(import.meta.url)('../src/sim.js');
-const PLAN = [['F', 85, 40], ['F', 96, 25], ['F', 90, 40], ['F', 70, 55], ['F', 85, 45], ['F', 90, 35], ['F', 98, 15], ['F', 99, 8], ['F', 95, 30]];
+const PLAN = [['F', 85, 40], ['F', 96, 25], ['F', 90, 40], ['F', 70, 55], ['F', 85, 45], ['F', 90, 35], ['F', 98, 15], ['F', 99, 8]];
 
 function live(seed, plan) { // the way the browser drives it: step by step
   const run = S.newRun(seed);
@@ -66,7 +66,7 @@ test('scoring formula', () => {
 });
 
 test('replay rejects illegal input records', () => {
-  assert.ok(S.replay(1, Array(10).fill(['F', 50, 50])).error);
+  assert.ok(S.replay(1, Array(9).fill(['F', 50, 50])).error);
   assert.ok(S.replay(1, [['E']]).error, 'cannot conclude before a full clear');
   assert.ok(S.replay(1, [['X']]).error);
   assert.deepEqual(S.clampQ(300, 400), [60, 80]);

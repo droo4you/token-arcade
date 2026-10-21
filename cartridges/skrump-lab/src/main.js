@@ -248,7 +248,7 @@
     for (const b of r.bodies) { if (b.out) continue;
       const rot = G.spin.get(b.id) || 0;
       if (b.kind === 'subj') sprite(LOOKS[b.look], b.x, b.y, b.r, rot);
-      else { const id = PS[pi % PS.length]; pi++; if (!b.spent || F.frame === 'catapult') { if (!b.sleep) { cx.save(); cx.globalAlpha = 0.35; cx.fillStyle = PINK; cx.beginPath(); cx.arc(X(b.x - b.vx * 0.03), Y(b.y - b.vy * 0.03), b.r * sc * 0.9, 0, 6.29); cx.fill(); cx.restore(); } sprite(id, b.x, b.y, b.r, rot); } else sprite(id, b.x, b.y, b.r, rot); }
+      else { const id = PS[pi % PS.length]; pi++; if (!b.spent || F.frame === 'catapult') { if (!b.sleep && b.r > 0.2) { cx.save(); cx.globalAlpha = 0.35; cx.fillStyle = PINK; cx.beginPath(); cx.arc(X(b.x - b.vx * 0.03), Y(b.y - b.vy * 0.03), b.r * sc * 0.9, 0, 6.29); cx.fill(); cx.restore(); } sprite(id, b.x, b.y, b.r, rot); } else sprite(id, b.x, b.y, b.r, rot); }
     }
   }
   function drawAim(r) {

@@ -2,7 +2,7 @@
   "id": "skrump-lab",
   "name": "Skrump Lab: Weapons Test",
   "description": "LAB-07 weapons test. Launch Skrumpeys at piles of pink Skrumpeys. Accuracy: irrelevant.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "artwork": {
     "icon": "assets/sprites/3.png"
   },
@@ -20,7 +20,7 @@
   "integrationLevel": "L0",
   "skeleton": "launcher",
   "entry": {
-    "url": "/skrump-lab/v/1.2.0/arcade.html",
+    "url": "/skrump-lab/v/1.3.0/arcade.html",
     "origin": "cartridge",
     "kind": "iframe"
   },
@@ -55,13 +55,13 @@
     }
   },
   "determinism": "replayable-portable",
-  "simVersion": "3",
+  "simVersion": "4",
   "tickHz": 120,
   "seedPolicy": "per_run",
-  "simHash": "sha256:89c66b8f4df54ae5d51a4f7efa77c911e4512ceeffe95508b9fcc5f00ab80da0",
+  "simHash": "sha256:4026eb95b61cbaeb29042a9c27a078e48f5f185c38a413085e642629514df099",
   "verifier": {
     "kind": "replay",
-    "entry": "src/sim.js#replay (opts.simVersion 1 / 2 replay older FIG.1+2 / FIG.1-3 records)",
+    "entry": "src/sim.js#replay (opts.simVersion 1/2/3 replay older lineups bit-identically)",
     "runtime": "node (not installed in the API yet)"
   },
   "removedInArcade": [
@@ -78,8 +78,8 @@
     "lineup": [
       "catapult",
       "tank",
-      "trail",
-      "consensus"
+      "trailDrop",
+      "blast"
     ]
   }
 }
