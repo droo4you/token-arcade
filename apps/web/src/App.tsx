@@ -464,6 +464,26 @@ function AccountPrompt({ health }: { health: Health | null }) {
   return <div className="account-prompt"><div className="prompt-art"><span>✦</span></div><div><h2>Your arcade identity starts here.</h2><p>A Player Passport keeps verified scores and raid history together. New and returning players use the same sign-in. You can browse the arcade without an account.</p><div className="prompt-actions">{auth.configured ? <button className="action action-lime" onClick={auth.login}>Sign in / Create account <ArrowUpRight size={18} /></button> : <div className="setup-note"><Settings2 size={19} /><span>Privy sign-in is not configured. Add <code>VITE_PRIVY_APP_ID</code> and server credentials to enable player accounts.</span></div>}<ActionLink href="/" tone="light">Browse as Guest</ActionLink></div>{health?.auth.localDemo && <div className="demo-controls"><strong>Local developer demo</strong><span>These identities only work with LOCAL_DEMO_MODE on loopback.</span><div><button onClick={() => auth.setDemoRole("player")}>Enter as test player</button>{health.auth.localDemoAdmin && <button onClick={() => auth.setDemoRole("admin")}>Enter as test admin</button>}</div>{health.auth.localDemoAdmin === false && <span>Curator actions require an allowlisted Privy account in this rehearsal.</span>}</div>}</div></div>;
 }
 
+function WalletSigningCheck({ wallet }: { wallet: string }) {
+  const auth = useArcadeAuth();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const check = async () => {
+    setBusy(true); setResult(null);
+    try {
+      await auth.checkArcadeWalletSigning(wallet);
+      setResult({ ok: true, message: "Signing verified for this arcade wallet. The funded raid prize claim still needs a separate transaction and test MON for gas." });
+    } catch (reason) {
+      setResult({ ok: false, message: `Signing was not verified. ${messageFor(reason)} You can retry when ready.` });
+    } finally { setBusy(false); }
+  };
+  return <div>
+    <button className="text-button" type="button" disabled={busy} onClick={() => void check()}>{busy ? "Waiting for Privy signature…" : "Check wallet signing"}</button>
+    <p>Sign a message with your arcade wallet. No gas or funds needed.</p>
+    {result && <p role={result.ok ? "status" : "alert"}>{result.message}</p>}
+  </div>;
+}
+
 function PassportPage({ health, records }: { health: Health | null; records: GameRecord[] }) {
   const auth = useArcadeAuth();
   const rankedGame = getCatalog(records).find((game) => game.playable && game.record?.status === "published" && game.record.manifest.supportedModes.includes("ranked"));
@@ -552,7 +572,7 @@ function PassportPage({ health, records }: { health: Health | null; records: Gam
            const gameName = records.find((record) => record.manifest.id === gameId)?.manifest.name ?? getGame(gameId, [])?.name ?? gameId;
            return <div className="history-row" key={key}><span>{gameName} · {objective.replaceAll("_", " ")}</span><strong>{score.toLocaleString()}</strong></div>;
          })}</div> : <div className="empty-list"><Gamepad2 size={27} /><strong>No verified scores yet</strong><span>{rankedGame ? "Finish a Passport Play run to add your first one." : "Your verified scores will appear when Passport Play opens."}</span></div>}{rankedGame && <ActionLink href={playHref(rankedGame.id, "ranked")}>Try Passport Play</ActionLink>}</section>
-        <section className="passport-wallet"><h2>Wallets & communities</h2><div className="rule-row"><span>Arcade wallet</span><strong>{auth.demoRole ? "Demo identity · no wallet" : passport.arcadeWallet ? shortAddress(passport.arcadeWallet) : walletSync?.ready === false ? "Wallet sync unavailable" : "Waiting for Privy wallet"}</strong></div>{!auth.demoRole && !passport.arcadeWallet && <>{walletSync?.ready === false && <p role="status">{walletSync.reason}</p>}{!auth.hasEmbeddedWallet && <button className="text-button" disabled={creatingArcadeWallet} onClick={() => void createArcadeWallet()}>{creatingArcadeWallet ? "Creating arcade wallet…" : "Create arcade wallet"}</button>}<button className="text-button" onClick={() => setPassportLoad((value) => value + 1)}>Refresh wallet</button></>}<div className="rule-row"><span>Ownership wallets</span><strong>{passport.ownershipWallets.length}</strong></div>{passport.ownershipWallets.map((address) => <div className="linked-wallet" key={address}><code>{shortAddress(address)}</code><button disabled={walletBusy} onClick={() => void unlinkWallet(address)}>Unlink</button></div>)}<button className="wallet-link-button" disabled={walletBusy} onClick={() => void linkWallet()}>{walletBusy ? "Waiting for wallet…" : "Link ownership wallet"}<ArrowUpRight size={16} /></button><p>Sign a message to associate an external wallet. No asset transfer is requested. Holder eligibility needs a configured Community Asset and Monad RPC.</p><div className="rule-row"><span>Communities</span><strong>{passport.communities.length ? passport.communities.join(", ") : "None yet"}</strong></div><button className="text-button" onClick={() => void auth.logout()}>Sign out</button></section>
+        <section className="passport-wallet"><h2>Wallets & communities</h2><div className="rule-row"><span>Arcade wallet</span><strong>{auth.demoRole ? "Demo identity · no wallet" : passport.arcadeWallet ? shortAddress(passport.arcadeWallet) : walletSync?.ready === false ? "Wallet sync unavailable" : "Waiting for Privy wallet"}</strong></div>{!auth.demoRole && passport.arcadeWallet && <WalletSigningCheck key={`${auth.identityKey}:${passport.arcadeWallet}`} wallet={passport.arcadeWallet} />}{!auth.demoRole && !passport.arcadeWallet && <>{walletSync?.ready === false && <p role="status">{walletSync.reason}</p>}{!auth.hasEmbeddedWallet && <button className="text-button" disabled={creatingArcadeWallet} onClick={() => void createArcadeWallet()}>{creatingArcadeWallet ? "Creating arcade wallet…" : "Create arcade wallet"}</button>}<button className="text-button" onClick={() => setPassportLoad((value) => value + 1)}>Refresh wallet</button></>}<div className="rule-row"><span>Ownership wallets</span><strong>{passport.ownershipWallets.length}</strong></div>{passport.ownershipWallets.map((address) => <div className="linked-wallet" key={address}><code>{shortAddress(address)}</code><button disabled={walletBusy} onClick={() => void unlinkWallet(address)}>Unlink</button></div>)}<button className="wallet-link-button" disabled={walletBusy} onClick={() => void linkWallet()}>{walletBusy ? "Waiting for wallet…" : "Link ownership wallet"}<ArrowUpRight size={16} /></button><p>Sign a message to associate an external wallet. No asset transfer is requested. Holder eligibility needs a configured Community Asset and Monad RPC.</p><div className="rule-row"><span>Communities</span><strong>{passport.communities.length ? passport.communities.join(", ") : "None yet"}</strong></div><button className="text-button" onClick={() => void auth.logout()}>Sign out</button></section>
       </div>}
     </>}
   </main>;
