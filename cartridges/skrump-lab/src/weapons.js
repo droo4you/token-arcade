@@ -105,7 +105,40 @@
         more: 'It was fired again. {gained} more. {displaced} of {N}. The vote stands.',
       },
     },
+    // FIG.4 (v5): one shell only, fewer rounds, wider fan: a great aim takes most of the pile, not all of it.
+    blastOne: {
+      id: 'blastOne', fig: 4, name: 'DN CONSENSUS MECHANISM', sub: 'test 04 · everything at once', owner: { token: '2067', name: 'Skrumpey #2067' },
+      shells: 1, N: 39, layout: 'gallery', launcher: { x: 3.4, y: 3.0 },
+      fire: { arc: 'direct', gScale: 0.6, vk: 0.33, burst: 44, gap: 0, spread: [0], pattern: wideBlast(44), despawn: true },
+      proj: { r: 0.18, m: 0.3, label: '3,333 SKRUMPEYS', sprites: ['2067', '2912', '690', '3'] },
+      rules: { ceasefire: false }, hud: 'consensus', frame: 'barrel', sfx: 'cannon', shake: 0.6, aimDefault: 0.25,
+      auto: [[100, 8], [99, 15], [98, 22], [95, 30], [90, 40], [100, 0], [80, 50]],
+      lines: {
+        intro: 'Test four. The DN consensus mechanism voted on firing everything at once. Unanimous.',
+        first: 'Everything was fired at once. {gained} subjects displaced. {displaced} of {N}.',
+      },
+    },
+    // FIG.5 (v5): the clip's "A BIGGER TANK" (test 05 · approach speed). Huge, slow, heavy shells; the tank rolls forward every shot (no brakes).
+    biggerTank: {
+      id: 'biggerTank', fig: 5, name: 'A BIGGER TANK', sub: 'test 05 · approach speed', owner: { token: '690', name: 'Skrumpey #690' },
+      shells: 4, N: 55, layout: 'dais', launcher: { x: 4.5, y: 3.4 },
+      fire: { arc: 'ballistic', gScale: 1, vk: 0.27, burst: 1, gap: 0, spread: [0], advance: 3 },
+      proj: { r: 0.95, m: 14, label: '1 LARGE SKRUMPEY / SHELL', sprites: ['690', '2912', '2067', '3'] },
+      rules: { ceasefire: false, brakes: false }, hud: 'bigtank', frame: 'bigtank', sfx: 'cannon', shake: 0.9, aimDefault: 0.5,
+      auto: [[90, 45], [100, 35], [85, 55], [100, 25], [95, 50], [75, 60], [100, 45], [70, 70]],
+      lines: {
+        intro: 'Test five. A bigger tank.',
+        first: '{gained} subjects displaced. Approach speed: increasing.',
+        more: '{gained} more. {displaced} of {N}. Approach speed: increasing.',
+        last: 'Brakes: not installed.',
+      },
+    },
   };
+  function wideBlast(n) { const out = [], s = 0.4; let i = 0;
+    for (let ring = 0; i < n; ring++) for (let row = -ring; row <= ring && i < n; row++) for (let col = -ring; col <= ring && i < n; col++) {
+      if (Math.max(Math.abs(row), Math.abs(col)) !== ring) continue;
+      out.push({ t: 0, dx: col * s + (row % 2 ? s / 2 : 0), dy: row * s, k: row * 0.075 + ((i * 7) % 5 - 2) * 0.02, p: 1 + col * 0.04 + ((i * 3) % 7 - 3) * 0.02 }); i++; }
+    return out; }
   // pattern rounds: { t: spawn tick, dx, dy: offset from the muzzle, k: perpendicular spread, p: power scale }. Plain arithmetic only.
   function trailPattern() { const out = [{ t: 0, dx: 0, dy: 0, k: 0, p: 1 }]; let t = 0, gap = 4;
     for (let i = 1; i < 10; i++) { gap += 1 + Math.floor(i / 2); t += gap; out.push({ t, dx: 0, dy: 0, k: 0, p: 1 - 0.035 * i }); } return out; }
@@ -114,7 +147,7 @@
       if (Math.max(Math.abs(row), Math.abs(col)) !== ring) continue;
       out.push({ t: 0, dx: col * s + (row % 2 ? s / 2 : 0), dy: row * s, k: row * 0.045 + ((i * 7) % 5 - 2) * 0.012, p: 1 + col * 0.03 + ((i * 3) % 7 - 3) * 0.012 }); i++; }
     return out; }
-  const LINEUPS = { 1: ['catapult', 'tank'], 2: ['catapult', 'tank', 'rapid'], 3: ['catapult', 'tank', 'trail', 'consensus'], 4: ['catapult', 'tank', 'trailDrop', 'blast'] };
+  const LINEUPS = { 1: ['catapult', 'tank'], 2: ['catapult', 'tank', 'rapid'], 3: ['catapult', 'tank', 'trail', 'consensus'], 4: ['catapult', 'tank', 'trailDrop', 'blast'], 5: ['catapult', 'tank', 'trailDrop', 'blastOne', 'biggerTank'] };
   function fill(tpl, v) { return String(tpl || '').replace(/\{(\w+)\}/g, (_, k) => (k in v ? String(v[k]) : '')); }
   const api = { WEAPONS, LINEUPS, fill };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

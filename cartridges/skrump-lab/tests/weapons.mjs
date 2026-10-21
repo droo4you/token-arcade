@@ -7,11 +7,12 @@ const S = req('../src/sim.js'), WP = req('../src/weapons.js');
 const golden = JSON.parse(fs.readFileSync(new URL('./fixtures/v1-golden.json', import.meta.url), 'utf8'));
 const golden2 = JSON.parse(fs.readFileSync(new URL('./fixtures/v2-golden.json', import.meta.url), 'utf8'));
 const golden3 = JSON.parse(fs.readFileSync(new URL('./fixtures/v3-golden.json', import.meta.url), 'utf8'));
+const golden4 = JSON.parse(fs.readFileSync(new URL('./fixtures/v4-golden.json', import.meta.url), 'utf8'));
 
 // play through to FIG idx with a fixed lead-in, then fire `plan` at it
-const LEAD = [[['F', 85, 40]], [['F', 100, 20], ['F', 100, 10], ['F', 90, 40]], [['F', 85, 45], ['F', 90, 35]]];
+const LEAD = [[['F', 85, 40]], [['F', 100, 20], ['F', 100, 10], ['F', 90, 40]], [['F', 85, 45], ['F', 90, 35]], [['F', 98, 15]]];
 function onFig(idx, plan) { let ins = []; for (let i = 0; i < idx; i++) ins = ins.concat(LEAD[i]); return ins.concat(plan); }
-const PLANS = { catapult: [['F', 85, 40]], tank: [['F', 100, 20], ['F', 100, 10], ['F', 60, 70]], trailDrop: [['F', 85, 45], ['F', 90, 35]], blast: [['F', 98, 15], ['F', 99, 8]] };
+const PLANS = { catapult: [['F', 85, 40]], tank: [['F', 100, 20], ['F', 100, 10], ['F', 60, 70]], trailDrop: [['F', 85, 45], ['F', 90, 35]], blastOne: [['F', 98, 15]], biggerTank: [['F', 90, 45], ['F', 100, 35], ['F', 85, 55]] };
 
 test('registry: every weapon has the full slot contract', () => {
   for (const [k, w] of Object.entries(WP.WEAPONS)) {
@@ -20,11 +21,11 @@ test('registry: every weapon has the full slot contract', () => {
     assert.ok(['ballistic', 'direct'].includes(w.fire.arc)); assert.ok(w.fire.burst >= 1 && w.fire.spread.length >= 1);
     assert.ok(w.fire.burst === 1 || w.fire.gap > 0 || (w.fire.pattern && w.fire.pattern.length === w.fire.burst)); assert.ok(w.owner.token && w.lines.intro);
   }
-  assert.deepEqual(S.FIGS.map(F => F.id), [1, 2, 3, 4]); assert.deepEqual(S.FIGS.map(F => F.key), ['catapult', 'tank', 'trailDrop', 'blast']); assert.deepEqual(S.lineup(3).map(F => F.key), ['catapult', 'tank', 'trail', 'consensus']);
-  assert.deepEqual(S.lineup(1).map(F => F.key), ['catapult', 'tank']); assert.deepEqual(S.lineup(2).map(F => F.key), ['catapult', 'tank', 'rapid']); assert.equal(S.SIM_VERSION, 4);
+  assert.deepEqual(S.FIGS.map(F => F.id), [1, 2, 3, 4, 5]); assert.deepEqual(S.FIGS.map(F => F.key), ['catapult', 'tank', 'trailDrop', 'blastOne', 'biggerTank']); assert.deepEqual(S.lineup(4).map(F => F.key), ['catapult', 'tank', 'trailDrop', 'blast']); assert.deepEqual(S.lineup(3).map(F => F.key), ['catapult', 'tank', 'trail', 'consensus']);
+  assert.deepEqual(S.lineup(1).map(F => F.key), ['catapult', 'tank']); assert.deepEqual(S.lineup(2).map(F => F.key), ['catapult', 'tank', 'rapid']); assert.equal(S.SIM_VERSION, 5);
 });
 
-for (const [v, gold] of [[1, () => golden], [2, () => golden2], [3, () => golden3]]) test(`v${v} records replay bit-identically (golden fixture)`, () => {
+for (const [v, gold] of [[1, () => golden], [2, () => golden2], [3, () => golden3], [4, () => golden4]]) test(`v${v} records replay bit-identically (golden fixture)`, () => {
   for (const c of gold().cases) {
     const r = S.replay(c.seed, c.inputs, { simVersion: v });
     assert.ok(!r.error, r.error);
@@ -78,20 +79,39 @@ for (const idx of [2, 3]) test(`${S.FIGS[idx].key}: one shell = a burst of round
   else { const ys = P.map(b => b.vy); assert.ok(new Set(ys.map(v => v.toFixed(3))).size > 1, 'spread varies rounds'); }
 });
 
-test('balance: trail < blast; blast is the strongest (flattens the pile); trail weaker than v3 trail', () => {
-  const share = (v, idx, lead, cands) => { let t = 0; for (let seed = 1; seed <= 5; seed++) { let best = 0; for (const q of cands) { const r = S.replay(seed, [...lead, ['F', ...q]], { simVersion: v }); best = Math.max(best, r.run.figs[idx].shots[0].displaced / r.run.figs[idx].N); } t += best; } return t / 5; };
-  const L3 = [['F', 85, 40], ['F', 100, 20], ['F', 100, 10], ['F', 90, 40]];
-  const trail = share(4, 2, L3, S.FIGS[2].auto), blast = share(4, 3, [...L3, ['F', 85, 45], ['F', 90, 35]], S.FIGS[3].auto), oldTrail = share(3, 2, L3, S.lineup(3)[2].auto);
-  assert.ok(trail < blast, `trail ${trail} < blast ${blast}`); assert.ok(blast >= 0.9, `blast flattens: ${blast}`); assert.ok(trail <= oldTrail, `drop-off trail ${trail} <= v3 trail ${oldTrail}`);
+const L4 = [['F', 85, 40], ['F', 100, 20], ['F', 100, 10], ['F', 90, 40], ['F', 85, 45], ['F', 90, 35]];
+const bestShare = (v, idx, lead, cands, seeds = 5) => { const out = []; for (let seed = 1; seed <= seeds; seed++) { let best = 0; for (const q of cands) { const r = S.replay(seed, [...lead, ['F', ...q]], { simVersion: v }); best = Math.max(best, r.run.figs[idx].shots.slice(-1)[0].displaced / r.run.figs[idx].N); } out.push(best); } return out; };
+const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+
+test('balance: FIG.4 one-shell blast takes most but not all (best aim ~70-85%), weaker than v4 blast; still beats the trail', () => {
+  const blast = bestShare(5, 3, L4, S.FIGS[3].auto, 6), oldBlast = bestShare(4, 3, L4, S.lineup(4)[3].auto, 6), trail = bestShare(5, 2, L4.slice(0, 4), S.FIGS[2].auto, 6);
+  assert.ok(avg(blast) >= 0.62 && avg(blast) <= 0.88, 'blast avg ' + avg(blast)); assert.ok(blast.every(x => x < 1), 'never an automatic full clear: ' + blast);
+  assert.ok(avg(blast) < avg(oldBlast), 'toned down'); assert.ok(avg(trail) < avg(blast), 'trail ' + avg(trail) + ' < blast');
+  const aims = S.FIGS[3].auto.map(q => S.replay(2, [...L4, ['F', ...q]]).run.figs[3].displaced); assert.ok(Math.max(...aims) - Math.min(...aims) >= 10, 'aim matters: ' + aims);
+});
+
+test('balance: A BIGGER TANK hits hardest per shell but needs more than one well-aimed shell', () => {
+  const lead = [...L4, ['F', 98, 15]], big = bestShare(5, 4, lead, S.FIGS[4].auto, 6), tank = bestShare(5, 1, [['F', 85, 40]], S.FIGS[1].auto, 6);
+  assert.ok(avg(big) > avg(tank), `bigger tank ${avg(big)} > tank ${avg(tank)}`); assert.ok(big.every(x => x < 1), 'no one-shell clear: ' + big);
+});
+
+test('A BIGGER TANK rolls forward each shell (approach speed) and fires very heavy shells', () => {
+  const F = S.FIGS[4], r = S.replay(5, onFig(4, [['F', 50, 50], ['F', 50, 50], ['F', 50, 50], ['F', 50, 50]])).run;
+  const shells = r.bodies.filter(b => b.kind === 'proj' && b.r === F.proj.r);
+  assert.equal(shells.length, 4); assert.ok(1 / shells[0].inv >= 10 * S.FIGS[1].proj.m / 7, 'heavy');
+  const run = S.newRun(5); for (const x of onFig(4, [])) { if (run.phase === 'figdone') S.next(run); S.fire(run, x[1], x[2]); S.settle(run); } S.next(run);
+  const xs = []; for (let k = 0; k < 4; k++) { xs.push(S.muzzleX(run)); S.fire(run, 50, 50); assert.equal(run.bodies[run.bodies.length - 1].x, xs[k]); S.settle(run); }
+  assert.deepEqual(xs.map(x => x - F.launcher.x), [0, 3, 6, 9]); assert.equal(run.phase, 'figdone'); S.next(run); assert.equal(run.over, true, 'FIG.5 is the finale');
 });
 
 test('blast: dozens of rounds, settled rounds despawn, still deterministic', () => {
-  const ins = [['F', 85, 40], ['F', 100, 20], ['F', 100, 10], ['F', 90, 40], ['F', 85, 45], ['F', 90, 35], ['F', 99, 15]];
+  const ins = [...L4, ['F', 99, 15]];
   const a = S.replay(11, ins), b = S.replay(11, ins); assert.equal(S.stateHash(a.run), S.stateHash(b.run));
-  const P = a.run.bodies.filter(x => x.kind === 'proj' && x.r === S.FIGS[3].proj.r);
-  assert.ok(P.length >= 90, 'blast rounds: ' + P.length); assert.ok(P.filter(x => x.gone).length > 0, 'settled rounds despawned');
+  const run = S.newRun(11); for (const x of ins) { if (run.phase === 'figdone') S.next(run); S.fire(run, x[1], x[2]); S.settle(run); } // stop before FIG.5 replaces the bodies
+  assert.equal(run.fig, 3); const P = run.bodies.filter(x => x.kind === 'proj' && x.r === S.FIGS[3].proj.r);
+  assert.ok(P.length >= 40, 'blast rounds: ' + P.length); assert.ok(P.filter(x => x.gone).length > 0, 'settled rounds despawned');
 });
 
 test('ceasefire gag only on weapons that declare it', () => {
-  const r = S.replay(9, onFig(3, PLANS.blast)).run; assert.equal(r.figs[1].ceasefire, 'denied'); assert.equal(r.figs[2].ceasefire, null); assert.equal(r.figs[3].ceasefire, null); assert.equal(r.figs[0].ceasefire, null);
+  const r = S.replay(9, onFig(4, PLANS.biggerTank)).run; assert.equal(r.figs[4].ceasefire, null); assert.equal(r.figs[1].ceasefire, 'denied'); assert.equal(r.figs[2].ceasefire, null); assert.equal(r.figs[3].ceasefire, null); assert.equal(r.figs[0].ceasefire, null);
 });

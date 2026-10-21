@@ -8,7 +8,7 @@
 (function (root) {
   'use strict';
   const WP = (typeof module !== 'undefined' && module.exports) ? require('./weapons.js') : root.SkrumpWeapons;
-  const SIM_VERSION = 4, HZ = 120, DT = 1 / HZ, G = 18, ITER = 4, MAX_SHOT_TICKS = HZ * 9;
+  const SIM_VERSION = 5, HZ = 120, DT = 1 / HZ, G = 18, ITER = 4, MAX_SHOT_TICKS = HZ * 9;
   const SUBJ_R = 0.5, DISPLACE_D = 1.0, OUT = { x0: -12, x1: 90, y0: -10 };
   const PTS = { perSubject: 100, clear: 500, unusedShell: 250, overkill: 300, wasted: 100 };
   // A FIG = one weapon from the registry, flattened for the sim. Legacy fields (id, shots, vk) kept for the scorer and tests.
@@ -29,6 +29,8 @@
     if (kind === 'conga') { // FIG.3 v3: three low pyramids strung along the floor for a chain to chew through
       let x = 22 + Math.floor(R() * 4);
       for (let k = 0; k < 3; k++) { const h = k === 1 ? Math.floor(R() * 3) : 0; if (h) boxes.push({ x0: x - 0.5, y0: 0, x1: x + 4.5, y1: h, kind: 'plinth' }); pyramid(subs, x, h, 4, look()); x += 7 + Math.floor(R() * 4); }
+    } else if (kind === 'dais') { // FIG.5 finale: one big pyramid on a raised dais
+      const x = 34 + Math.floor(R() * 5), h = 1 + Math.floor(R() * 2); boxes.push({ x0: x - 0.8, y0: 0, x1: x + 10.8, y1: h, kind: 'plinth' }); pyramid(subs, x, h, 10, look());
     } else if (kind === 'gallery') { // FIG.3: low pyramid, two towers, a raised pyramid on a stand
       const px = 22 + Math.floor(R() * 5); pyramid(subs, px, 0, 5, look());
       let x = px + 7;
@@ -86,7 +88,7 @@
     const F = run.lineup[run.fig], P = F.proj, sh = run.shot, [qx, qy] = sh.q, k = F.fire.spread[sh.round % F.fire.spread.length];
     let vx = qx * F.vk, vy = qy * F.vk; if (pt) { vx *= pt.p; vy *= pt.p; if (pt.k) { const ox = -vy * pt.k, oy = vx * pt.k; vx += ox; vy += oy; } } else if (k) { const ox = -vy * k, oy = vx * k; vx += ox; vy += oy; }
     const L = sh.round === 0 && F.fire.lead, r = L ? L.r : P.r, m = L ? L.m : P.m;
-    const b = { id: run.bodies.length, kind: 'proj', x: F.launcher.x + (pt ? pt.dx : 0), y: F.launcher.y + (pt ? pt.dy : 0), vx, vy, g: F.g, r, inv: 1 / m, sleep: false, still: 0, out: false, round: sh.round };
+    const b = { id: run.bodies.length, kind: 'proj', x: F.launcher.x + (F.fire.advance ? F.fire.advance * (cur(run).shotsFired - 1) : 0) + (pt ? pt.dx : 0), y: F.launcher.y + (pt ? pt.dy : 0), vx, vy, g: F.g, r, inv: 1 / m, sleep: false, still: 0, out: false, round: sh.round };
     run.bodies.push(b); sh.projs.push(b); if (!sh.proj) sh.proj = b; sh.round++;
   }
   function conclude(run) {
@@ -212,9 +214,11 @@
   function stateHash(run) { let h = 2166136261 >>> 0; const mix = v => { const s = String(Math.round(v * 1e6)); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } };
     for (const b of run.bodies) { mix(b.x); mix(b.y); mix(b.disp ? 1 : 0); } mix(run.tick); return h >>> 0; }
   /** Pure ballistic preview (no collisions) for the aim guide. */
+  /** Launcher x for the next shot (tanks with fire.advance roll forward each shell). */
+  function muzzleX(run) { const F = run.lineup[run.fig]; return F.launcher.x + (F.fire.advance ? F.fire.advance * cur(run).shotsFired : 0); }
   function preview(figIdx, qx, qy, n, dt, figs) { [qx, qy] = clampQ(qx, qy); const F = (figs || FIGS)[figIdx]; let x = F.launcher.x, y = F.launcher.y, vx = qx * F.vk, vy = qy * F.vk; const pts = []; for (let i = 0; i < n; i++) { x += vx * dt; vy -= F.g * dt; y += vy * dt; pts.push([x, y]); if (y < 0) break; } return pts; }
 
-  const api = { SIM_VERSION, HZ, DT, FIGS, WEAPONS: WP.WEAPONS, LINEUPS: WP.LINEUPS, lineup, PTS, DISPLACE_D, rng, hashSeed, layout, newRun, fire, conclude, next, step, settle, canFire, score, figScore, replay, stateHash, preview, clampQ, cur };
+  const api = { muzzleX, SIM_VERSION, HZ, DT, FIGS, WEAPONS: WP.WEAPONS, LINEUPS: WP.LINEUPS, lineup, PTS, DISPLACE_D, rng, hashSeed, layout, newRun, fire, conclude, next, step, settle, canFire, score, figScore, replay, stateHash, preview, clampQ, cur };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SkrumpSim = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

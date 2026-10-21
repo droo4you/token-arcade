@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 const S = createRequire(import.meta.url)('../src/sim.js');
-const PLAN = [['F', 85, 40], ['F', 96, 25], ['F', 90, 40], ['F', 70, 55], ['F', 85, 45], ['F', 90, 35], ['F', 98, 15], ['F', 99, 8]];
+const PLAN = [['F', 85, 40], ['F', 96, 25], ['F', 90, 40], ['F', 70, 55], ['F', 85, 45], ['F', 90, 35], ['F', 98, 15], ['F', 88, 44], ['F', 94, 33], ['F', 85, 52], ['F', 97, 24]];
 
 function live(seed, plan) { // the way the browser drives it: step by step
   const run = S.newRun(seed);
@@ -33,9 +33,9 @@ test('sim uses no clock, no Math.random and no transcendental math', () => {
   }
 });
 
-test('pile seeds: deterministic, always 36 / 44 / 30 / 39 subjects, no overlaps, all resting', () => {
-  const variants = [new Set(), new Set(), new Set(), new Set()];
-  for (let seed = 0; seed < 200; seed++) for (const fig of [0, 1, 2, 3]) {
+test('pile seeds: deterministic, always 36 / 44 / 30 / 39 / 55 subjects, no overlaps, all resting', () => {
+  const variants = [new Set(), new Set(), new Set(), new Set(), new Set()];
+  for (let seed = 0; seed < 200; seed++) for (const fig of [0, 1, 2, 3, 4]) {
     const L = S.layout(fig, seed), L2 = S.layout(fig, seed);
     assert.deepEqual(L, L2);
     assert.equal(L.subs.length, S.FIGS[fig].N);
@@ -43,7 +43,7 @@ test('pile seeds: deterministic, always 36 / 44 / 30 / 39 subjects, no overlaps,
     for (let i = 0; i < L.subs.length; i++) for (let j = i + 1; j < L.subs.length; j++) { const dx = L.subs[i].x - L.subs[j].x, dy = L.subs[i].y - L.subs[j].y; assert.ok(dx * dx + dy * dy >= 0.999, `overlap seed ${seed}`); }
     for (const s of L.subs) assert.ok(s.x > 10 && s.x < 60, 'pile out of range');
   }
-  assert.ok(variants[0].size >= 10 && variants[1].size >= 20 && variants[2].size >= 20 && variants[3].size >= 20, 'seeds vary the layout');
+  assert.ok(variants[0].size >= 10 && variants[1].size >= 20 && variants[2].size >= 20 && variants[3].size >= 20 && variants[4].size >= 8, 'seeds vary the layout');
 });
 
 test('an untouched pile stays put (a miss displaces nothing)', () => {
@@ -66,7 +66,7 @@ test('scoring formula', () => {
 });
 
 test('replay rejects illegal input records', () => {
-  assert.ok(S.replay(1, Array(9).fill(['F', 50, 50])).error);
+  assert.ok(S.replay(1, Array(12).fill(['F', 50, 50])).error);
   assert.ok(S.replay(1, [['E']]).error, 'cannot conclude before a full clear');
   assert.ok(S.replay(1, [['X']]).error);
   assert.deepEqual(S.clampQ(300, 400), [60, 80]);

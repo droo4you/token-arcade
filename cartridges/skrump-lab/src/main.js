@@ -44,7 +44,7 @@
     G.screen = 'intro'; G.introT = G.t; G.aim = null; G.pending = null;
     narrate(say(WF().lines.intro));
   }
-  function figIntro() { G.screen = 'intro'; G.introT = G.t; narrate(say(WF().lines.intro)); }
+  function figIntro() { G.cards = null; G.tankX = null; G.screen = 'intro'; G.introT = G.t; narrate(say(WF().lines.intro)); }
   function fire(qx, qy) {
     const r = G.run; if (!S.canFire(r)) return;
     const f = S.cur(r), wasClear = f.cleared;
@@ -67,6 +67,7 @@
     else if (s.wasted) line = 'No subjects displaced. Noted.';
     else line = say(f.shotsFired === 1 ? F.lines.first : F.lines.more, v);
     if (f.cleared && !s.overkill) line += ' All subjects displaced.';
+    if (F.lines.last && f.shotsFired === F.shots) line += ' ' + F.lines.last;
     narrate(line);
     G.screen = 'verdict-shot'; G.waitUntil = G.t + (AUTOPILOT ? 2.6 : 3.2);
     G.pending = r.phase === 'figdone' ? 'fig' : 'aim';
@@ -82,10 +83,10 @@
     A.sfx('stamp');
     if (G.arcadeRunOpen && TA && TA.active) {
       G.arcadeRunOpen = false;
-      const [f1, f2, f3, f4] = r.figs;
+      const [f1, f2, f3, f4, f5] = r.figs;
       TA.complete({ result: 'completed', primaryMetric: r.total, durationMs: Math.round(G.runT * 1000),
         secondaryMetrics: { displaced: r.displaced, subjects: r.N, shots: r.shots, perShotX100: r.perShotX100, clears: r.clears, overkill: r.overkill, wasted: r.wasted,
-          fig1Displaced: f1 ? f1.displaced : 0, fig2Displaced: f2 ? f2.displaced : 0, fig3Displaced: f3 ? f3.displaced : 0, fig4Displaced: f4 ? f4.displaced : 0, ticks: r.ticks } });
+          fig1Displaced: f1 ? f1.displaced : 0, fig2Displaced: f2 ? f2.displaced : 0, fig3Displaced: f3 ? f3.displaced : 0, fig4Displaced: f4 ? f4.displaced : 0, fig5Displaced: f5 ? f5.displaced : 0, ticks: r.ticks } });
     }
   }
 
@@ -129,7 +130,7 @@
   }
   function impact(e) {
     A.sfx('impact', e.s);
-    if (e.s > 9) G.shake = Math.max(G.shake, 0.18);
+    if (e.s > 9) G.shake = Math.max(G.shake, G.run && WF().frame === 'bigtank' ? 0.55 : 0.18);
     const n = Math.min(10, 2 + Math.floor(e.s / 3));
     for (let i = 0; i < n; i++) G.parts.push({ x: e.x, y: e.y, vx: (rr() - 0.5) * 10, vy: rr() * 9, life: 0.7 + rr() * 0.8, t: 0, s: 0.18 + rr() * 0.3, c: CUBES[i % CUBES.length].c, rot: rr() * 6 });
     if (G.parts.length > 220) G.parts.splice(0, G.parts.length - 220);
@@ -202,7 +203,11 @@
   }
   function aimAngle(r) { const a = G.aim; if (a && (a.qx || a.qy)) return Math.atan2(a.qy, a.qx); return S.FIGS[r.fig].aimDefault; }
   function drawLauncher(r) {
-    const F = S.FIGS[r.fig], lx = X(F.launcher.x), ly = Y(F.launcher.y), ang = aimAngle(r);
+    const F = S.FIGS[r.fig], ang = aimAngle(r);
+    // tanks that roll forward each shell glide to the next firing spot (render only; the sim uses S.muzzleX)
+    const adv = F.fire.advance || 0, tgt = F.launcher.x + adv * (S.cur(r).shotsFired - (r.phase === 'flight' ? 1 : 0));
+    G.tankX = G.tankX == null ? tgt : G.tankX + (tgt - G.tankX) * 0.08; const LX = adv ? G.tankX : F.launcher.x;
+    const lx = X(LX), ly = Y(F.launcher.y);
     cx.save();
     if (F.frame === 'catapult') { // catapult frame
       cx.strokeStyle = '#4a4458'; cx.lineWidth = sc * 0.35; cx.lineCap = 'round';
@@ -210,6 +215,13 @@
       cx.fillStyle = '#3a3546'; cx.fillRect(lx - 2.6 * sc, fy - 0.7 * sc, 5.2 * sc, 0.7 * sc);
       cx.fillStyle = '#111'; for (const w of [-1.9, 1.9]) { cx.beginPath(); cx.arc(lx + w * sc, fy - 0.1 * sc, 0.55 * sc, 0, 6.29); cx.fill(); }
       cx.strokeStyle = '#6a627c'; cx.lineWidth = sc * 0.25; cx.beginPath(); cx.moveTo(lx - 0.2 * sc, ly + 0.6 * sc); cx.lineTo(lx - Math.cos(ang) * 1.3 * sc * (G.aim ? 1.6 : 1), ly + Math.sin(ang) * 1.3 * sc * (G.aim ? 1.6 : 1)); cx.stroke();
+    } else if (F.frame === 'bigtank') { // A BIGGER TANK: ~1.8x chassis, long fat barrel, glowing muzzle ring
+      const k = 1.8; cx.fillStyle = '#121117'; cx.fillRect(lx - 2.9 * k * sc, fy - 1.0 * k * sc, 5.8 * k * sc, 1.0 * k * sc);
+      cx.fillStyle = '#2f2e26'; cx.fillRect(lx - 2.4 * k * sc, fy - 2.0 * k * sc, 4.6 * k * sc, 1.05 * k * sc); cx.fillRect(lx - 1.2 * k * sc, fy - 2.7 * k * sc, 2.3 * k * sc, 0.8 * k * sc);
+      cx.fillStyle = '#4b4a43'; for (let i = 0; i < 8; i++) { cx.beginPath(); cx.arc(lx + (-2.5 + i * 0.72) * k * sc, fy - 0.5 * k * sc, 0.3 * k * sc, 0, 6.29); cx.fill(); }
+      cx.fillStyle = PINK; cx.fillRect(lx - 2.9 * k * sc, fy - 1.05 * k * sc, 5.8 * k * sc, Math.max(2, 0.08 * sc));
+      cx.translate(lx, ly); cx.rotate(-ang); cx.fillStyle = '#3d3c31'; cx.fillRect(0, -0.55 * sc, 6.2 * sc, 1.1 * sc); cx.fillStyle = '#2a2922'; cx.fillRect(5.6 * sc, -0.75 * sc, 1.1 * sc, 1.5 * sc);
+      cx.fillStyle = 'rgba(255,209,102,0.35)'; cx.beginPath(); cx.arc(6.8 * sc, 0, 0.9 * sc, 0, 6.29); cx.fill();
     } else if (F.frame === 'barrel') { // DN consensus: one fat black barrel on a cradle
       cx.fillStyle = '#2c2a36'; cx.fillRect(lx - 2.4 * sc, fy - 0.8 * sc, 4.8 * sc, 0.8 * sc);
       cx.fillStyle = '#111'; for (const w of [-1.6, 1.6]) { cx.beginPath(); cx.arc(lx + w * sc, fy - 0.1 * sc, 0.6 * sc, 0, 6.29); cx.fill(); }
@@ -233,10 +245,10 @@
     // loaded projectile
     if (G.screen === 'aim' || G.screen === 'intro') { const f = S.cur(r); if (f.shotsFired < F.shots) {
       const PS = F.proj.sprites, id = PS[f.shotsFired % PS.length], pull = G.aim ? Math.hypot(G.aim.qx, G.aim.qy) / 100 : 0;
-      const px = F.launcher.x - Math.cos(ang) * pull * 1.6, py = F.launcher.y - Math.sin(ang) * pull * 1.6;
+      const px = LX - Math.cos(ang) * pull * 1.6, py = F.launcher.y - Math.sin(ang) * pull * 1.6;
       if (F.frame === 'catapult') sprite(id, px, py, F.proj.r, 0); } }
     // owner badge: the Skrumpey that brought this weapon
-    sprite(F.owner.token, F.launcher.x - 2.2, 0.7, 0.7, 0);
+    sprite(F.owner.token, LX - (F.frame === 'bigtank' ? 6 : 2.2), 0.7, 0.7, 0);
   }
   function sprite(id, x, y, rad, rot) {
     const im = IMG[id]; const s = rad * 2.25 * sc;
@@ -253,13 +265,13 @@
   }
   function drawAim(r) {
     if (!G.aim || G.screen !== 'aim') return; const { qx, qy } = G.aim;
-    const pts = S.preview(r.fig, qx, qy, 60, 1 / 24);
+    const off = S.muzzleX(r) - S.FIGS[r.fig].launcher.x, pts = S.preview(r.fig, qx, qy, 60, 1 / 24).map(p => [p[0] + off, p[1]]);
     cx.fillStyle = 'rgba(255,255,255,0.85)';
     pts.forEach((p, i) => { if (i % 2) return; cx.globalAlpha = 1 - i / pts.length; cx.beginPath(); cx.arc(X(p[0]), Y(p[1]), Math.max(1.5, sc * 0.14), 0, 6.29); cx.fill(); });
     cx.globalAlpha = 1;
     const F = S.FIGS[r.fig], pw = Math.round(Math.min(100, Math.hypot(qx, qy)));
     cx.font = `${Math.max(11, Math.round(sc * 0.75))}px ${MONO}`; cx.fillStyle = PINK; cx.textAlign = 'left';
-    cx.fillText(`POWER ${pw}%`, X(F.launcher.x) + 2 * sc, Y(F.launcher.y) - 3 * sc);
+    cx.fillText(`POWER ${pw}%`, X(S.muzzleX(r)) + 2 * sc, Y(F.launcher.y) - 3 * sc);
   }
   function drawParts() { for (const p of G.parts) cube(X(p.x), Y(p.y), p.s * sc, p.rot, p.c, Math.max(0, 1 - p.t / p.life)); }
   function nearCubes() { for (const c of CUBES) if (c.z >= 0.8) cube(c.x * W, c.y * fy * 0.7 + Math.sin(G.t * 0.5 + c.ph) * 10, c.s * sc * c.z, c.r + G.t * c.vr, c.c, 0.75); }
@@ -268,6 +280,9 @@
     const f = S.cur(r), F = S.FIGS[r.fig];
     if (F.hud === 'range') return [['PAYLOAD', F.proj.label], ['RANGE', f.shotsFired ? (r.phase === 'flight' && r.shot ? ((r.shot.maxX - F.launcher.x) / 1000).toFixed(3) : (f.range / 1000).toFixed(3)) + ' KM' : '—'],
       ['SUBJECTS DISPLACED', `${f.displaced} / ${f.N}`, PINK], ['ACCURACY', 'IRRELEVANT', PINK]];
+    if (F.hud === 'bigtank') { const n = f.shotsFired, speed = n * 23400;
+      return [['SPEED', `${speed.toLocaleString('en-US')} KM/H`], ['SHELLS FIRED', `${n} / ${F.shots}`], ['SUBJECTS IN PILE', `${f.N - f.displaced} / ${f.N}`, PINK],
+        ['BRAKES', n >= F.shots ? 'NOT INSTALLED' : '—', n >= F.shots ? '#ff3b5c' : null], ['OVERKILL', f.overkill ? 'YES' : 'NO', f.overkill ? PINK : null]]; }
     if (F.hud === 'stream') { const fired = r.bodies.filter(b => b.kind === 'proj').length;
       return [['RATE', '600 SKRUMPEYS / S'], ['FIRED', `${fired}`], ['SHOTS', `${f.shotsFired} / ${F.shots}`], ['SUBJECTS STANDING', `${f.N - f.displaced} / ${f.N}`, PINK], ['OVERKILL', f.overkill ? 'YES' : '—', f.overkill ? PINK : null]]; }
     if (F.hud === 'consensus') { // render-only vote count-up, like the clip: COUNTING… → UNANIMOUS
