@@ -8,7 +8,7 @@
 (function (root) {
   'use strict';
   const WP = (typeof module !== 'undefined' && module.exports) ? require('./weapons.js') : root.SkrumpWeapons;
-  const SIM_VERSION = 2, HZ = 120, DT = 1 / HZ, G = 18, ITER = 4, MAX_SHOT_TICKS = HZ * 9;
+  const SIM_VERSION = 3, HZ = 120, DT = 1 / HZ, G = 18, ITER = 4, MAX_SHOT_TICKS = HZ * 9;
   const SUBJ_R = 0.5, DISPLACE_D = 1.0, OUT = { x0: -12, x1: 90, y0: -10 };
   const PTS = { perSubject: 100, clear: 500, unusedShell: 250, overkill: 300, wasted: 100 };
   // A FIG = one weapon from the registry, flattened for the sim. Legacy fields (id, shots, vk) kept for the scorer and tests.
@@ -26,7 +26,10 @@
   function layout(figIdx, seed, figs) {
     const R = rng((seed ^ Math.imul(figIdx + 1, 0x9E3779B1)) >>> 0), boxes = [{ x0: -6, y0: -1, x1: 64, y1: 0, kind: 'floor' }], subs = [];
     const look = () => Math.floor(R() * 3), kind = (figs || FIGS)[figIdx].layout;
-    if (kind === 'gallery') { // FIG.3: low pyramid, two towers, a raised pyramid on a stand
+    if (kind === 'conga') { // FIG.3 v3: three low pyramids strung along the floor for a chain to chew through
+      let x = 22 + Math.floor(R() * 4);
+      for (let k = 0; k < 3; k++) { const h = k === 1 ? Math.floor(R() * 3) : 0; if (h) boxes.push({ x0: x - 0.5, y0: 0, x1: x + 4.5, y1: h, kind: 'plinth' }); pyramid(subs, x, h, 4, look()); x += 7 + Math.floor(R() * 4); }
+    } else if (kind === 'gallery') { // FIG.3: low pyramid, two towers, a raised pyramid on a stand
       const px = 22 + Math.floor(R() * 5); pyramid(subs, px, 0, 5, look());
       let x = px + 7;
       for (let k = 0; k < 2; k++) { x += 2 + Math.floor(R() * 3); const h = Math.floor(R() * 3); if (h) boxes.push({ x0: x - 0.9, y0: 0, x1: x + 0.9, y1: h, kind: 'plinth' }); tower(subs, x, h, 7, look()); }
@@ -77,7 +80,8 @@
   function spawnRound(run) { // one round of the current shell; burst weapons call this every fire.gap ticks
     const F = run.lineup[run.fig], P = F.proj, sh = run.shot, [qx, qy] = sh.q, k = F.fire.spread[sh.round % F.fire.spread.length];
     let vx = qx * F.vk, vy = qy * F.vk; if (k) { const ox = -vy * k, oy = vx * k; vx += ox; vy += oy; }
-    const b = { id: run.bodies.length, kind: 'proj', x: F.launcher.x, y: F.launcher.y, vx, vy, g: F.g, r: P.r, inv: 1 / P.m, sleep: false, still: 0, out: false, round: sh.round };
+    const L = sh.round === 0 && F.fire.lead, r = L ? L.r : P.r, m = L ? L.m : P.m;
+    const b = { id: run.bodies.length, kind: 'proj', x: F.launcher.x, y: F.launcher.y, vx, vy, g: F.g, r, inv: 1 / m, sleep: false, still: 0, out: false, round: sh.round };
     run.bodies.push(b); sh.projs.push(b); if (!sh.proj) sh.proj = b; sh.round++;
   }
   function conclude(run) {

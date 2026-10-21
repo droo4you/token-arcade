@@ -34,6 +34,7 @@
         secondFire: 'Ceasefire: denied.',
       },
     },
+    // sim v2's FIG.3. Frozen so v2 records replay; the v3 lineup uses 'consensus' (same idea, toned down) instead.
     rapid: {
       id: 'rapid', fig: 3, name: 'RAPID FIRE', sub: 'test 03 · rate of fire', owner: { token: '2067', name: 'Skrumpey #2067' },
       shells: 3, N: 39, layout: 'gallery', launcher: { x: 3.2, y: 2.6 },
@@ -47,8 +48,37 @@
         more: '{gained} more. {displaced} of {N}. Rate of fire: excessive.',
       },
     },
+    // FIG.3 (v3): the clip's "test three" stream. One shell = a lead Skrumpey with a chain trailing it on the same arc;
+    // they hit the pile one after another. Light chain links, so it chips rather than flattens.
+    trail: {
+      id: 'trail', fig: 3, name: 'RAPID FIRE', sub: 'test 03 · skrumpey trail', owner: { token: '2912', name: 'Skrumpey #2912' },
+      shells: 2, N: 30, layout: 'conga', launcher: { x: 3.2, y: 2.4 },
+      fire: { arc: 'ballistic', gScale: 1, vk: 0.31, burst: 8, gap: 6, spread: [0], lead: { r: 0.6, m: 3 } },
+      proj: { r: 0.34, m: 0.55, label: '1 LEAD + 7 TRAILING', sprites: ['2912', '690', '2067', '3'] },
+      rules: { ceasefire: false }, hud: 'stream', frame: 'gun', sfx: 'cannon', shake: 0.15, aimDefault: 0.6,
+      auto: [[80, 45], [90, 35], [100, 25], [70, 55], [95, 40], [85, 50], [100, 15]],
+      lines: {
+        intro: 'Test three. Rapid fire. One Skrumpey leads. The others follow. As instructed.',
+        first: 'Six hundred Skrumpeys per second. {gained} subjects displaced.',
+        more: '{gained} more. {displaced} of {N}. Overkill: pending.',
+      },
+    },
+    // FIG.4 (v3): the clip's "test four", DN CONSENSUS MECHANISM ("everything at once"). droober calls it "unanimous".
+    consensus: {
+      id: 'consensus', fig: 4, name: 'DN CONSENSUS MECHANISM', sub: 'test 04 · everything at once', owner: { token: '2067', name: 'Skrumpey #2067' },
+      shells: 3, N: 39, layout: 'gallery', launcher: { x: 3.4, y: 2.8 },
+      fire: { arc: 'direct', gScale: 0.5, vk: 0.34, burst: 5, gap: 9, spread: [0, 0.05, -0.05, 0.1, -0.1] },
+      proj: { r: 0.3, m: 0.95, label: '3,333 SKRUMPEYS', sprites: ['2067', '2912', '690', '3'] },
+      rules: { ceasefire: false }, hud: 'consensus', frame: 'barrel', sfx: 'cannon', shake: 0.3, aimDefault: 0.25,
+      auto: [[100, 8], [99, 15], [98, 22], [95, 30], [90, 40], [100, 0], [80, 50]],
+      lines: {
+        intro: 'Test four. The DN consensus mechanism voted on firing everything at once. Unanimous.',
+        first: 'Consensus reached. {gained} subjects displaced.',
+        more: '{gained} more. {displaced} of {N}. The vote stands.',
+      },
+    },
   };
-  const LINEUPS = { 1: ['catapult', 'tank'], 2: ['catapult', 'tank', 'rapid'] };
+  const LINEUPS = { 1: ['catapult', 'tank'], 2: ['catapult', 'tank', 'rapid'], 3: ['catapult', 'tank', 'trail', 'consensus'] };
   function fill(tpl, v) { return String(tpl || '').replace(/\{(\w+)\}/g, (_, k) => (k in v ? String(v[k]) : '')); }
   const api = { WEAPONS, LINEUPS, fill };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

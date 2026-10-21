@@ -2,7 +2,7 @@
   "id": "skrump-lab",
   "name": "Skrump Lab: Weapons Test",
   "description": "LAB-07 weapons test. Launch Skrumpeys at piles of pink Skrumpeys. Accuracy: irrelevant.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "artwork": {
     "icon": "assets/sprites/3.png"
   },
@@ -20,7 +20,7 @@
   "integrationLevel": "L0",
   "skeleton": "launcher",
   "entry": {
-    "url": "/skrump-lab/v/1.1.0/arcade.html",
+    "url": "/skrump-lab/v/1.2.0/arcade.html",
     "origin": "cartridge",
     "kind": "iframe"
   },
@@ -33,10 +33,10 @@
   "mobile": "full",
   "runLength": {
     "typicalSec": [
-      55,
-      100
+      70,
+      130
     ],
-    "maxSec": 240
+    "maxSec": 300
   },
   "scoring": {
     "SCORE": {
@@ -55,13 +55,13 @@
     }
   },
   "determinism": "replayable-portable",
-  "simVersion": "2",
+  "simVersion": "3",
   "tickHz": 120,
   "seedPolicy": "per_run",
-  "simHash": "sha256:f7d741db952834e9110f38152c9663beea3bc17aba42c3148cc680dfb5bc234c",
+  "simHash": "sha256:89c66b8f4df54ae5d51a4f7efa77c911e4512ceeffe95508b9fcc5f00ab80da0",
   "verifier": {
     "kind": "replay",
-    "entry": "src/sim.js#replay (opts.simVersion 1 replays pre-1.1 FIG.1+2 records)",
+    "entry": "src/sim.js#replay (opts.simVersion 1 / 2 replay older FIG.1+2 / FIG.1-3 records)",
     "runtime": "node (not installed in the API yet)"
   },
   "removedInArcade": [
@@ -78,7 +78,8 @@
     "lineup": [
       "catapult",
       "tank",
-      "rapid"
+      "trail",
+      "consensus"
     ]
   }
 }

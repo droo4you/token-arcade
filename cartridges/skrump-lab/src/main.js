@@ -82,10 +82,10 @@
     A.sfx('stamp');
     if (G.arcadeRunOpen && TA && TA.active) {
       G.arcadeRunOpen = false;
-      const [f1, f2, f3] = r.figs;
+      const [f1, f2, f3, f4] = r.figs;
       TA.complete({ result: 'completed', primaryMetric: r.total, durationMs: Math.round(G.runT * 1000),
         secondaryMetrics: { displaced: r.displaced, subjects: r.N, shots: r.shots, perShotX100: r.perShotX100, clears: r.clears, overkill: r.overkill, wasted: r.wasted,
-          fig1Displaced: f1 ? f1.displaced : 0, fig2Displaced: f2 ? f2.displaced : 0, fig3Displaced: f3 ? f3.displaced : 0, ticks: r.ticks } });
+          fig1Displaced: f1 ? f1.displaced : 0, fig2Displaced: f2 ? f2.displaced : 0, fig3Displaced: f3 ? f3.displaced : 0, fig4Displaced: f4 ? f4.displaced : 0, ticks: r.ticks } });
     }
   }
 
@@ -210,6 +210,12 @@
       cx.fillStyle = '#3a3546'; cx.fillRect(lx - 2.6 * sc, fy - 0.7 * sc, 5.2 * sc, 0.7 * sc);
       cx.fillStyle = '#111'; for (const w of [-1.9, 1.9]) { cx.beginPath(); cx.arc(lx + w * sc, fy - 0.1 * sc, 0.55 * sc, 0, 6.29); cx.fill(); }
       cx.strokeStyle = '#6a627c'; cx.lineWidth = sc * 0.25; cx.beginPath(); cx.moveTo(lx - 0.2 * sc, ly + 0.6 * sc); cx.lineTo(lx - Math.cos(ang) * 1.3 * sc * (G.aim ? 1.6 : 1), ly + Math.sin(ang) * 1.3 * sc * (G.aim ? 1.6 : 1)); cx.stroke();
+    } else if (F.frame === 'barrel') { // DN consensus: one fat black barrel on a cradle
+      cx.fillStyle = '#2c2a36'; cx.fillRect(lx - 2.4 * sc, fy - 0.8 * sc, 4.8 * sc, 0.8 * sc);
+      cx.fillStyle = '#111'; for (const w of [-1.6, 1.6]) { cx.beginPath(); cx.arc(lx + w * sc, fy - 0.1 * sc, 0.6 * sc, 0, 6.29); cx.fill(); }
+      cx.translate(lx, ly); cx.rotate(-ang); const g = cx.createLinearGradient(0, -1.1 * sc, 0, 1.1 * sc); g.addColorStop(0, '#3a3846'); g.addColorStop(0.5, '#0d0c12'); g.addColorStop(1, '#2a2833');
+      cx.fillStyle = g; cx.fillRect(-1.2 * sc, -1.0 * sc, 4.6 * sc, 2.0 * sc); cx.fillStyle = '#1a1922'; cx.fillRect(3.2 * sc, -1.25 * sc, 0.6 * sc, 2.5 * sc);
+      cx.strokeStyle = 'rgba(255,255,255,0.25)'; cx.lineWidth = 1.5; for (const o of [0.6, 1.8]) { cx.beginPath(); cx.moveTo(o * sc, -1.0 * sc); cx.lineTo(o * sc, 1.0 * sc); cx.stroke(); }
     } else if (F.frame === 'gun') { // rapid-fire turret: tripod + drum + long thin barrel
       cx.strokeStyle = '#4a4458'; cx.lineWidth = sc * 0.22; cx.lineCap = 'round';
       for (const w of [-1.4, 0, 1.4]) { cx.beginPath(); cx.moveTo(lx, ly); cx.lineTo(lx + w * sc, fy); cx.stroke(); }
@@ -262,6 +268,12 @@
     const f = S.cur(r), F = S.FIGS[r.fig];
     if (F.hud === 'range') return [['PAYLOAD', F.proj.label], ['RANGE', f.shotsFired ? (r.phase === 'flight' && r.shot ? ((r.shot.maxX - F.launcher.x) / 1000).toFixed(3) : (f.range / 1000).toFixed(3)) + ' KM' : '—'],
       ['SUBJECTS DISPLACED', `${f.displaced} / ${f.N}`, PINK], ['ACCURACY', 'IRRELEVANT', PINK]];
+    if (F.hud === 'stream') { const fired = r.bodies.filter(b => b.kind === 'proj').length;
+      return [['RATE', '600 SKRUMPEYS / S'], ['FIRED', `${fired}`], ['SHOTS', `${f.shotsFired} / ${F.shots}`], ['SUBJECTS STANDING', `${f.N - f.displaced} / ${f.N}`, PINK], ['OVERKILL', f.overkill ? 'YES' : '—', f.overkill ? PINK : null]]; }
+    if (F.hud === 'consensus') { // render-only vote count-up, like the clip: COUNTING… → UNANIMOUS
+      const k = G.screen === 'intro' ? Math.min(1, (G.t - G.introT) / 1.8) : 1, votes = Math.round(3333 * k);
+      return [['VOTES IN', `${votes.toLocaleString('en-US')} / 3,333`], ['RESULT', k < 1 ? 'COUNTING…' : 'UNANIMOUS', k < 1 ? '#ffd166' : '#5ef2a0'],
+        ['PAYLOAD', k < 1 ? '—' : F.proj.label], ['SHOTS', `${f.shotsFired} / ${F.shots}`], ['TARGET', f.cleared ? 'GONE' : 'THE PILE', PINK], ['SUBJECTS DISPLACED', `${f.displaced} / ${f.N}`]]; }
     const cf = f.ceasefire === 'requested' ? 'REQUESTED' : f.ceasefire === 'denied' ? 'DENIED' : '—';
     const rows = [['AMMUNITION', F.proj.label], ['SHOTS', `${f.shotsFired} / ${F.shots}`], ['SUBJECTS DISPLACED', `${f.displaced} / ${f.N}`, PINK]];
     if (F.rules.ceasefire) rows.push(['CEASEFIRE', cf, cf === 'DENIED' ? '#ff3b5c' : cf === 'REQUESTED' ? '#ffd166' : null]);
