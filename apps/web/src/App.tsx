@@ -265,8 +265,8 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
          {game.record?.economy && <div className="cabinet-economy"><StatusBadge tone="wait">{game.record.minicoin ? "Full MiniCoin economy pending" : "MiniCoin Economy — Coming Soon"}</StatusBadge><p>{game.record.economy.reason}</p></div>}
          {game.record?.minicoin && <MinicoinEvidence record={game.record} playable={game.playable} />}
         <div className="detail-mode-list">
-          <div><span className="mode-icon mode-free"><Play size={20} fill="currentColor" /></span><div><strong>Free Play</strong><small>No account. No limit. Just play.</small></div>{game.playable ? <Link href={playHref(game.id)} className="mini-action">Play Free <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Awaiting adapter</span>}</div>
-          <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>Passport Play</strong><small>Verified score and a place on the board.</small></div>{competitive ? <Link href={playHref(game.id, "ranked")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
+          <div><span className="mode-icon mode-free"><Play size={20} fill="currentColor" /></span><div><strong>{game.id === "coindle" ? "Daily · Free Play" : "Free Play"}</strong><small>{game.id === "coindle" ? "The main mode: one shared puzzle a day, streaks, share your grid." : "No account. No limit. Just play."}</small></div>{game.playable ? <Link href={playHref(game.id)} className="mini-action">Play Free <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Awaiting adapter</span>}</div>
+          <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>{game.id === "coindle" ? "Rapid Fire · Passport Play" : "Passport Play"}</strong><small>{game.id === "coindle" ? "Solve as many coins as you can in 3 minutes. Ranked." : "Verified score and a place on the board."}</small></div>{competitive ? <Link href={playHref(game.id, "ranked")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
           <div><span className="mode-icon mode-raid"><Sparkles size={21} /></span><div><strong>Community Raid</strong><small>Same challenge, shared standings.</small></div>{openRaid ? <Link href={`/raids/${encodeURIComponent(openRaid.id)}`} className="mini-action">See raid <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">No open raid</span>}</div>
         </div>
         {!game.playable && <div className="pending-note"><LockKeyhole size={20} /><span>{game.name} needs a reviewed browser cartridge before play opens here.</span></div>}
@@ -308,6 +308,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   const [config, setConfig] = useState<GameRunConfig | null>(null);
   const [result, setResult] = useState<GameRunResult | null>(null);
   const [verified, setVerified] = useState(false);
+  const [rank, setRank] = useState<number | null>(null);
   const completionGeneration = useRef(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -334,12 +335,12 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   if (mode !== "free" && !auth.authenticated) return <main className="page-width centered-state"><UserRound size={42} /><h1>A player account keeps your score.</h1><p>Sign in to start {mode === "raid" ? "a Community Raid" : "Passport Play"}. Your run will open here after sign-in. Free Play is open right now.</p><div className="state-actions"><ActionLink href={playHref(game.id)}>Play Free</ActionLink>{auth.configured ? <button className="action action-lime" onClick={auth.login}>Sign in with Privy <ArrowUpRight size={18} /></button> : <ActionLink href="/passport" tone="light">Set up account</ActionLink>}</div></main>;
   const complete = async (runResult: GameRunResult) => {
     const generation = completionGeneration.current;
-    setResult(runResult); setVerified(false); setError("");
+    setResult(runResult); setVerified(false); setError(""); setRank(null);
     if (mode === "free") { void recordFreePlay(runResult, token.current); return; }
     setLoading(true);
     try {
       const response = await api<CompleteResponse>(`/api/runs/${encodeURIComponent(runResult.runId)}/complete`, token.current, { method: "POST", body: runResult });
-      if (completionGeneration.current === generation) setVerified(response.verified);
+      if (completionGeneration.current === generation) { setVerified(response.verified); setRank(response.leaderboardEntry?.rank ?? null); }
     } catch (reason) {
       try {
         const saved = await api<{ verified: boolean }>(`/api/runs/${encodeURIComponent(runResult.runId)}/result`, token.current);
@@ -359,7 +360,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
     {config && (!result || mode === "free") && <CartridgeView key={config.runId} config={config} manifest={game.record!.manifest} onComplete={complete} />}
     {result && <div className="result-panel"><div className="result-medal"><Trophy size={31} /></div><div>
       <span>{result.result === "failed" ? "RUN FINISHED" : mode === "free" ? "LOCAL RESULT" : loading ? "VERIFYING RESULT" : verified ? "VERIFIED RESULT" : "RESULT NOT VERIFIED"}</span>
-       <h2>{metricText(result.primaryMetric, result.objective)}</h2><span className="result-metric">{result.objective.replaceAll("_", " ")}</span>
+       <h2>{metricText(result.primaryMetric, result.objective)}</h2><span className="result-metric">{result.objective.replaceAll("_", " ")}</span>{verified && rank !== null && <span className="result-rank" data-testid="result-rank">Rank #{rank} on the {mode === "raid" ? "raid" : "Passport Play"} board</span>}
       <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "Run summaries help us improve game balance. Progress saves on this device; competitive scores require Passport Play or Community Raid." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
       {result.secondaryMetrics && <dl className="result-details">{Object.entries(result.secondaryMetrics).filter(([key]) => !["ticks", "elapsedMs"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1")}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl>}
     </div><button className="action action-lime" disabled={loading} onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
