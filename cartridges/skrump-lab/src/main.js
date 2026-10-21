@@ -379,7 +379,7 @@
     cx.fillStyle = PINK; cx.beginPath(); cx.arc(drag.cx, drag.cy, 10, 0, 6.29); cx.fill(); cx.restore();
   }
   /* landscape-first: phones in portrait get a full-screen rotate card */
-  const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600;
+  const PHONE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches && typeof screen !== 'undefined' && Math.min(screen.width, screen.height) < 600;
   let rotateDismissed = false;
   const needRotate = () => PHONE && !rotateDismissed && H > W;
   function drawRotate() {
