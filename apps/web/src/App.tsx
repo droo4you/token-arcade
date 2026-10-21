@@ -9,6 +9,7 @@ import { recordFreePlay } from "./freePlay";
 import { createClientCartridge, hasClientCartridge } from "./cartridges";
 import { gameHref, getCatalog, getGame, playHref, type ArcadeGame } from "./catalog";
 import { CreatorPortal } from "./CreatorPortal";
+import { FundedRaidControls } from "./FundedRaidControls";
 import { shippedSections } from "./shipped";
 import { getGuideTopic, guideTopics, guideFaq, guideDefinitions, type GuideTopic, type GuideTopicId } from "./guideContent";
 
@@ -880,6 +881,7 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
              <button className="action action-lime" disabled={loading || !selectedRaidGame} type="submit">Create raid <ArrowUpRight size={17} /></button>
           </form>
         </section>
+        <FundedRaidControls key={auth.identityKey} />
         <section className="console-panel console-setup-panel">
           <div className="console-panel-heading"><div><span className="section-kicker">SETUP</span><h2>Onchain readiness</h2></div><ShieldCheck size={24} /></div>
           <div className="setup-state"><span className={`setup-indicator ${health?.settlement.ready ? "is-ready" : ""}`} /><strong>{health?.settlement.ready ? "Settlement configured" : "Settlement needs configuration"}</strong></div>
