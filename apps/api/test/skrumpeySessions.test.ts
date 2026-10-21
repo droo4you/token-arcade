@@ -10,7 +10,7 @@ test("Skrumpey Slide Passport Play: issued seed -> server replay -> standings; f
   const store = new ArcadeStore(":memory:", false);
   const now = new Date().toISOString();
   // Published the way the creator flow publishes it (see scripts/publish-skrumpey-local.sh).
-  store.saveGame({ manifest: { id: "skrumpey-slide", name: "Skrumpey Slide", description: "test", version: "1.0.0", developer: "droo4you",
+  store.saveGame({ manifest: { id: "skrumpey-slide", name: "Skrumpey Slide", description: "test", version: "1.1.0", developer: "droo4you",
     adapterId: "skrumpey-slide", skeletonId: "skrumpey-slide", supportedModes: ["free", "ranked", "raid"], supportedObjectives: ["score"],
     communityOptional: true, minicoinOptional: true, verifier: { kind: "replay", description: "Server replays sim.js input log" } },
     status: "published", createdAt: now, publishedAt: now, creatorId: "local-demo:droober" } as GameRecord);
@@ -36,14 +36,26 @@ test("Skrumpey Slide Passport Play: issued seed -> server replay -> standings; f
     store.db.prepare("UPDATE run_sessions SET json = ? WHERE id = ?").run(JSON.stringify(config), config.runId);
     const secondaryMetrics = { distance: r.distance, bestCombo: r.bestCombo, perfects: r.perfects, collectibles: r.gems, kills: r.kills, hits: r.hits, falls: r.falls, rescued: r.rescued, trainBest: r.trainBest, ticks: r.endTick };
     const result = { gameId: config.gameId, gameVersion: config.gameVersion, runId: config.runId, mode: config.mode, objective: config.objective,
-      seed: config.seed, primaryMetric: r.score, secondaryMetrics, proof: { v: 1, seed: skrumpeySeed(config.seed!), input },
+      seed: config.seed, primaryMetric: r.score, secondaryMetrics, proof: { v: 1, rules: "1.1.0", seed: skrumpeySeed(config.seed!), input },
       result: "completed", startedAt: config.startedAt, finishedAt: new Date().toISOString() } as GameRunResult;
     const forged = await request(`/api/runs/${config.runId}/complete`, { ...result, primaryMetric: r.score * 2 });
     assert.equal(forged.status, 400);
     assert.equal(forged.body.error.code, "UNVERIFIED_RESULT");
+    const adminPatch = async (body: unknown) => {
+      const response = await fetch(origin + "/api/admin/games/skrumpey-slide", { method: "PATCH", headers: { authorization: "Bearer local-demo:admin", "content-type": "application/json" }, body: JSON.stringify(body) });
+      return { status: response.status, body: await response.json() as any };
+    };
+    assert.equal((await adminPatch({ status: "paused" })).status, 200);
+    assert.equal((await request("/api/runs", { gameId: "skrumpey-slide", mode: "ranked" })).status, 404, "paused game issues no new runs");
+    const blockedUpdate = await adminPatch({ manifest: { ...store.getGame("skrumpey-slide")!.manifest, version: "1.2.0" } });
+    assert.equal(blockedUpdate.body.error.code, "ACTIVE_RUNS");
     const accepted = await request(`/api/runs/${config.runId}/complete`, result);
     assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
     assert.equal(accepted.body.verified, true);
+    const drainedUpdate = await adminPatch({ manifest: { ...store.getGame("skrumpey-slide")!.manifest, version: "1.2.0" } });
+    assert.equal(drainedUpdate.status, 200, "configuration can change after the issued run finishes");
+    const restored = store.getGame("skrumpey-slide")!;
+    restored.manifest.version = "1.1.0"; restored.status = "published"; store.saveGame(restored);
     const standings = await request("/api/leaderboards/skrumpey-slide");
     assert.equal(standings.body.entries[0].primaryMetric, r.score);
     const reused = await request(`/api/runs/${config.runId}/complete`, result);

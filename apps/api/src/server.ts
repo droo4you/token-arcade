@@ -681,7 +681,8 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
             if (body.manifest !== undefined) {
               const manifest = validateManifest(body.manifest);
               if (manifest.id !== game.manifest.id) fail(400, "INVALID_MANIFEST", "Game ID cannot change");
-              if (store.listRaids().some((raid) => raid.gameId === manifest.id && raid.status === "open" && Date.parse(raid.endsAt) > Date.now())) fail(409, "ACTIVE_RAID", "Close active raids before changing the cartridge");
+              if (store.listRaids().some((raid) => raid.gameId === manifest.id && raid.status === "open")) fail(409, "ACTIVE_RAID", "Close and finalize open raids before changing the cartridge");
+              if (store.db.prepare("SELECT 1 FROM run_sessions WHERE game_id = ? AND consumed_at IS NULL AND julianday(json_extract(json, '$.expiresAt')) > julianday('now') LIMIT 1").get(manifest.id)) fail(409, "ACTIVE_RUNS", "Wait for issued runs to finish or expire before updating this game");
               game.manifest = manifest;
             }
             if (body.community !== undefined) game.community = validateCommunity(body.community);
@@ -760,7 +761,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (result.result !== "completed") fail(400, "INVALID_RESULT", "Only completed runs can enter standings");
         if (Date.parse(result.finishedAt) > Date.now() + 5_000) fail(400, "INVALID_RESULT", "Run finish is in the future");
         const game = store.getGame(result.gameId);
-        if (game?.status !== "published") fail(409, "GAME_UNAVAILABLE", "Game is no longer published");
+        if (game?.status !== "published" && game?.status !== "paused") fail(409, "GAME_UNAVAILABLE", "Game is no longer available for completing issued runs");
         if (game?.manifest.version !== session.config.gameVersion) fail(409, "GAME_VERSION_CHANGED", "Game version changed during this run");
         const verifier = game && adapters.get(game.manifest.adapterId)?.verifier;
         if (result.mode === "ranked" && JSON.stringify(session.config.rules ?? {}) !== JSON.stringify(adapters.get(game!.manifest.adapterId)?.rankedRules ?? {})) {
@@ -940,10 +941,13 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           if (game.minicoin && (body.community !== undefined || body.communityStrategy !== undefined)) fail(409, "IMMUTABLE_ASSOCIATION", "Community Asset and Strategy are locked after Minicoin association");
           if (body.status !== undefined) {
             if (body.status !== "paused" || game.status !== "published") fail(400, "INVALID_STATUS", "Only a published game can be paused here");
+            if (store.listRaids().some((raid) => raid.gameId === game.manifest.id && raid.status === "open")) fail(409, "ACTIVE_RAID", "Close and finalize open raids before pausing the game");
             game.status = "paused";
           }
           if (body.manifest !== undefined || body.community !== undefined || body.communityStrategy !== undefined || body.communityConcept !== undefined || body.economy !== undefined) {
             if (game.status === "published") fail(409, "GAME_PUBLISHED", "Pause the game before changing its configuration");
+            if (store.db.prepare("SELECT 1 FROM run_sessions WHERE game_id = ? AND consumed_at IS NULL AND julianday(json_extract(json, '$.expiresAt')) > julianday('now') LIMIT 1").get(game.manifest.id)) fail(409, "ACTIVE_RUNS", "Wait for issued runs to finish or expire before updating this game");
+            if (store.listRaids().some((raid) => raid.gameId === game.manifest.id && raid.status === "open")) fail(409, "ACTIVE_RAID", "Close and finalize open raids before updating this game");
             if (body.manifest !== undefined) {
               const manifest = validateManifest(body.manifest);
               if (manifest.id !== game.manifest.id) fail(400, "INVALID_MANIFEST", "Game ID cannot change");
