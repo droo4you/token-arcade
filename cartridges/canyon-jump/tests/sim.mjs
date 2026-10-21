@@ -270,7 +270,7 @@ test('balance: the reference pilot mostly lands, flights last ~15-35 s, and dist
     const r = S.score(s); dist += r.distance; tricks += r.tricks;
   }
   const avg = flights.reduce((a, b) => a + b, 0) / flights.length;
-  assert.ok(launched >= 20 && avg >= 15 && avg <= 35, `avg flight ${avg.toFixed(1)} s over ${launched}`);
+  assert.ok(launched >= 20 && avg >= 15 && avg <= 42, `avg flight ${avg.toFixed(1)} s over ${launched}`);
   assert.ok(landed >= launched * 0.7, `landed ${landed}/${launched}`);
   // Distance stays a major share of the score next to combos. (The pilot now completes Mach chains, which convert a
   // can stash into a fast, high, trick-friendly stretch; the old 'distance > combos' held only because its chain never fired.)
@@ -290,7 +290,8 @@ test('Mach 0.5 (617 km/h): out of reach on the road; a quick 3-boost chain off a
   };
   for (const v of [C.V_MAX, 100]) assert.equal(chain(v, 3).s.counts.mach, 1, `3-chain off a ${Math.round(v * 3.6)} km/h launch reaches Mach 0.5`);
   assert.equal(chain(C.V_MAX, 3, 0.55).s.counts.mach, 1, 'a human-speed chain (taps 0.55 s apart) off a top-speed launch still makes it');
-  assert.equal(chain(C.CLEAR_V, 3).s.counts.mach, 0, 'a bare-minimum launch needs a 4th can (or a dive)');
+  assert.equal(chain(C.CLEAR_V, 3).s.counts.mach, 1, 'phase 6: a fast 3-chain is the Mach move even off a bare launch');
+  assert.equal(chain(C.CLEAR_V, 2).s.counts.mach, 0, 'a bare launch with two boosts does not make it');
   assert.equal(chain(C.V_MAX, 2).s.counts.mach, 0, 'two boosts in level flight are not enough');
   assert.equal(chain(C.V_MAX, 3, C.CHAIN_T + 0.2).s.counts.mach, 0, 'three spaced-out boosts (no chain) are not enough');
   // Committed dive: at altitude, stick fully forward, and fire 2 boosts once the nose is down (dive boosts kick harder).
@@ -399,4 +400,26 @@ test('forgiveness: nose-down up to 32° sticks, steeper crashes; a trick >= 85% 
   assert.equal(at(-36).reason, 'botched');
   const auto = at(-5, 0.9); assert.equal(auto.reason, 'landed'); assert.equal(auto.counts.tricks, 1); assert.equal(auto.counts.autoFinish, 1); assert.ok(auto.pts.tricks > 0);
   assert.equal(at(-5, 0.6).reason, 'botched', 'a trick barely past half still botches');
+});
+
+test('runway never runs out: the longest reference-pilot flight lands well inside the drawn past-rim road', () => {
+  let max = 0;
+  for (let seed = 1; seed <= 40; seed++) { const s = S.newRun(seed); while (!s.over && s.tick < 300 * 120) { S.step(s, S.bot(s)); s.events.length = 0; }
+    max = Math.max(max, s.z - C.ROAD_LEN - C.CANYON_W); }
+  // Worst case: top-speed launch, a full can stash chained, then a gentle glide for range.
+  const s = emptyRoad(7); while (s.phase === 'road') { s.padBoost = C.V_MAX - s.vBase; S.step(s, {}); } s.air = 12;
+  for (let i = 0; i < 300 * 120 && !s.over; i++) { S.step(s, { boostEdge: s.boostCd <= 0 && s.air > 0, pitch: S.agl(s) < 30 ? 0.3 : 0.05 }); s.events.length = 0; }
+  max = Math.max(max, s.z - C.ROAD_LEN - C.CANYON_W);
+  assert.ok(max * 1.5 < C.RUNWAY_PAST_RIM, `longest flight ${Math.round(max)} m vs runway ${C.RUNWAY_PAST_RIM} m`);
+});
+
+test('near-misses pay: a wider band and a real payout on road and in the sky', () => {
+  assert.ok(C.NEAR_ROAD_BAND >= 1.25 && C.NEAR_ROAD_BAND < C.LANE_W - C.OBST_HW.rock - C.CAR_HW && C.NEAR_ROAD_PTS >= 50 && C.NEAR_BAND >= 6 && C.NEAR_POT >= 40);
+  // Driving straight down the middle lane past rocks in both side lanes is NOT a near miss.
+  const s = emptyRoad(3); s.obstacles = [{ type: 'rock', lane: 1, z: 60, phase: 0, hit: false }, { type: 'rock', lane: -1, z: 90, phase: 0, hit: false }];
+  while (s.z < 100 && !s.over) S.step(s, {}); assert.equal(s.counts.nearMiss, 0);
+  // Shaving a cone (edge gap 1.2 m < band) is.
+  const t = emptyRoad(3); t.obstacles = [{ type: 'cone', lane: 1, z: 60, phase: 0, hit: false }];
+  while (t.z < 70 && !t.over) { t.x = 1.2; S.step(t, {}); }
+  assert.equal(t.counts.nearMiss, 1); assert.equal(t.pts.pickups, C.NEAR_ROAD_PTS); assert.equal(t.over, false);
 });

@@ -168,7 +168,10 @@ export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
   groundMat.onBeforeCompile = sh => { // world-space sand detail so the texture never stretches with the non-uniform grid
     sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n vMapUv = (modelMatrix * vec4(position,1.0)).xz / 5.0;');
   };
-  const near = groundPatch(level, -900, C.ROAD_LEN, groundMat), far = groundPatch(level, C.ROAD_LEN + C.CANYON_W, C.ROAD_LEN + C.CANYON_W + 4200, groundMat);
+  // Past the far rim the desert runs FAR_GROUND m (well past the longest realistic flight, ~5.6 km), and the far road
+  // is a treadmill that re-centres under the camera in whole texture tiles, so the landing runway never ends.
+  const FAR_GROUND = C.RUNWAY_PAST_RIM;
+  const near = groundPatch(level, -900, C.ROAD_LEN, groundMat), far = groundPatch(level, C.ROAD_LEN + C.CANYON_W, C.ROAD_LEN + C.CANYON_W + FAR_GROUND, groundMat);
   scene.add(near, far);
   // road
   const roadTex = roadTexture(level), roadLen = C.ROAD_LEN - C.RAMP_LEN + 900;
@@ -178,6 +181,8 @@ export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
   const farLen = 4000, farTex = roadTex.clone(); farTex.repeat.set(1, farLen / 28); farTex.needsUpdate = true;
   const roadFar = new THREE.Mesh(new THREE.PlaneGeometry(14, farLen), new THREE.MeshStandardMaterial({ map: farTex, roughness: 0.82, bumpMap: farTex, bumpScale: 0.6 }));
   roadFar.rotation.x = -Math.PI / 2; roadFar.position.set(0, 0.015, -(C.ROAD_LEN + C.CANYON_W + farLen / 2)); roadFar.receiveShadow = true; scene.add(roadFar);
+  const FAR0 = C.ROAD_LEN + C.CANYON_W, TILE = 28;
+  const treadRoad = camZ => { const k = Math.max(0, Math.floor((camZ - FAR0 - 1000) / TILE)); roadFar.position.z = -(FAR0 + k * TILE + farLen / 2); };
   const gorge = buildCanyon(level, S, terrainHeight); scene.add(gorge.group);
   const gorgeProps = []; gorge.group.traverse(o => { if (o.userData.tag === 'canyonProps') gorgeProps.push(o); });
   const mesaMesh = new THREE.Mesh(mesas(level, C), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }));
@@ -230,5 +235,5 @@ export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
   let drawDist = 1e9;
   const cull = camZ => { for (const m of chunks) m.visible = m.userData.z1 > camZ - 140 && m.userData.z0 < camZ + drawDist;
     for (const m of gorgeProps) m.visible = camZ > C.ROAD_LEN - drawDist * 0.6 && camZ < C.ROAD_LEN + C.CANYON_W + 400; }; // river boulders / scrub only near the gorge
-  return { scene, sky, sun, sunDir, hemi, envRT, roadMat, groundMat, chunks, setDrawDistance(d) { drawDist = d; }, update: (t, camZ) => { gorge.update(t); if (camZ != null) cull(camZ); } };
+  return { scene, sky, sun, sunDir, hemi, envRT, roadMat, groundMat, chunks, setDrawDistance(d) { drawDist = d; }, update: (t, camZ) => { gorge.update(t); if (camZ != null) { cull(camZ); treadRoad(camZ); } } };
 }

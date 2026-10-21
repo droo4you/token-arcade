@@ -24,17 +24,19 @@
     DRAG0: 1.6, DRAG2: 0.00028, DRAG_I: 0.6, DIVE_TUCK: 0.5, // stick held forward in a dive tucks the car: up to 50% less parasitic drag (never adds energy, so no climb/dive pump)
     PITCH_RESP: 7, GAM_MIN: -1.25, GAM_MAX: 1.05, M_MAX: 195, // sky speed cap 702 km/h
     STEER_V: 20, STEER_RESP: 10,
-    BOOST_M: 22, BOOST_CD: 0.3, BOOST_POP: 0.06,
-    // CHAIN: a boost fired within CHAIN_T of the previous one hits CHAIN_STEP harder per link (22 → 29 → 36, capped at
-    // CHAIN_MAX links), so a quick 3-chain is +87 m/s (that's the Mach move) while lone boosts stay ~what they were.
-    CHAIN_T: 0.8, CHAIN_STEP: 7, CHAIN_MAX: 2,
+    BOOST_M: 24, BOOST_CD: 0.3, BOOST_POP: 0.06,
+    // CHAIN: a boost fired within CHAIN_T of the previous one hits CHAIN_STEP harder per link (24 → 34 → 44, capped at
+    // CHAIN_MAX links), so a 3-chain inside ~1.8 s gaps is +102 m/s (that's the Mach move) while lone boosts stay ~what they were.
+    CHAIN_T: 1.8, CHAIN_STEP: 10, CHAIN_MAX: 2,
     // DIVE BOOST: an AIR boost fired with the nose at least DIVE_BOOST_GAM below the horizon kicks DIVE_BOOST_K× harder (gravity is with you).
-    DIVE_BOOST_GAM: -0.3, DIVE_BOOST_K: 1.3,
+    DIVE_BOOST_GAM: -0.3, DIVE_BOOST_K: 1.5,
     // Tricks feed an unbanked combo: pot × multiplier pays out only on a clean landing past the far rim.
     FLIP_T: 0.7, ROLL_T: 1.05, FLIP_PTS: 30, ROLL_PTS: 50, TRICK_CD: 0.2, TRICK_COST: 3,
     // Tricks are nearly pitch-neutral: mid-spin the car loses at most TRICK_DIP of its lift (a tiny dip, not a nosedive).
     TRICK_DIP: 0.12, TRICK_MIN_AGL: 8, VARIETY: 1.5,
-    MULT_STEP: 0.5, MULT_MAX: 3, NEAR_POT: 25, NEAR_MULT: 0.25, RING_POT: 50, RING_MULT: 0.25, RING_V: 8, RING_R: 4.4,
+    // Near misses: sky band = hitbox + NEAR_BAND m; road band = edge gap < NEAR_ROAD_BAND (kept under the 1.35 m that would
+    // flag every rock/tumbleweed in the next lane, so it still means a real shave). MULT_MAX 2.5 keeps distance king.
+    MULT_STEP: 0.5, MULT_MAX: 2.5, NEAR_POT: 40, NEAR_BAND: 6, NEAR_ROAD_BAND: 1.3, NEAR_ROAD_PTS: 50, NEAR_MULT: 0.25, RING_POT: 50, RING_MULT: 0.25, RING_V: 8, RING_R: 4.4,
     // Gorge wall profile shared by the sim and the 3D walls: [depth below the rim, inset into the gap] (m). Cliff bands,
     // benches and an inner gorge: the canyon narrows as it deepens, from 520 m at the rim to ~432 m at the river.
     WALL: [[0, 0], [4, 0.5], [30, 3], [34, 14], [68, 18], [74, 30], [104, 34], [110, 44]],
@@ -51,6 +53,8 @@
     // Mach 0.5 ≈ 617 km/h. Speed is m/s everywhere: road speed v on the ground, airspeed m in the air.
     // The road tops out at V_MAX (396 km/h), so Mach is earned in the sky: chain AIR boosts and/or trade altitude in a dive.
     MACH05: 617 / 3.6, MACH_BONUS: 250,
+    // Ground and road past the far rim are drawn this far (the 3D road is also a treadmill): ~2x the longest flight we can produce.
+    RUNWAY_PAST_RIM: 20000,
   });
 
   function rng(seed) {
@@ -194,7 +198,7 @@
       if (Math.abs(o.z - s.z) < 1.9) {
         const gap = Math.abs(obstacleX(o, s.t) - s.x);
         if (gap < C.OBST_HW[o.type] + C.CAR_HW) { o.hit = true; s.events.push({ e: 'crash', what: o.type }); end(s, 'road'); return; }
-        if (!o.near && gap < C.OBST_HW[o.type] + C.CAR_HW + 1) { o.near = true; s.counts.nearMiss++; s.pts.pickups += 10; s.events.push({ e: 'near' }); }
+        if (!o.near && gap < C.OBST_HW[o.type] + C.CAR_HW + C.NEAR_ROAD_BAND) { o.near = true; s.counts.nearMiss++; s.pts.pickups += C.NEAR_ROAD_PTS; s.events.push({ e: 'near' }); }
       }
     }
     for (const p of s.pickups) {
@@ -382,7 +386,7 @@
       if (Math.abs(o.z - s.z) < o.r + 1) {
         const p = skyObjPos(o, s.t), d = Math.hypot(p.x - s.x, p.y - s.y);
         if (d < o.r + 1.1) { o.hit = true; s.events.push({ e: 'crash', what: o.type }); end(s, 'air'); return; }
-        if (!o.near && d < o.r + 4) { o.near = true; s.counts.nearMiss++; addCombo(s, C.NEAR_POT, C.NEAR_MULT); s.events.push({ e: 'near', what: o.type, pot: s.cmb.pot, mult: s.cmb.mult }); }
+        if (!o.near && d < o.r + C.NEAR_BAND) { o.near = true; s.counts.nearMiss++; addCombo(s, C.NEAR_POT, C.NEAR_MULT); s.events.push({ e: 'near', what: o.type, pot: s.cmb.pot, mult: s.cmb.mult }); }
       }
     }
     for (const g2 of s.rings) {

@@ -120,7 +120,7 @@ function init() {
     ring: pool(ringGeo, ringMat, 64, false), ringRisky: pool(ringGeo, riskyMat, 64, false) };
   const rr = rng(77);
   const FAR = C.ROAD_LEN + C.CANYON_W;
-  const clouds = createClouds({ count: 80, z0: C.ROAD_LEN - 300, z1: FAR + 7000, yMin: 40, yMax: 240, xSpan: 650, top: level.time.clouds?.top || '#ffd9cf', bottom: level.time.clouds?.bottom || '#a0709f', rand: rr });
+  const clouds = createClouds({ count: 120, z0: C.ROAD_LEN - 300, z1: FAR + 14000, yMin: 40, yMax: 240, xSpan: 650, top: level.time.clouds?.top || '#ffd9cf', bottom: level.time.clouds?.bottom || '#a0709f', rand: rr });
   scene.add(clouds.mesh);
   const streaks = createStreaks(170, rr); scene.add(streaks.mesh);
   // glow halos for pickups (additive sprites): keep the "glow" readable in the no-bloom tier too

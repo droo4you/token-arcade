@@ -532,7 +532,7 @@
       if (z > zMin && z < zMax) items.push({ z, f: () => hoodoo(ctx, cam, x, z, hh, wd, i) });
     }
     for (let d = 500; d < C.ROAD_LEN; d += 500) { const z = C.ROAD_LEN - d; if (z > zMin && z < zMax) items.push({ z, f: () => { const p = cam.p(ROAD_HALF + 2.5, 0, z); if (p) sign(ctx, p.x, p.y, p.k, `CANYON ${d}m`, '#ffd23f'); } }); }
-    for (let d = 100; d < 4000; d += 100) { const z = C.ROAD_LEN + C.CANYON_W + d; if (z > zMin && z < zMax) items.push({ z, f: () => { const p = cam.p(-ROAD_HALF - 2.5, 0, z); if (p) sign(ctx, p.x, p.y, p.k, `+${d}m`, '#5af0ff'); } }); }
+    for (let d = Math.max(100, Math.ceil((zMin - C.ROAD_LEN - C.CANYON_W) / 100) * 100); d < Math.max(100, zMax - C.ROAD_LEN - C.CANYON_W) + 1; d += 100) { const z = C.ROAD_LEN + C.CANYON_W + d; if (z > zMin && z < zMax) items.push({ z, f: () => { const p = cam.p(-ROAD_HALF - 2.5, 0, z); if (p) sign(ctx, p.x, p.y, p.k, `+${d}m`, '#5af0ff'); } }); }
     { const z = C.ROAD_LEN + C.CANYON_W + 2; if (z > zMin && z < zMax) items.push({ z, f: () => { const p = cam.p(ROAD_HALF + 2.5, 0, z); if (p) sign(ctx, p.x, p.y, p.k, 'FAR RIM', '#5af0ff'); } }); }
     // Clouds in the sky lanes
     if (s.phase !== 'road' || cam.z > C.ROAD_LEN - 700) {

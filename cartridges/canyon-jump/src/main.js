@@ -195,7 +195,7 @@
         case 'air': A.sfx('air'); burst(cs.x, cs.y - 30, 14, ['#5af0ff', '#ffffff'], 220, 0.6); G.airPulse = 1; popup('+1 AIR', '#5af0ff', false, s.air > 1 ? `${s.air} cans` : null, 'air'); break;
         case 'pad': A.sfx('pad'); G.fovKick = 0.8; burst(cs.x, cs.y, 16, ['#ff4fd8', '#ffd0f4', '#fff'], 260, 0.5, 200, true); G.shake = Math.max(G.shake, 6); G.flash = 0.25; G.flashColor = '#ff4fd8'; G.boostT = 0.6; popup('SPEED PAD', '#ff4fd8', true); break;
         case 'lane': A.sfx('lane'); break;
-        case 'near': if (s.phase === 'sky') { A.sfx('whoosh', 1); G.shake = Math.max(G.shake, 5); popup('NEAR MISS', '#fff4e0', false, `×${fmtMult(ev.mult)}`); G.comboPulse = 1; } else { A.sfx('near'); popup('NEAR MISS', '#fff4e0'); } break;
+        case 'near': if (s.phase === 'sky') { A.sfx('whoosh', 1); G.shake = Math.max(G.shake, 5); popup('NEAR MISS', '#fff4e0', false, `×${fmtMult(ev.mult)}`); G.comboPulse = 1; } else { A.sfx('near'); popup('NEAR MISS', '#fff4e0', false, `+${C.NEAR_ROAD_PTS}`); } break;
         case 'ring': A.sfx('ring', s.counts.rings); G.fovKick = Math.max(G.fovKick, 0.7); G.flash = Math.max(G.flash, 0.18); G.flashColor = '#ffd23f'; G.boostT = Math.max(G.boostT, 0.45); G.shake = Math.max(G.shake, 6); G.comboPulse = 1;
           popup(ev.risky ? 'RISKY RING' : 'BOOST RING', '#ffd23f', ev.risky, `×${fmtMult(ev.mult)}`); burst(cs.x, cs.y - 10, 18, ['#ffd23f', '#fff6c0', '#ff9f1a'], 300, 0.5, 0, true); break;
         case 'launch': A.sfx('launch'); G.slowT = 0.9; G.shake = 14; G.flash = 0.5; G.flashColor = '#fff1a8'; G.boostT = 1;
