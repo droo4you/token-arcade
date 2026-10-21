@@ -95,7 +95,8 @@
         "course_navigator",
         "grid_logic",
         "build_and_resolve",
-        "daily_deduction"
+        "daily_deduction",
+        "launcher"
       ]
     },
     "entry": {

@@ -13,7 +13,8 @@
   /* ---------- sprites ---------- */
   const IMG = {}; const LOOKS = ['10-pink', '314-pink', '20-pink'];
   ['3', '690', '2912', '2067', '1764', '38', '210', ...LOOKS].forEach(id => { const im = new Image(); im.src = 'assets/sprites/' + id + '.png'; IMG[id] = im; });
-  const PROJ = [['3'], ['690', '2912', '2067']];
+  const WF = () => S.FIGS[G.run.fig]; // current weapon (registry entry, see weapons.js)
+  const say = (tpl, v) => window.SkrumpWeapons.fill(tpl, v || {});
   const JUDGES = ['1764', '38', '210'];
 
   /* ---------- layout ---------- */
@@ -41,16 +42,16 @@
     const seed = params.has('seed') ? (+params.get('seed') >>> 0) : (Math.random() * 4294967296) >>> 0;
     G.run = S.newRun(seed); G.result = null; G.parts.length = 0; G.spin.clear(); G.runT = 0; G.cards = null;
     G.screen = 'intro'; G.introT = G.t; G.aim = null; G.pending = null;
-    narrate('Welcome to Lab zero seven. Figure one. Catapult. Payload: one Skrumpey. Large.');
+    narrate(say(WF().lines.intro));
   }
-  function figIntro() { G.screen = 'intro'; G.introT = G.t; narrate('Figure two. Tank. Three shells. Accuracy remains irrelevant.'); }
+  function figIntro() { G.screen = 'intro'; G.introT = G.t; narrate(say(WF().lines.intro)); }
   function fire(qx, qy) {
     const r = G.run; if (!S.canFire(r)) return;
     const f = S.cur(r), wasClear = f.cleared;
     if (!S.fire(r, qx, qy)) return;
-    G.aim = null; G.screen = 'flight'; G.shake = r.fig ? 0.35 : 0.2;
-    A.sfx(r.fig ? 'cannon' : 'launch');
-    if (r.fig === 1 && f.shotsFired === 2) { narrate('Ceasefire: denied.'); A.sfx('alarm'); G.flash = G.t; }
+    const F = WF(); G.aim = null; G.screen = 'flight'; G.shake = F.shake;
+    A.sfx(F.sfx);
+    if (F.rules.ceasefire && f.shotsFired === 2) { narrate(say(F.lines.secondFire)); A.sfx('alarm'); G.flash = G.t; }
     else if (wasClear) narrate('Overkill: yes.');
   }
   function conclude() { if (S.conclude(G.run)) afterFig(); }
@@ -60,11 +61,11 @@
     G.cards = JUDGES.map((_, k) => Math.max(0, Math.min(10, Math.round(ratio * 10 + (k - 1) * (s.overkill ? -2 : 0.6)))));
     G.cardsT = G.t; A.sfx('card');
     let line;
-    if (r.fig === 0) line = `Range: ${Math.round(s.range * 10) / 10} meters. Subjects displaced: ${f.displaced} of ${f.N}. Accuracy: irrelevant.`;
+    const v = { range: Math.round(s.range * 10) / 10, displaced: f.displaced, N: f.N, gained: s.displaced };
+    if (F.lines.shot) line = say(F.lines.shot, v);
     else if (s.overkill) line = 'Overkill: yes. Noted.';
     else if (s.wasted) line = 'No subjects displaced. Noted.';
-    else if (f.shotsFired === 1) line = `${s.displaced} subjects displaced. A request for ceasefire has been received.`;
-    else line = `${s.displaced} additional subjects displaced. ${f.displaced} of ${f.N}.`;
+    else line = say(f.shotsFired === 1 ? F.lines.first : F.lines.more, v);
     if (f.cleared && !s.overkill) line += ' All subjects displaced.';
     narrate(line);
     G.screen = 'verdict-shot'; G.waitUntil = G.t + (AUTOPILOT ? 2.6 : 3.2);
@@ -81,10 +82,10 @@
     A.sfx('stamp');
     if (G.arcadeRunOpen && TA && TA.active) {
       G.arcadeRunOpen = false;
-      const [f1, f2] = r.figs;
+      const [f1, f2, f3] = r.figs;
       TA.complete({ result: 'completed', primaryMetric: r.total, durationMs: Math.round(G.runT * 1000),
         secondaryMetrics: { displaced: r.displaced, subjects: r.N, shots: r.shots, perShotX100: r.perShotX100, clears: r.clears, overkill: r.overkill, wasted: r.wasted,
-          fig1Displaced: f1 ? f1.displaced : 0, fig2Displaced: f2 ? f2.displaced : 0, ticks: r.ticks } });
+          fig1Displaced: f1 ? f1.displaced : 0, fig2Displaced: f2 ? f2.displaced : 0, fig3Displaced: f3 ? f3.displaced : 0, ticks: r.ticks } });
     }
   }
 
@@ -92,7 +93,7 @@
   function autoPick() {
     const r = G.run, f = S.cur(r);
     if (f.cleared) return null; // conclude
-    const cands = r.fig === 0 ? [[85, 40], [100, 20], [100, 40], [100, 60], [70, 60], [90, 50]] : [[100, 10], [100, 25], [90, 40], [70, 55], [100, 45], [60, 70], [80, 30], [100, 60]];
+    const cands = S.FIGS[r.fig].auto;
     let best = null;
     for (const [qx, qy] of cands) { const rep = S.replay(r.seed, [...r.inputs, ['F', qx, qy]]); const d = rep.run ? rep.run.figs[r.fig].displaced : -1; if (!best || d > best[0]) best = [d, qx, qy]; }
     return [best[1], best[2]];
@@ -199,16 +200,23 @@
       cx.fillStyle = '#3b3749'; cx.fillRect(X(k.x0) + sc * 0.25, Y(k.y1) - sc * 0.25, (k.x1 - k.x0) * sc, sc * 0.25);
       cx.fillStyle = PINK; cx.fillRect(X(k.x0), Y(k.y1), (k.x1 - k.x0) * sc, Math.max(1.5, sc * 0.08)); }
   }
-  function aimAngle(r) { const a = G.aim; if (a && (a.qx || a.qy)) return Math.atan2(a.qy, a.qx); return r.fig ? 0.35 : 0.8; }
+  function aimAngle(r) { const a = G.aim; if (a && (a.qx || a.qy)) return Math.atan2(a.qy, a.qx); return S.FIGS[r.fig].aimDefault; }
   function drawLauncher(r) {
     const F = S.FIGS[r.fig], lx = X(F.launcher.x), ly = Y(F.launcher.y), ang = aimAngle(r);
     cx.save();
-    if (r.fig === 0) { // catapult frame
+    if (F.frame === 'catapult') { // catapult frame
       cx.strokeStyle = '#4a4458'; cx.lineWidth = sc * 0.35; cx.lineCap = 'round';
       cx.beginPath(); cx.moveTo(lx - 1.8 * sc, fy); cx.lineTo(lx - 0.2 * sc, ly + 0.6 * sc); cx.lineTo(lx + 1.6 * sc, fy); cx.stroke();
       cx.fillStyle = '#3a3546'; cx.fillRect(lx - 2.6 * sc, fy - 0.7 * sc, 5.2 * sc, 0.7 * sc);
       cx.fillStyle = '#111'; for (const w of [-1.9, 1.9]) { cx.beginPath(); cx.arc(lx + w * sc, fy - 0.1 * sc, 0.55 * sc, 0, 6.29); cx.fill(); }
       cx.strokeStyle = '#6a627c'; cx.lineWidth = sc * 0.25; cx.beginPath(); cx.moveTo(lx - 0.2 * sc, ly + 0.6 * sc); cx.lineTo(lx - Math.cos(ang) * 1.3 * sc * (G.aim ? 1.6 : 1), ly + Math.sin(ang) * 1.3 * sc * (G.aim ? 1.6 : 1)); cx.stroke();
+    } else if (F.frame === 'gun') { // rapid-fire turret: tripod + drum + long thin barrel
+      cx.strokeStyle = '#4a4458'; cx.lineWidth = sc * 0.22; cx.lineCap = 'round';
+      for (const w of [-1.4, 0, 1.4]) { cx.beginPath(); cx.moveTo(lx, ly); cx.lineTo(lx + w * sc, fy); cx.stroke(); }
+      cx.translate(lx, ly); cx.rotate(-ang); cx.fillStyle = '#2c2a36'; cx.fillRect(-0.9 * sc, -0.5 * sc, 1.8 * sc, 1.0 * sc);
+      cx.fillStyle = '#4a4938'; for (const o of [-0.18, 0.18]) cx.fillRect(0.6 * sc, (o - 0.09) * sc, 3.4 * sc, 0.18 * sc);
+      cx.fillStyle = PINK; cx.fillRect(3.9 * sc, -0.32 * sc, 0.22 * sc, 0.64 * sc);
+      cx.fillStyle = '#ffd166'; cx.beginPath(); cx.arc(-0.2 * sc, 0.75 * sc, 0.5 * sc, 0, 6.29); cx.fill();
     } else { // tank
       cx.fillStyle = '#1a1820'; cx.fillRect(lx - 2.6 * sc, fy - 0.9 * sc, 5.2 * sc, 0.9 * sc);
       cx.fillStyle = '#3b3a2f'; cx.fillRect(lx - 2.2 * sc, fy - 1.9 * sc, 4.2 * sc, 1.0 * sc); cx.fillRect(lx - 1.1 * sc, fy - 2.6 * sc, 2 * sc, 0.8 * sc);
@@ -218,9 +226,11 @@
     cx.restore();
     // loaded projectile
     if (G.screen === 'aim' || G.screen === 'intro') { const f = S.cur(r); if (f.shotsFired < F.shots) {
-      const id = PROJ[r.fig][f.shotsFired % PROJ[r.fig].length], pull = G.aim ? Math.hypot(G.aim.qx, G.aim.qy) / 100 : 0;
-      const px = F.launcher.x - (r.fig ? 0 : Math.cos(ang) * pull * 1.6), py = F.launcher.y - (r.fig ? 0 : Math.sin(ang) * pull * 1.6);
-      if (r.fig === 0) sprite(id, px, py, F.proj.r, 0); } }
+      const PS = F.proj.sprites, id = PS[f.shotsFired % PS.length], pull = G.aim ? Math.hypot(G.aim.qx, G.aim.qy) / 100 : 0;
+      const px = F.launcher.x - Math.cos(ang) * pull * 1.6, py = F.launcher.y - Math.sin(ang) * pull * 1.6;
+      if (F.frame === 'catapult') sprite(id, px, py, F.proj.r, 0); } }
+    // owner badge: the Skrumpey that brought this weapon
+    sprite(F.owner.token, F.launcher.x - 2.2, 0.7, 0.7, 0);
   }
   function sprite(id, x, y, rad, rot) {
     const im = IMG[id]; const s = rad * 2.25 * sc;
@@ -228,11 +238,11 @@
     cx.save(); cx.translate(X(x), Y(y)); cx.rotate(rot); cx.drawImage(im, -s / 2, -s / 2, s, s * im.naturalHeight / im.naturalWidth); cx.restore();
   }
   function drawBodies(r) {
-    let pi = 0;
+    const F = S.FIGS[r.fig], PS = F.proj.sprites; let pi = 0;
     for (const b of r.bodies) { if (b.out) continue;
       const rot = G.spin.get(b.id) || 0;
       if (b.kind === 'subj') sprite(LOOKS[b.look], b.x, b.y, b.r, rot);
-      else { const id = PROJ[r.fig][pi % PROJ[r.fig].length]; pi++; if (!b.spent || r.fig === 0) { if (!b.sleep) { cx.save(); cx.globalAlpha = 0.35; cx.fillStyle = PINK; cx.beginPath(); cx.arc(X(b.x - b.vx * 0.03), Y(b.y - b.vy * 0.03), b.r * sc * 0.9, 0, 6.29); cx.fill(); cx.restore(); } sprite(id, b.x, b.y, b.r, rot); } else sprite(id, b.x, b.y, b.r, rot); }
+      else { const id = PS[pi % PS.length]; pi++; if (!b.spent || F.frame === 'catapult') { if (!b.sleep) { cx.save(); cx.globalAlpha = 0.35; cx.fillStyle = PINK; cx.beginPath(); cx.arc(X(b.x - b.vx * 0.03), Y(b.y - b.vy * 0.03), b.r * sc * 0.9, 0, 6.29); cx.fill(); cx.restore(); } sprite(id, b.x, b.y, b.r, rot); } else sprite(id, b.x, b.y, b.r, rot); }
     }
   }
   function drawAim(r) {
@@ -250,11 +260,13 @@
 
   function hudRows(r) {
     const f = S.cur(r), F = S.FIGS[r.fig];
-    if (r.fig === 0) return [['PAYLOAD', F.proj.label], ['RANGE', f.shotsFired ? (r.phase === 'flight' && r.shot ? ((r.shot.maxX - F.launcher.x) / 1000).toFixed(3) : (f.range / 1000).toFixed(3)) + ' KM' : '—'],
+    if (F.hud === 'range') return [['PAYLOAD', F.proj.label], ['RANGE', f.shotsFired ? (r.phase === 'flight' && r.shot ? ((r.shot.maxX - F.launcher.x) / 1000).toFixed(3) : (f.range / 1000).toFixed(3)) + ' KM' : '—'],
       ['SUBJECTS DISPLACED', `${f.displaced} / ${f.N}`, PINK], ['ACCURACY', 'IRRELEVANT', PINK]];
     const cf = f.ceasefire === 'requested' ? 'REQUESTED' : f.ceasefire === 'denied' ? 'DENIED' : '—';
-    return [['AMMUNITION', F.proj.label], ['SHOTS', `${f.shotsFired} / ${F.shots}`], ['SUBJECTS DISPLACED', `${f.displaced} / ${f.N}`, PINK],
-      ['CEASEFIRE', cf, cf === 'DENIED' ? '#ff3b5c' : cf === 'REQUESTED' ? '#ffd166' : null], ['OVERKILL', f.overkill ? 'YES' : 'NO', f.overkill ? PINK : null]];
+    const rows = [['AMMUNITION', F.proj.label], ['SHOTS', `${f.shotsFired} / ${F.shots}`], ['SUBJECTS DISPLACED', `${f.displaced} / ${f.N}`, PINK]];
+    if (F.rules.ceasefire) rows.push(['CEASEFIRE', cf, cf === 'DENIED' ? '#ff3b5c' : cf === 'REQUESTED' ? '#ffd166' : null]);
+    else rows.push(['OPERATOR', F.owner.name.toUpperCase()]);
+    rows.push(['OVERKILL', f.overkill ? 'YES' : 'NO', f.overkill ? PINK : null]); return rows;
   }
   function drawHUD(r) {
     const F = S.FIGS[r.fig], fs = Math.max(10, Math.min(15, Math.round(Math.min(W, H) * 0.024))), pad = Math.max(10, W * 0.018);
@@ -290,11 +302,19 @@
   function corners() { const p = Math.max(8, W * 0.012), l = Math.min(W, H) * 0.05; cx.strokeStyle = 'rgba(255,255,255,0.4)'; cx.lineWidth = 1.5;
     for (const [x, y, sx, sy] of [[p, p, 1, 1], [W - p, p, -1, 1], [p, H - p, 1, -1], [W - p, H - p, -1, -1]]) { cx.beginPath(); cx.moveTo(x, y + sy * l); cx.lineTo(x, y); cx.lineTo(x + sx * l, y); cx.stroke(); } }
   function drawCaption() {
-    if (!G.caption || G.t - G.capT > 5.5) return; const fs = Math.max(14, Math.min(26, Math.round(Math.min(W, H) * 0.042)));
+    if (!G.caption || G.t - G.capT > 5.5 || G.screen === 'end') return; const fs = Math.max(14, Math.min(26, Math.round(Math.min(W, H) * 0.042)));
     cx.save(); cx.font = `600 ${fs}px system-ui, -apple-system, sans-serif`; cx.textAlign = 'center'; cx.textBaseline = 'middle';
     const words = G.caption.split(' '), lines = []; let line = '';
-    for (const w of words) { const t = line ? line + ' ' + w : w; if (cx.measureText(t).width > W * 0.7 && line) { lines.push(line); line = w; } else line = t; } lines.push(line);
-    const y0 = fy + (H - fy) * 0.45 - (lines.length - 1) * fs * 0.6 - (G.screen === 'aim' ? fs * 1.2 : 0);
+    const maxW = W < 900 ? W * 0.88 : W * 0.7;
+    for (const w of words) { const t = line ? line + ' ' + w : w; if (cx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; } lines.push(line);
+    const lh = fs * 1.2, blockH = lines.length * lh, floorH = H - fy - (G.screen === 'aim' ? fs * 1.6 : 0);
+    let y0;
+    if (blockH <= floorH * 0.9) y0 = fy + (floorH - blockH) / 2 + lh / 2;
+    else { // phone: the floor strip can't hold it without covering the launcher/tracks, so caption sits in the open air above the piles
+      y0 = Math.max(H * 0.2, Math.min(W, H) * 0.024 * 6.5) + lh / 2;
+      let mw = 0; for (const l of lines) mw = Math.max(mw, cx.measureText(l).width);
+      cx.fillStyle = 'rgba(8,7,12,0.6)'; cx.fillRect(W / 2 - mw / 2 - fs * 0.5, y0 - lh / 2 - fs * 0.2, mw + fs, blockH + fs * 0.4);
+    }
     cx.lineJoin = 'round'; cx.lineWidth = Math.max(3, fs * 0.22); cx.strokeStyle = 'rgba(0,0,0,0.85)'; cx.fillStyle = '#f2f0f7';
     lines.forEach((l, i) => { cx.strokeText(l, W / 2, y0 + i * fs * 1.2); cx.fillText(l, W / 2, y0 + i * fs * 1.2); }); cx.restore();
   }
@@ -308,7 +328,7 @@
     cx.font = `900 ${Math.round(fs)}px system-ui, sans-serif`; cx.fillStyle = '#f2f0f7'; cx.shadowColor = PINK; cx.shadowBlur = 24; cx.fillText('SKRUMP LAB', W / 2, H * 0.42);
     cx.shadowBlur = 0; cx.font = `bold ${Math.round(fs * 0.38)}px ${MONO}`; cx.fillStyle = PINK; cx.fillText('WEAPONS TEST', W / 2, H * 0.54);
     cx.font = `${Math.round(fs * 0.2)}px ${MONO}`; cx.fillStyle = 'rgba(255,255,255,0.7)';
-    cx.fillText('FIG. 1 CATAPULT  ·  FIG. 2 TANK', W / 2, H * 0.62);
+    cx.fillText(S.FIGS.map(F => `FIG. ${F.id} ${F.name}`).join('  ·  '), W / 2, H * 0.62);
     if (Math.floor(G.t * 2) % 2 === 0) { cx.fillStyle = '#fff'; cx.font = `bold ${Math.round(fs * 0.24)}px ${MONO}`; cx.fillText(AUTOPILOT ? 'AUTOPILOT' : 'TAP TO BEGIN TESTING', W / 2, H * 0.74); }
     cx.font = `${Math.round(fs * 0.17)}px ${MONO}`; cx.fillStyle = 'rgba(255,255,255,0.4)'; cx.fillText('drag back to aim · release to fire · best ' + best, W / 2, H * 0.82);
     for (let k = 0; k < 5; k++) sprite(LOOKS[k % 3], -1 + k * 1.1 + 52, 0.5, 0.5, 0);
@@ -321,8 +341,8 @@
     cx.textAlign = 'left'; cx.textBaseline = 'alphabetic'; cx.font = `bold ${fs + 2}px ${MONO}`; cx.fillStyle = 'rgba(255,255,255,0.6)';
     cx.fillText('TEST REPORT — LAB-07', px, py); cx.font = `${fs - 2}px ${MONO}`; cx.fillStyle = 'rgba(255,255,255,0.35)'; cx.fillText(`seed ${r.seed} · sim v${r.simVersion}`, px, py + fs * 1.2);
     const rows = [];
-    r.figs.forEach((f, i) => { rows.push([`FIG. ${f.id} — ${S.FIGS[i].name}`, '', '#fff']); rows.push(['  SUBJECTS DISPLACED', `${f.displaced} / ${f.N}`, PINK]); rows.push(['  SHOTS', String(f.shots)]);
-      rows.push(['  DISPLACEMENT', `+${f.displacedPts}`]); if (f.clearBonus) rows.push(['  FULL CLEAR', `+${f.clearBonus}`]); if (f.penalty) rows.push(['  OVERKILL / WASTED', `−${f.penalty}`, '#ff3b5c']); });
+    r.figs.forEach((f, i) => { rows.push([`FIG. ${f.id} — ${S.FIGS[i].name}`, `${f.total}`, '#fff']);
+      rows.push([`  ${f.displaced}/${f.N} displaced · ${f.shots} shot${f.shots === 1 ? '' : 's'}`, `+${f.displacedPts}${f.clearBonus ? ' +' + f.clearBonus : ''}${f.penalty ? ' −' + f.penalty : ''}`, f.penalty ? '#ff3b5c' : PINK]); });
     rows.push(['ACCURACY', 'IRRELEVANT', PINK]); rows.push(['OVERKILL', r.overkill ? 'YES' : 'NO', r.overkill ? PINK : null]); rows.push(['SUBJECTS / SHOT', (r.perShotX100 / 100).toFixed(2)]);
     cx.fillStyle = 'rgba(20,18,28,0.9)'; cx.fillRect(px, py + fs * 1.8, pw, lh * rows.length + fs); cx.strokeStyle = 'rgba(255,255,255,0.15)'; cx.strokeRect(px, py + fs * 1.8, pw, lh * rows.length + fs);
     rows.forEach(([k, v, c], i) => { const y = py + fs * 2.4 + lh * (i + 0.8); cx.font = `${fs}px ${MONO}`; cx.fillStyle = 'rgba(255,255,255,0.65)'; cx.fillText(k, px + fs, y); cx.font = `bold ${fs}px ${MONO}`; cx.fillStyle = c || '#fff'; cx.textAlign = 'right'; cx.fillText(v, px + pw - fs, y); cx.textAlign = 'left'; });

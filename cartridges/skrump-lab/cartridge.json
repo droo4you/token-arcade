@@ -2,26 +2,83 @@
   "id": "skrump-lab",
   "name": "Skrump Lab: Weapons Test",
   "description": "LAB-07 weapons test. Launch Skrumpeys at piles of pink Skrumpeys. Accuracy: irrelevant.",
-  "version": "1.0.0",
-  "artwork": { "icon": "assets/sprites/3.png" },
-  "developer": { "name": "droo4you" },
-  "supportedModes": ["free_play"],
-  "supportedObjectives": ["SCORE"],
+  "version": "1.1.0",
+  "artwork": {
+    "icon": "assets/sprites/3.png"
+  },
+  "developer": {
+    "name": "droo4you"
+  },
+  "supportedModes": [
+    "free_play"
+  ],
+  "supportedObjectives": [
+    "SCORE"
+  ],
   "communityOptional": true,
   "minicoinOptional": true,
   "integrationLevel": "L0",
-  "skeleton": "commit_and_simulate",
-  "entry": { "url": "/skrump-lab/v/1.0.0/arcade.html", "origin": "cartridge", "kind": "iframe" },
-  "inputs": ["pointer_drag", "touch_drag", "keyboard"],
+  "skeleton": "launcher",
+  "entry": {
+    "url": "/skrump-lab/v/1.1.0/arcade.html",
+    "origin": "cartridge",
+    "kind": "iframe"
+  },
+  "inputs": [
+    "pointer_drag",
+    "touch_drag",
+    "keyboard"
+  ],
   "orientation": "landscape",
   "mobile": "full",
-  "runLength": { "typicalSec": [35, 70], "maxSec": 180 },
-  "scoring": { "SCORE": { "primary": "score", "unit": "points", "order": "desc", "secondary": ["displaced", "perShotX100", "overkill"], "tieBreak": ["shots_asc", "ticks_asc"] } },
+  "runLength": {
+    "typicalSec": [
+      55,
+      100
+    ],
+    "maxSec": 240
+  },
+  "scoring": {
+    "SCORE": {
+      "primary": "score",
+      "unit": "points",
+      "order": "desc",
+      "secondary": [
+        "displaced",
+        "perShotX100",
+        "overkill"
+      ],
+      "tieBreak": [
+        "shots_asc",
+        "ticks_asc"
+      ]
+    }
+  },
   "determinism": "replayable-portable",
-  "simVersion": "1",
+  "simVersion": "2",
   "tickHz": 120,
   "seedPolicy": "per_run",
-  "simHash": "sha256:1fbd41389414b0c5790305dec25808ddfe424a76da39afe7a70206a4c23daa5f",
-  "verifier": { "kind": "replay", "entry": "src/sim.js#replay", "runtime": "node (not installed in the API yet)" },
-  "removedInArcade": ["?seed and ?autopilot URL params", "local best score (kept, display only)"]
+  "simHash": "sha256:f7d741db952834e9110f38152c9663beea3bc17aba42c3148cc680dfb5bc234c",
+  "verifier": {
+    "kind": "replay",
+    "entry": "src/sim.js#replay (opts.simVersion 1 replays pre-1.1 FIG.1+2 records)",
+    "runtime": "node (not installed in the API yet)"
+  },
+  "removedInArcade": [
+    "?seed and ?autopilot URL params",
+    "local best score (kept, display only)"
+  ],
+  "simHashCovers": [
+    "src/weapons.js",
+    "src/sim.js"
+  ],
+  "contentSlot": {
+    "kind": "weapon",
+    "registry": "src/weapons.js",
+    "lineup": [
+      "catapult",
+      "tank",
+      "rapid"
+    ]
+  }
 }
