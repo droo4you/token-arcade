@@ -1,7 +1,9 @@
 // Staged operator for a real website raid. Preview by default; --broadcast sends testnet transactions.
-// Requires ARCADE_ADMIN_TOKEN, TESTNET_RPC_URL, TESTNET_DEPLOYER_PRIVATE_KEY.
-// node --env-file=.env.testnet scripts/funded-player-raid.mjs open|settle WEBSITE_RAID_ID [--broadcast]
+// Requires TESTNET_RPC_URL, TESTNET_DEPLOYER_PRIVATE_KEY, and either a public admin-UI plan or ARCADE_ADMIN_TOKEN.
+// node --env-file=.env.testnet --experimental-strip-types scripts/funded-player-raid.mjs open|settle WEBSITE_RAID_ID [--plan-file plan.json] [--broadcast]
+// With --plan-file, link the returned chain raid ID in the authenticated admin UI immediately after opening.
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createPublicClient, createWalletClient, http, parseAbi, decodeFunctionData } from 'viem';
 import { monadTestnet } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -9,7 +11,11 @@ import { fundedVaultAbi, artifactHash } from '../apps/api/src/fundedRaids.ts';
 
 const [action, id] = process.argv.slice(2);
 assert.ok(['open', 'settle'].includes(action) && id, 'Usage: open|settle WEBSITE_RAID_ID [--broadcast]');
-assert.ok(process.env.ARCADE_ADMIN_TOKEN, 'Set an authenticated arcade admin token in ARCADE_ADMIN_TOKEN');
+const planIndex = process.argv.indexOf('--plan-file');
+const planFile = planIndex >= 0 ? process.argv[planIndex + 1] : undefined;
+assert.ok(planFile || process.env.ARCADE_ADMIN_TOKEN, 'Supply --plan-file exported by the admin UI, or ARCADE_ADMIN_TOKEN');
+const filePlan = planFile ? JSON.parse(await readFile(planFile, 'utf8')) : undefined;
+if (filePlan) assert.equal(filePlan.artifact?.websiteRaidId, id, 'Plan belongs to a different website raid');
 assert.ok(process.env.TESTNET_RPC_URL && process.env.TESTNET_DEPLOYER_PRIVATE_KEY, 'Set testnet RPC and signer');
 const base = process.env.ARCADE_API_URL || 'https://token-arcade.onrender.com';
 const apiUrl = new URL(base);
@@ -46,7 +52,7 @@ async function send(address, abi, functionName, args = []) {
   assert.equal(receipt.status, 'success', 'Transaction reverted');
 }
 if (action === 'open') {
-  const plan = await api(`${prefix}/rules`);
+  const plan = filePlan ?? await api(`${prefix}/rules`);
   assert.ok(plan.vault && plan.chainId === 10143 && plan.rulesHash === artifactHash(plan.artifact), 'Invalid rules plan');
   const address = plan.vault;
   const read = functionName => client.readContract({ address, abi: adminAbi, functionName });
@@ -66,9 +72,9 @@ if (action === 'open') {
     await send(address, adminAbi, 'openEconomyRaid');
     active = await read('activeRaidId');
   }
-  if (broadcast) console.log(JSON.stringify({ linkedRaid: (await api(`${prefix}/bind`, { chainRaidId: active })).raid.id, chainRaidId: active }));
+  if (broadcast) console.log(JSON.stringify(filePlan ? { websiteRaidId: id, chainRaidId: active, next: 'Link this chain raid in the authenticated admin UI immediately.' } : { linkedRaid: (await api(`${prefix}/bind`, { chainRaidId: active })).raid.id, chainRaidId: active }));
 } else {
-  const plan = await api(`${prefix}/settlement`);
+  const plan = filePlan ?? await api(`${prefix}/settlement`);
   assert.equal(plan.resultHash, artifactHash(plan.artifact), 'Result artifact hash mismatch');
   assert.equal(plan.transaction.chainId, 10143);
   assert.equal(plan.transaction.value, '0');
