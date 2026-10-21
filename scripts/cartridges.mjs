@@ -13,6 +13,19 @@ export function createCartridgeServer() {
     res.setHeader('Referrer-Policy', 'strict-origin');
     try {
       const url = new URL(req.url, 'http://localhost');
+      const rapid = /^\/api\/coindle\/rapid\/[0-9a-f-]{36}\/(start|state|guess|skip|finish)$/.exec(url.pathname);
+      if (rapid) {
+        // Rapid Fire judge: forwarded as-is (bounded body), no cookies or auth headers.
+        const method = rapid[1] === 'state' ? 'GET' : 'POST';
+        if (req.method !== method) { res.writeHead(405); res.end(); return; }
+        let body = '';
+        if (method === 'POST') for await (const chunk of req) { body += chunk; if (body.length > 1024) { res.writeHead(413); res.end(); return; } }
+        const reply = await fetch(new URL(url.pathname, process.env.ARCADE_API_ORIGIN || 'http://127.0.0.1:8787'), {
+          method, signal: AbortSignal.timeout(12_000), ...(method === 'POST' ? { body: body || '{}', headers: { 'Content-Type': 'application/json' } } : {}),
+        });
+        res.writeHead(reply.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(await reply.text()); return;
+      }
       if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); res.end(); return; }
       if (/^\/api\/coindle\/(prices|live|history)$/.test(url.pathname)) {
         if (url.search.length > 8192) { res.writeHead(400); res.end(); return; }

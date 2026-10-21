@@ -6,7 +6,7 @@ import { useArcadeAuth } from "./auth";
 import { TestnetTokenPanel } from "./TestnetTokenPanel";
 
 type Submission = GameRecord & { readiness?: { ready: boolean; blockers: string[] } };
-const objectives: GameObjective[] = ["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses"];
+const objectives: GameObjective[] = ["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses", "coins_solved"];
 const checks = [
   ["builds", "Build completes successfully"], ["mounts", "Free Play mounts and can be played"],
   ["destroys", "Leaving the cabinet stops the game, audio and listeners"], ["resultSchema", "Completed runs return the required result fields"],

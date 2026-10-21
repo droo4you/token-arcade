@@ -658,7 +658,7 @@ function FounderDemo({ records, health, loading, registryError, refresh }: { rec
 }
 
 type AdminGame = GameRecord & { readiness?: { ready: boolean; blockers: string[] } };
-const objectiveOptions: GameManifest["supportedObjectives"] = ["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses"];
+const objectiveOptions: GameManifest["supportedObjectives"] = ["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses", "coins_solved"];
 
 function GameConfigEditor({ game, health, onSaved, onClose }: { game: AdminGame; health: Health | null; onSaved: () => Promise<void>; onClose: () => void }) {
   const auth = useArcadeAuth();
