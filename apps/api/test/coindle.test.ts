@@ -10,7 +10,7 @@ const now = () => Date.parse("2026-10-09T12:00:00Z");
 const sample = { id: btc.pythFeedId.slice(2), price: { price: "6200000000000", expo: -8 } };
 
 test("Coindle missing price configuration is explicit and the handler is read-only", async () => {
-  const handler = createCoindleHandler({ apiKey: "" });
+  const handler = createCoindleHandler({ cacheDir: null, apiKey: "" });
   assert.equal((await handler(get, url("prices")))?.status, 503);
   assert.equal((await handler({ method: "POST" }, url("live")))?.status, 405);
   assert.equal(await handler(get, url("leaderboard")), null);
@@ -18,7 +18,7 @@ test("Coindle missing price configuration is explicit and the handler is read-on
 
 test("Coindle allows only known feeds and bounded historical requests", async () => {
   let calls = 0;
-  const handler = createCoindleHandler({ apiKey: "test-only", now, fetch: (async () => { calls++; throw new Error("must not fetch"); }) as typeof fetch });
+  const handler = createCoindleHandler({ cacheDir: null, apiKey: "test-only", now, fetch: (async () => { calls++; throw new Error("must not fetch"); }) as typeof fetch });
   for (const query of ["ids[]=https://attacker.invalid", `ids[]=${btc.pythFeedId}&at=9999999999`, `ids[]=${btc.pythFeedId}&at=1`, `ids[]=${btc.pythFeedId}&at=1e9`, ""]) {
     assert.equal((await handler(get, url(`live?${query}`)))?.status, 400);
   }
@@ -28,7 +28,7 @@ test("Coindle allows only known feeds and bounded historical requests", async ()
 
 test("Coindle snapshots use native price tiers, cache the daily snapshot and retain credentials on the server", async () => {
   let calls = 0;
-  const handler = createCoindleHandler({ apiKey: "test-only", now, fetch: (async (input, init) => {
+  const handler = createCoindleHandler({ cacheDir: null, apiKey: "test-only", now, fetch: (async (input, init) => {
     calls++;
     assert.equal(new URL(String(input)).origin, "https://hermes.pyth.network");
     assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer test-only");
@@ -43,7 +43,7 @@ test("Coindle snapshots use native price tiers, cache the daily snapshot and ret
 
 test("Coindle live and 90-day data return native schemas with cached requests", async () => {
   let calls = 0;
-  const handler = createCoindleHandler({ apiKey: "test-only", now, fetch: (async () => { calls++; return Response.json({ parsed: [sample] }); }) as typeof fetch });
+  const handler = createCoindleHandler({ cacheDir: null, apiKey: "test-only", now, fetch: (async () => { calls++; return Response.json({ parsed: [sample] }); }) as typeof fetch });
   const live = await handler(get, url(`live?ids[]=${btc.pythFeedId}`));
   assert.deepEqual(live, { status: 200, body: { parsed: [sample] } });
   await handler(get, url(`live?ids[]=${btc.pythFeedId}`));
@@ -60,7 +60,7 @@ test("Coindle live and 90-day data return native schemas with cached requests", 
 });
 
 test("Coindle does not return fabricated data or upstream secrets on errors", async () => {
-  const handler = createCoindleHandler({ apiKey: "test-only", fetch: (async () => { throw new Error("sensitive upstream detail"); }) as typeof fetch });
+  const handler = createCoindleHandler({ cacheDir: null, apiKey: "test-only", fetch: (async () => { throw new Error("sensitive upstream detail"); }) as typeof fetch });
   assert.deepEqual(await handler(get, url("prices")), { status: 502, body: { error: "Pyth data is temporarily unavailable" } });
 });
 
@@ -72,7 +72,7 @@ test("Coindle history skips failed points, retries 429s and caches a partial ser
   const seen = new Map<number, number>();
   const sleeps: number[] = [];
   let calls = 0;
-  const handler = createCoindleHandler({ apiKey: "test-only", now: () => clock, ...quiet, sleep: async (ms) => { sleeps.push(ms); },
+  const handler = createCoindleHandler({ cacheDir: null, apiKey: "test-only", now: () => clock, ...quiet, sleep: async (ms) => { sleeps.push(ms); },
     fetch: (async (input) => {
       calls++;
       const ts = tsOf(input);
@@ -94,13 +94,15 @@ test("Coindle history skips failed points, retries 429s and caches a partial ser
   await handler(get, url("history?ticker=BTC"));
   assert.equal(calls, before, "partial series cached for a few minutes");
   clock += 6 * 60_000;
-  await handler(get, url("history?ticker=BTC"));
-  assert.ok(calls > before, "partial series expires after ~10 min");
+  const stale = await handler(get, url("history?ticker=BTC"));
+  assert.equal((stale?.body as { points: unknown[] }).points.length, 29, "stale partial served immediately");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.ok(calls > before, "partial series refreshes in the background after ~10 min");
 });
 
 test("Coindle history returns 502 only when every point fails, and does not cache it", async () => {
   let calls = 0;
-  const handler = createCoindleHandler({ apiKey: "test-only", now, ...quiet, fetch: (async () => { calls++; return new Response("x", { status: 500 }); }) as typeof fetch });
+  const handler = createCoindleHandler({ cacheDir: null, apiKey: "test-only", now, ...quiet, fetch: (async () => { calls++; return new Response("x", { status: 500 }); }) as typeof fetch });
   assert.deepEqual(await handler(get, url("history?ticker=BTC")), { status: 502, body: { error: "Pyth data is temporarily unavailable" } });
   const first = calls;
   await handler(get, url("history?ticker=BTC"));
@@ -110,7 +112,7 @@ test("Coindle history returns 502 only when every point fails, and does not cach
 test("Coindle history nudges to a nearby timestamp on 404, dedupes in-flight requests and logs without secrets", async () => {
   const logs: string[] = [];
   let calls = 0;
-  const handler = createCoindleHandler({ apiKey: "test-only", now, ...quiet, log: (m) => logs.push(m), fetch: (async (input) => {
+  const handler = createCoindleHandler({ cacheDir: null, apiKey: "test-only", now, ...quiet, log: (m) => logs.push(m), fetch: (async (input) => {
     calls++;
     return tsOf(input) % 86400 === 0 ? new Response("not found", { status: 404 }) : Response.json({ parsed: [sample] });
   }) as typeof fetch });
@@ -120,4 +122,53 @@ test("Coindle history nudges to a nearby timestamp on 404, dedupes in-flight req
   assert.equal(calls, 62);
   assert.ok(logs.some((m) => m.includes("status=404") && m.includes("/v2/updates/price/")));
   assert.equal(logs.join("\n").includes("test-only"), false);
+});
+
+import { mkdtempSync, readFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+test("Coindle history persists to disk, survives restart, and serves stale while refreshing next day", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "coindle-"));
+  let clock = now(); let calls = 0; const releases: (() => void)[] = []; let gate = false;
+  const fetcher = (async () => {
+    calls++;
+    if (gate) await new Promise<void>((resolve) => { releases.push(resolve); });
+    return Response.json({ parsed: [sample] });
+  }) as typeof fetch;
+  const first = createCoindleHandler({ cacheDir: dir, apiKey: "test-only", now: () => clock, ...quiet, fetch: fetcher });
+  await first(get, url("history?ticker=BTC"));
+  assert.equal(calls, 31);
+  assert.ok(existsSync(join(dir, "coindle-history.json")));
+  assert.equal(readFileSync(join(dir, "coindle-history.json"), "utf8").includes("test-only"), false);
+  // Restart: warm from disk with zero upstream calls.
+  const second = createCoindleHandler({ cacheDir: dir, apiKey: "test-only", now: () => clock, ...quiet, fetch: fetcher });
+  const warm = await second(get, url("history?ticker=BTC"));
+  assert.equal(calls, 31);
+  assert.equal((warm?.body as { points: unknown[] }).points.length, 31);
+  // Next day: stale served instantly, one deduped background build.
+  clock += 86_400_000; gate = true;
+  const [a, b] = await Promise.all([second(get, url("history?ticker=BTC")), second(get, url("history?ticker=BTC"))]);
+  assert.equal((a?.body as { points: { timestamp: number }[] }).points[30].timestamp, Date.parse("2026-10-09T00:00:00Z") / 1000);
+  assert.deepEqual(a, b);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(calls, 37, "one deduped build in flight: 6 workers, not 12");
+  gate = false; releases.forEach((release) => release());
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const fresh = await second(get, url("history?ticker=BTC"));
+  assert.equal((fresh?.body as { points: { timestamp: number }[] }).points[30].timestamp, Date.parse("2026-10-10T00:00:00Z") / 1000);
+});
+
+test("Coindle history builds in parallel up to the concurrency limit and prewarm fills the cache", async () => {
+  let active = 0; let peak = 0; let calls = 0;
+  const handler = createCoindleHandler({ cacheDir: null, apiKey: "test-only", now, ...quiet, fetch: (async () => {
+    calls++; active++; peak = Math.max(peak, active);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    active--; return Response.json({ parsed: [sample] });
+  }) as typeof fetch });
+  await handler.prewarm(["BTC"]);
+  assert.equal(calls, 31);
+  assert.equal(peak, 6);
+  await handler(get, url("history?ticker=BTC"));
+  assert.equal(calls, 31, "prewarmed request is served from cache");
 });

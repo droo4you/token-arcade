@@ -401,6 +401,12 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   const localDemoAdmin = auth.localDemoAdmin && !localMinicoinRehearsalRequested;
   const staticRoot = options.staticRoot ?? resolve(process.cwd(), "dist/web");
   const coindle = createCoindleHandler();
+  // Warm the sparkline cache off the request path (no-op without PYTH_API_KEY); re-check every 6h.
+  const prewarmList = (process.env.COINDLE_PREWARM_TICKERS ?? "BTC,ETH,SOL").split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+  if (prewarmList.length) {
+    setTimeout(() => void coindle.prewarm(prewarmList), 2_000).unref();
+    setInterval(() => void coindle.prewarm(prewarmList), 6 * 3_600_000).unref();
+  }
   const testnet = new TestnetMinicoinService(store, options.testnetMinicoinSettings ?? {
     enabled: process.env.TESTNET_ENABLE_WRITES === "true", chainId: "10143",
     rpcUrl: process.env.TESTNET_RPC_URL, privateKey: process.env.TESTNET_DEPLOYER_PRIVATE_KEY,
