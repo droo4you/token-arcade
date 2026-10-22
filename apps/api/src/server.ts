@@ -17,6 +17,7 @@ import { createCoindleHandler } from "./coindle.ts";
 import { TestnetMinicoinService } from "./testnet-minicoin.ts";
 import { FundedRaids, FundedRaidError } from "./fundedRaids.ts";
 import { AutomaticPayouts } from "./automaticPayouts.ts";
+import { freePlayReport } from "./freePlayAnalytics.ts";
 
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses"]);
 const MODES = new Set(["free", "ranked", "raid"]);
@@ -468,6 +469,12 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           startedAt: isoDate(candidate.startedAt, "startedAt"), finishedAt: isoDate(candidate.finishedAt, "finishedAt") };
         store.db.prepare("INSERT OR IGNORE INTO free_play_summaries VALUES (?,?,?,?,?,?)").run(runId, gameId, playerId, guestId, now, JSON.stringify(summary));
         return respond(response, 200, { recorded: true, verified: false });
+      }
+      if (method === "GET" && path === "/api/admin/free-play/report") {
+        requireAdmin(await auth.authenticate(request));
+        const days = Number(url.searchParams.get("days") ?? 7);
+        if (![1, 7, 30].includes(days)) fail(400, "INVALID_INPUT", "Choose 1, 7 or 30 days");
+        return respond(response, 200, freePlayReport(store, days));
       }
       if (method === "GET" && path === "/api/admin/free-play/summaries") {
         requireAdmin(await auth.authenticate(request));

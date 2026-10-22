@@ -41,6 +41,15 @@ test("Free Play summaries support guests and accounts without awarding competiti
   assert.equal(report.body.summaries.find((r: any) => r.runId === "summary-guest").playerId, null);
   assert.equal(report.body.summaries[0].proof, undefined);
   assert.equal(report.body.summaries[0].verified, false);
+  assert.equal((await api("/api/admin/free-play/report")).status, 401);
+  assert.equal((await api("/api/admin/free-play/report", { auth: "summary-player" })).status, 403);
+  assert.equal((await api("/api/admin/free-play/report?days=999", { auth: "admin" })).status, 400);
+  const analytics = await api("/api/admin/free-play/report?days=7", { auth: "admin" });
+  assert.equal(analytics.status, 200);
+  const group = analytics.body.groups.find((g: any) => g.gameId === "skip-to-10k");
+  assert.equal(group.runs, 2); assert.equal(group.guests, 1); assert.equal(group.accounts, 1);
+  assert.equal(group.primary.median, 123);
+  assert.equal(group.recent[0].guestId, undefined);
   for (const patch of [{ mode: "ranked" }, { primaryMetric: "oops" }, { secondaryMetrics: { bad: "value" } }, { gameId: "unknown" }]) {
     const response = await api("/api/free-play/summaries", { method: "POST", body: { ...body, result: { ...result, ...patch } } });
     assert.ok(response.status >= 400);

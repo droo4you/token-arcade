@@ -10,6 +10,7 @@ import { createClientCartridge, hasClientCartridge } from "./cartridges";
 import { gameHref, getCatalog, getGame, playHref, type ArcadeGame } from "./catalog";
 import { CreatorPortal } from "./CreatorPortal";
 import { FundedRaidControls } from "./FundedRaidControls";
+import { FreePlayAnalytics } from "./FreePlayAnalytics";
 import { shippedSections } from "./shipped";
 import { getGuideTopic, guideTopics, guideFaq, guideDefinitions, type GuideTopic, type GuideTopicId } from "./guideContent";
 
@@ -883,6 +884,7 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
           </form>
         </section>
         <FundedRaidControls key={auth.identityKey} />
+        <FreePlayAnalytics key={`analytics-${auth.identityKey}`} />
         <section className="console-panel console-setup-panel">
           <div className="console-panel-heading"><div><span className="section-kicker">SETUP</span><h2>Onchain readiness</h2></div><ShieldCheck size={24} /></div>
           <div className="setup-state"><span className={`setup-indicator ${health?.settlement.ready ? "is-ready" : ""}`} /><strong>{health?.settlement.ready ? "Settlement configured" : "Settlement needs configuration"}</strong></div>
