@@ -9,14 +9,21 @@ The report groups by game, version and objective. It includes guest/account run 
 
 The time filter uses server receipt time. At most the newest 10,000 summaries are analyzed, with the total and truncation disclosed. Account IDs and guest identifiers are omitted from this report. Counts describe runs, not unique people.
 
-## Interpretation limits and next instrumentation
+## Starts, exits and starting conditions
+
+The host sends bounded, unverified observations to `POST /api/free-play/events` when an embedded Free Play run starts or exits. The report groups starts by game/version/objective and distinguishes finished runs, observed exits without results, and unresolved runs. A later result supersedes an earlier exit. Duplicate observations retain the first start context.
+
+This table uses starts received in the selected window; result statistics use results received in the window. They are different cohorts and their totals need not match. Each is independently capped at the newest 10,000 records with truncation disclosed. Historical starts cannot be backfilled.
+
+Skip captures starting rocks owned, wallet gwei and upgrade levels. Two Places captures a zero-based levelIndex and levelCount. Starting conditions are shown beside recent results when available. These snapshots are sent only in Free Play and do not change competitive rules or scores.
+
+## Interpretation limits
 
 - Reports are unverified client data. Use them to explore game balance, not to award prizes.
 - A game's “completed” outcome may mean a run ended, including a loss; it is not a universal win or completion rate.
-- There are no start/abandon events in this dataset. It cannot measure quits, conversion, all play sessions, or dropped uploads.
+- Exit capture is best effort: navigation, restart, fatal cartridge errors and page departure can be observed, but offline delivery or a killed browser can be missed. Unresolved means no result or exit was received, not a confirmed quit. Switching tabs pauses play and does not count as an exit; cached back-navigation pages also remain unresolved until another observation arrives.
 - Duration comes from client timestamps and can include pauses. The game may separately report elapsedMs or ticks.
-- Free Play loadouts and levels can vary. Skip already reports upgrades, earnings and peak price. Two Places reports deaths/apples/completed levels but does not consistently identify the selected Free Play level. Do not combine different conditions into a competitive leaderboard.
+- Free Play loadouts and levels can vary. Older runs and games without start context show no snapshot. Do not combine different conditions into a competitive leaderboard.
 - Standalone cartridge previews outside the arcade host are not captured by this path.
-- Next: start/end/abandon coverage, consistent level IDs and start-of-run loadout snapshots in reviewed future cartridge versions. Preserve frozen competitive releases when adding instrumentation.
 
 Verification: API guest/account capture and deduplication, curator-only report access, allowed time windows, grouping, percentiles, missing metrics, receipt-time filtering and identity omission are tested. Browser checks use an isolated in-memory fixture, never production player data.

@@ -441,6 +441,32 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (!saved) fail(404, "NOT_FOUND", "Raid not found");
         return respond(response, 200, await fundedRaids.claim(publicRaid(saved), store.getOrCreatePassport(identity.id)));
       }
+      if (method === "POST" && path === "/api/free-play/events") {
+        const body = await readJson(request);
+        const guestId = requiredString(body.guestId, "guestId", 36);
+        if (!/^[a-f0-9-]{36}$/i.test(guestId)) fail(400, "INVALID_INPUT", "Invalid guest ID");
+        if (body.type !== "started" && body.type !== "exited") fail(400, "INVALID_INPUT", "Unknown lifecycle event");
+        const run = body.run;
+        if (!isRecord(run) || run.mode !== "free") fail(400, "INVALID_INPUT", "Free Play only");
+        const runId = requiredString(run.runId, "runId", 100);
+        const gameId = requiredString(run.gameId, "gameId", 64);
+        const gameVersion = requiredString(run.gameVersion, "gameVersion", 80);
+        const game = store.getGame(gameId);
+        if (!game || game.status !== "published") fail(404, "NOT_FOUND", "Game not found");
+        if (!game.manifest.supportedObjectives.includes(run.objective as GameObjective)) fail(400, "INVALID_INPUT", "Unknown objective");
+        const startedAt = isoDate(run.startedAt, "startedAt");
+        const context = body.context ?? {};
+        if (!isRecord(context) || Object.keys(context).length > 32 || Object.entries(context).some(([key, value]) => !/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key) || typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > 1e12)) fail(400, "INVALID_INPUT", "Invalid start context");
+        if (body.type === "exited" && !["navigation", "restart", "pagehide", "error"].includes(String(body.reason))) fail(400, "INVALID_INPUT", "Unknown exit reason");
+        const identity = request.headers.authorization ? await auth.authenticate(request) : null;
+        const playerId = identity ? store.getOrCreatePassport(identity.id).playerId : null;
+        const cutoff = new Date(Date.now() - 60_000).toISOString();
+        const recent = store.db.prepare("SELECT COUNT(*) AS n FROM free_play_events WHERE received_at > ? AND (guest_id = ? OR player_id = ?)").get(cutoff, guestId, playerId) as { n: number };
+        if (recent.n >= 120) fail(429, "RATE_LIMITED", "Too many lifecycle events");
+        const observation = { runId, gameId, gameVersion, objective: run.objective, startedAt, context: body.type === "started" ? context : {}, ...(body.type === "exited" ? { reason: body.reason } : {}) };
+        store.db.prepare("INSERT OR IGNORE INTO free_play_events VALUES (?,?,?,?,?,?,?)").run(runId, body.type, gameId, playerId, guestId, new Date().toISOString(), JSON.stringify(observation));
+        return respond(response, 200, { recorded: true, verified: false });
+      }
       if (method === "POST" && path === "/api/free-play/summaries") {
         const body = await readJson(request);
         const guestId = requiredString(body.guestId, "guestId", 36);

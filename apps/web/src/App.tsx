@@ -5,7 +5,7 @@ import type { CommunityAsset, GameManifest, GameRecord, GameRunConfig, GameRunRe
 import { CartridgeHost } from "../../../packages/sdk/src/host";
 import { api, ApiError, messageFor, type CompleteResponse, type GameResponse, type GamesResponse, type Health, type LeaderboardEntry, type LeaderboardResponse, type PassportResponse, type RaidResponse, type RaidsResponse, type RunResponse } from "./api";
 import { useArcadeAuth } from "./auth";
-import { recordFreePlay } from "./freePlay";
+import { recordFreePlay, recordFreePlayLifecycle } from "./freePlay";
 import { createClientCartridge, hasClientCartridge } from "./cartridges";
 import { gameHref, getCatalog, getGame, playHref, type ArcadeGame } from "./catalog";
 import { CreatorPortal } from "./CreatorPortal";
@@ -282,6 +282,9 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
 }
 
 function CartridgeView({ config, manifest, onComplete }: { config: GameRunConfig; manifest: GameManifest; onComplete: (result: GameRunResult) => void }) {
+  const auth = useArcadeAuth();
+  const token = useRef(auth.getToken);
+  token.current = auth.getToken;
   const container = useRef<HTMLDivElement>(null);
   const host = useRef<CartridgeHost | null>(null);
   const callback = useRef(onComplete);
@@ -292,7 +295,7 @@ function CartridgeView({ config, manifest, onComplete }: { config: GameRunConfig
     const cartridgeHost = new CartridgeHost();
     host.current = cartridgeHost;
     if (container.current) {
-      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => setPaused(state === "paused"), setError);
+      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => setPaused(state === "paused"), setError, event => { void recordFreePlayLifecycle(event, token.current); });
       if (!cartridge) setError("The reviewed browser cartridge is not installed for this game.");
       else cartridgeHost.mount(cartridge, container.current, config, (result) => callback.current(result)).then(() => cartridgeHost.start()).catch((reason) => setError(messageFor(reason)));
     }
@@ -366,7 +369,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
       {result.secondaryMetrics && <dl className="result-details">{Object.entries(result.secondaryMetrics).filter(([key]) => !["ticks", "elapsedMs"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1")}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl>}
     </div><button className="action action-lime" disabled={loading} onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
     {game.record?.manifest.controls?.orientation === "landscape" && <p className="orientation-note">On a phone, turn sideways for the full playfield.</p>}
-    <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. We collect run summaries for game balance, linked to your Passport when signed in or a random browser ID when playing as a guest." : "Competitive results follow the cabinet’s issued rules and verifier before they reach its leaderboard."}</p></div>
+    <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. We collect run starts, exits and summaries for game balance, linked to your Passport when signed in or a random browser ID when playing as a guest." : "Competitive results follow the cabinet’s issued rules and verifier before they reach its leaderboard."}</p></div>
   </main>;
 }
 

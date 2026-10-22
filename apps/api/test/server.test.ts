@@ -56,6 +56,28 @@ test("Free Play summaries support guests and accounts without awarding competiti
   }
 });
 
+test("Free Play lifecycle is idempotent, bounded, and reconciles out-of-order exits", async () => {
+  const now = new Date().toISOString();
+  const run = { runId: "lifecycle-run", gameId: "skip-to-10k", gameVersion: "1.0.0", mode: "free", objective: "distance", startedAt: now };
+  const body = { guestId: "abcdef12-1234-1234-1234-123456789012", run };
+  const send = (patch: object, auth?: string) => api("/api/free-play/events", { method: "POST", auth, body: { ...body, ...patch } });
+  assert.equal((await send({ type: "exited", reason: "navigation" })).status, 200);
+  assert.equal((await send({ type: "started", context: { upgrade_arm: 3 } }, "lifecycle-player")).status, 200);
+  assert.equal((await send({ type: "started", context: { upgrade_arm: 99 } }, "lifecycle-player")).status, 200);
+  const stored = store.db.prepare("SELECT json FROM free_play_events WHERE run_id=? AND type='started'").get(run.runId) as { json: string };
+  assert.equal(JSON.parse(stored.json).context.upgrade_arm, 3, "retry cannot overwrite the initial loadout");
+  let report = (await api("/api/admin/free-play/report", { auth: "admin" })).body;
+  let group = report.lifecycle.groups.find((g: any) => g.gameId === run.gameId);
+  assert.equal(group.started, 1); assert.equal(group.exited, 1); assert.equal(group.finished, 0);
+  assert.equal((await api("/api/free-play/summaries", { method: "POST", auth: "lifecycle-player", body: { guestId: body.guestId, result: { ...run, primaryMetric: 99, result: "completed", finishedAt: now } } })).status, 200);
+  report = (await api("/api/admin/free-play/report", { auth: "admin" })).body;
+  group = report.lifecycle.groups.find((g: any) => g.gameId === run.gameId);
+  assert.equal(group.finished, 1); assert.equal(group.exited, 0, "late result takes precedence over exit");
+  const recent = report.groups.flatMap((g: any) => g.recent).find((r: any) => r.runId === run.runId);
+  assert.deepEqual(recent.startContext, { upgrade_arm: 3 });
+  for (const patch of [{ type: "other" }, { type: "started", run: { ...run, mode: "raid" } }, { type: "started", context: { privateText: "not numeric" } }, { type: "exited", reason: "tab_hidden" }]) assert.equal((await send(patch)).status, 400);
+});
+
 before(async () => {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

@@ -51,6 +51,12 @@ export class ArcadeStore {
         guest_id TEXT, received_at TEXT NOT NULL, json TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS free_play_received ON free_play_summaries(received_at);
+      CREATE TABLE IF NOT EXISTS free_play_events (
+        run_id TEXT NOT NULL, type TEXT NOT NULL, game_id TEXT NOT NULL,
+        player_id TEXT, guest_id TEXT NOT NULL, received_at TEXT NOT NULL, json TEXT NOT NULL,
+        PRIMARY KEY (run_id, type)
+      );
+      CREATE INDEX IF NOT EXISTS free_play_event_received ON free_play_events(received_at);
       CREATE TABLE IF NOT EXISTS raids (id TEXT PRIMARY KEY, game_id TEXT NOT NULL, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, identity_id TEXT NOT NULL UNIQUE, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS run_sessions (
