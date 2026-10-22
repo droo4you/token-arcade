@@ -2,6 +2,8 @@
 
 ## Post-hackathon launch gate — sponsored prize claims (2026-10-21)
 
+- Update: automatic fixed-winner payouts are implemented and passed an isolated zero-gas testnet rehearsal. See [automatic payout handoff](AUTOMATIC_PAYOUTS.md) for receipts, activation, recovery and remaining fee-routing work. Render activation is pending explicit approval to upload the new dedicated testnet payout key; do not call unattended website payouts live yet.
+
 - Required before public launch: winners can claim with zero native MON and zero WMON in their wallet. The app pays claim gas; rewards go only to the recorded winning wallet.
 - Implement and rehearse a sponsored claim path with bounded spend, winner authorization, duplicate-claim protection, and clear pending/success/failure feedback. This is a requirement, not a shipped feature.
 - Funded Skrumpey pilot `c96bcb61-bf72-4f7c-ac4e-c71a02defb60` settled to Guy's recorded wallet. Manual testnet workaround: topped up that wallet to 0.1 test MON; estimated claim gas was 0.011614842 MON. The winner still submits the claim through Privy.

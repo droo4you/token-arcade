@@ -1,0 +1,15 @@
+{
+  "chainId": 10143,
+  "owner": "0x35F0f9840aCABa576BA1C92AC1f79411F8e6091a",
+  "deployer": "0x115ab9287A60718Be04585a3226b223476897d51",
+  "transactions": {
+    "vault": "0x34d54750a2c3d91a82eb83a4a4c01c5eba16ed6c66849dd0c3b6694134992127",
+    "sponsor": "0x49ce2b3fa77b8395ff64a667cef20b19ce63ee710a9f43ca414c90d1d4b002dd",
+    "wrap": "0x9ef671cf104f82d229470160920c89484b7afddf190d3f4cbecd791c1f42f7ea",
+    "fund": "0x7f65a5776bcdb2a245ee280d5f7d2f9ba31f3703999471ee411cf5a0dff1e72e"
+  },
+  "vault": "0xa2c8b6819575705b340d7fb6796076bd1fed8a12",
+  "token": "0xFb8bf4c1CC7a94c73D209a149eA2AbEa852BC541",
+  "minicoin": "0x85043f5C86Fe1CC5a0dFECf8803Ba2d7C7406760",
+  "fundingSource": "Direct test deposit; existing hook still routes to the legacy vault"
+}
