@@ -39,7 +39,7 @@ function arcadeLevels(config) {
   return [level];
 }
 function arcadeBegin(config, levels) {
-  if (!window.TokenArcade.beginRun()) return false;
+  if (!window.TokenArcade.beginRun(config.mode === 'free' ? { levelIndex: levels[0], levelCount: levels.length } : undefined)) return false;
   arcadeRun = { levels, tracks: levels.map(() => []), segment: 0, ticks: 0, apples: 0, deaths: 0 };
   return true;
 }
@@ -73,7 +73,7 @@ function arcadeClear() {
 }
 
 function startLevel(i, keepTime = false) {
-  if (ARCADE && window.TokenArcade?.active && window.TokenArcade.config.mode === 'free' && !arcadeRun) {
+  if (ARCADE && window.TokenArcade?.active && window.TokenArcade.config.mode === 'free' && (!arcadeRun || !keepTime)) {
     if (!arcadeBegin(window.TokenArcade.config, [i])) return;
   }
   game.levelIndex = i;

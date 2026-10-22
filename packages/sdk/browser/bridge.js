@@ -20,13 +20,13 @@
     send('ta:paused', { reason });
   }
   function resume() { if (!active || destroyed) return; paused = false; hideOverlay(); adapter.resume?.(); send('ta:resumed'); }
-  function beginRun() {
+  function beginRun(context) {
     if (!active || destroyed) return false;
     if (config.mode !== 'free' && (running || completed)) return false;
-    if (completed && config.mode === 'free') config = { ...config, runId: crypto.randomUUID() };
+    if ((completed || running) && config.mode === 'free') config = { ...config, runId: crypto.randomUUID() };
     config = { ...config, startedAt: new Date().toISOString() };
     completed = false; running = true;
-    send('ta:run_started', { runId: config.runId, startedAt: config.startedAt });
+    send('ta:run_started', { runId: config.runId, startedAt: config.startedAt, ...(config.mode === 'free' && context ? { context } : {}) });
     return true;
   }
   const onMessage = async event => {

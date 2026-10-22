@@ -300,7 +300,9 @@ function drawTut() {
 
 // ---------- screen changes ----------
 function toAim() {
-  if (window.TokenArcade?.active && !window.TokenArcade.beginRun()) return;
+  const freeContext = window.TokenArcade?.config?.mode === 'free'
+    ? { rocksOwned: save.rocks.length, walletGwei: save.gwei, ...Object.fromEntries(Object.entries(save.up).map(([key, value]) => ['upgrade_' + key, value])) } : undefined;
+  if (window.TokenArcade?.active && !window.TokenArcade.beginRun(freeContext)) return;
   G8.screen = 'aim';
   // Passport Play (ranked/raid): issued seed + locked standard loadout; record the throw and every sim tick for server replay.
   const graded = window.TokenArcade?.embedded && window.TokenArcade.config && window.TokenArcade.config.mode !== 'free';

@@ -103,6 +103,14 @@ export interface GameRunResult {
   rules?: GameRules;
 }
 
+/** Unverified Free Play observation, never an input to competitive verification. */
+export interface FreePlayLifecycleEvent {
+  type: "started" | "exited";
+  run: GameRunConfig;
+  context?: Record<string, number>;
+  reason?: "navigation" | "restart" | "pagehide" | "error";
+}
+
 export interface TokenArcadeGame {
   mount(container: HTMLElement, config: GameRunConfig): void | Promise<void>;
   start(): void;
