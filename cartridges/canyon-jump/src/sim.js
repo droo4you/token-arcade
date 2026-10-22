@@ -20,9 +20,9 @@
     REACT_T: 0.45, SWITCH_T: 0.3, // seconds budgeted to notice a row and to cross one lane
     // Flight: point-mass glider with real gravity. Lift = G·CL·(V/LIFT_REF)² (capped at G_LIMIT g), pitch input sets CL,
     // gravity along the path trades height for speed (dive = faster, climb = slower), drag bleeds energy so every flight ends.
-    G: 9.8, G_SKY: 20, LIFT_REF: 70, CL_N: 0.32, CL_UP: 1.55, CL_DN: -0.5, G_LIMIT: 3.2, V_STALL: 44, V_MIN_LIFT: 28,
+    G: 9.8, G_SKY: 20, LIFT_REF: 70, CL_N: 0.32, CL_UP: 1.55, CL_DN: -0.5, G_LIMIT: 4.2, V_STALL: 44, V_MIN_LIFT: 28,
     DRAG0: 1.6, DRAG2: 0.00028, DRAG_I: 0.6, DIVE_TUCK: 0.5, // stick held forward in a dive tucks the car: up to 50% less parasitic drag (never adds energy, so no climb/dive pump)
-    PITCH_RESP: 7, GAM_MIN: -1.25, GAM_MAX: 1.05, M_MAX: 195, // sky speed cap 702 km/h
+    PITCH_RESP: 16, GAM_MIN: -1.25, GAM_MAX: 1.05, M_MAX: 195, // sky speed cap 702 km/h
     STEER_V: 20, STEER_RESP: 10,
     BOOST_M: 24, BOOST_CD: 0.3, BOOST_POP: 0.06,
     // CHAIN: a boost fired within CHAIN_T of the previous one hits CHAIN_STEP harder per link (24 → 34 → 44, capped at
@@ -36,7 +36,10 @@
     TRICK_DIP: 0.12, TRICK_MIN_AGL: 8, VARIETY: 1.5,
     // Near misses: sky band = hitbox + NEAR_BAND m; road band = edge gap < NEAR_ROAD_BAND (kept under the 1.35 m that would
     // flag every rock/tumbleweed in the next lane, so it still means a real shave). MULT_MAX 2.5 keeps distance king.
-    MULT_STEP: 0.5, MULT_MAX: 2.5, NEAR_POT: 40, NEAR_BAND: 6, NEAR_ROAD_BAND: 1.3, NEAR_ROAD_PTS: 50, NEAR_MULT: 0.25, RING_POT: 50, RING_MULT: 0.25, RING_V: 8, RING_R: 4.4,
+    MULT_STEP: 0.5, MULT_MAX: 2.5, NEAR_POT: 40, NEAR_BAND: 6, NEAR_ROAD_BAND: 1.3, NEAR_ROAD_PTS: 50, NEAR_MULT: 0.25, RING_POT: 25, RING_MULT: 0.25, RING_V: 8, RING_R: 4.4, RING_PICK: 6, RING_FADE: 0.8, // each ring's speed kick is 80% of the last, so ring chains can't keep a flight alive forever
+    CAN_PICK: 4.5,
+    // MAGNET: rings and sky pickups within MAGNET_R (x/y) and MAGNET_Z ahead slide toward the car at MAGNET_V m/s, so a modest correction collects them.
+    MAGNET_R: 10, MAGNET_Z: 60, MAGNET_V: 9,
     // Gorge wall profile shared by the sim and the 3D walls: [depth below the rim, inset into the gap] (m). Cliff bands,
     // benches and an inner gorge: the canyon narrows as it deepens, from 520 m at the rim to ~432 m at the river.
     WALL: [[0, 0], [4, 0.5], [30, 3], [34, 14], [68, 18], [74, 30], [104, 34], [110, 44]],
@@ -52,7 +55,7 @@
     WARN_T: 1.6,
     // Mach 0.5 ≈ 617 km/h. Speed is m/s everywhere: road speed v on the ground, airspeed m in the air.
     // The road tops out at V_MAX (396 km/h), so Mach is earned in the sky: chain AIR boosts and/or trade altitude in a dive.
-    MACH05: 617 / 3.6, MACH_BONUS: 250,
+    MACH05: 617 / 3.6, MACH_BONUS: 1250,
     // Ground and road past the far rim are drawn this far (the 3D road is also a treadmill): ~2x the longest flight we can produce.
     RUNWAY_PAST_RIM: 20000,
   });
@@ -270,7 +273,7 @@
       }
     }
     if (r() < 0.5) {
-      const p = { type: r() < 0.25 ? 'air' : 'orb', z: z0 + r() * C.SKY_CHUNK, x: (r() * 2 - 1) * 18, y: clamp(s.y + (r() - 0.3) * 30, yMin, C.SKY_CEIL - 5), taken: false };
+      const p = { type: r() < 0.3 ? 'air' : 'orb', z: z0 + r() * C.SKY_CHUNK, x: (r() * 2 - 1) * 18, y: clamp(s.y + (r() - 0.3) * 30, yMin, C.SKY_CEIL - 5), taken: false };
       if (clearOf(p.x, p.y, p.z, 2.6)) s.skyPickups.push(p);
     }
   }
@@ -332,6 +335,16 @@
     return true;
   }
 
+  function magnet(s, list, dt) {
+    for (const p of list) {
+      if (p.taken || p.risky || p.z < s.z || p.z > s.z + C.MAGNET_Z) continue;
+      const dx = s.x - p.x, dy = s.y - p.y, d = Math.hypot(dx, dy); if (d > C.MAGNET_R || d < 1e-6) continue;
+      const k = Math.min(d, C.MAGNET_V * dt) / d, nx = p.x + dx * k, ny = p.y + dy * k;
+      // Never drag a reward toward a hazard: stop if the new spot would sit inside any nearby hazard's clearance.
+      if (s.sky.some(o => Math.abs(o.z - p.z) < 12 && Math.hypot(o.x - nx, o.y - ny) < o.r + 1.1 + C.RING_R + 4.5 + SWAY_Y[o.type] + 4)) continue;
+      p.x = nx; p.y = ny;
+    }
+  }
   function skyStep(s, input, dt) {
     const sx = input.steer != null ? clamp(input.steer, -1, 1) : (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const sy = input.pitch != null ? clamp(input.pitch, -1, 1) : (input.up ? 1 : 0) - (input.down ? 1 : 0);
@@ -389,16 +402,17 @@
         if (!o.near && d < o.r + C.NEAR_BAND) { o.near = true; s.counts.nearMiss++; addCombo(s, C.NEAR_POT, C.NEAR_MULT); s.events.push({ e: 'near', what: o.type, pot: s.cmb.pot, mult: s.cmb.mult }); }
       }
     }
+    magnet(s, s.rings, dt); magnet(s, s.skyPickups, dt);
     for (const g2 of s.rings) {
       if (g2.taken || g2.z <= z0 || g2.z > s.z) continue;
-      if (Math.hypot(g2.x - s.x, g2.y - s.y) < C.RING_R) {
-        g2.taken = true; s.counts.rings++; s.m = Math.min(C.M_MAX, s.m + C.RING_V); addCombo(s, C.RING_POT, C.RING_MULT);
+      if (Math.hypot(g2.x - s.x, g2.y - s.y) < C.RING_PICK) {
+        g2.taken = true; s.counts.rings++; s.m = Math.min(C.M_MAX, s.m + C.RING_V * Math.pow(C.RING_FADE, s.counts.rings - 1)); addCombo(s, C.RING_POT, C.RING_MULT);
         s.events.push({ e: 'ring', risky: g2.risky, pot: s.cmb.pot, mult: s.cmb.mult });
       }
     }
     for (const p of s.skyPickups) {
       if (p.taken || p.z < z0 - 3 || p.z > s.z + 3) continue;
-      if (Math.hypot(p.x - s.x, p.y - s.y) < 2.6 && Math.abs(p.z - s.z) < 3) {
+      if (Math.hypot(p.x - s.x, p.y - s.y) < C.CAN_PICK && Math.abs(p.z - s.z) < 3) {
         p.taken = true;
         if (p.type === 'air') { s.air++; s.counts.air++; s.pts.pickups += C.AIR_PTS; s.events.push({ e: 'air', risky: !!p.risky, n: s.air }); }
         else { s.counts.orbs++; s.m = Math.min(C.M_MAX, s.m + C.COIN_V); s.pts.pickups += C.ORB_PTS; s.events.push({ e: 'orb' }); }

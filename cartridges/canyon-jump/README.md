@@ -9,7 +9,7 @@ Original Token Arcade cartridge (Free Play). A generic pearl-white electric road
 
 **AIR cans** have no cap: every can you grab (road or sky) is kept. The HUD shows up to 5 can icons (3 on phones) and a ×N count past that; the phone BOOST button badge shows the count (99+ past 99) and reads DIVE when a boost would be a dive boost. Reference pilot average: ~3.8 cans collected per run, ~5 held at launch (most held in the 30-seed run: 9).
 
-**Mach 0.5** (617 km/h, +250 once per run): the road tops out at 396 km/h, so it's earned in the sky. A quick 3-boost chain off a good launch (about 335 km/h or more) gets there, even at human tap speed (0.55 s apart) off a top-speed launch; 2 level boosts, 3 spaced-out boosts, or 3 off a bare-minimum 324 km/h launch don't. The other route is 2 boosts in a committed dive from altitude. Within 50 km/h of the mark the speed bar glows and pulses and the Mach tick reads the gap; hitting it fires a MACH 0.5! banner, a sonic-boom vapor ring and the boom sound. Tests pin all of these. 30-seed balance: the reference pilot (frame-perfect, top-speed launch nearly every run) hits Mach in 26/27 flights; a "decent human" proxy (doesn't swerve for pads, boosts ≥0.55 s apart) hits it in 13/30 (43%). Phase 5 (2.3 km runway, 520 m gorge, more pads, coin bump), 200 seeds: reference pilot 96% Mach, decent proxy 56% Mach / 92% clear.
+**Mach 0.5** (617 km/h, +1250 once per run): the road tops out at 396 km/h, so it's earned in the sky. A quick 3-boost chain off a good launch (about 335 km/h or more) gets there, even at human tap speed (0.55 s apart) off a top-speed launch; 2 level boosts, 3 spaced-out boosts, or 3 off a bare-minimum 324 km/h launch don't. The other route is 2 boosts in a committed dive from altitude. Within 50 km/h of the mark the speed bar glows and pulses and the Mach tick reads the gap; hitting it fires a MACH 0.5! banner, a sonic-boom vapor ring and the boom sound. Tests pin all of these. 30-seed balance: the reference pilot (frame-perfect, top-speed launch nearly every run) hits Mach in 26/27 flights; a "decent human" proxy (doesn't swerve for pads, boosts ≥0.55 s apart) hits it in 13/30 (43%). Phase 5 (2.3 km runway, 520 m gorge, more pads, coin bump), 200 seeds: reference pilot 96% Mach, decent proxy 56% Mach / 92% clear.
 
 Touch lanes: one gesture = at most one lane change (`src/input.js`): a 26 px sideways swipe fires immediately, otherwise a tap fires on release (or after a 120 ms still hold); the gesture then locks until touchend.
 
@@ -46,3 +46,9 @@ Run locally: `npm run dev:cartridges` from the repo root, then open `http://127.
 ## Balance tooling
 
 `node tools/human-proxy.cjs [sim.js]` flies a sloppy, mobile-ish human proxy (missed pads, human boost gaps, few rings) at two skill levels and prints Mach %, clear %, top-speed and past-rim distributions. Skill 1 is calibrated to a real phone run (396 km/h launch, ~536 km/h top). Past the far rim the ground runs `C.RUNWAY_PAST_RIM` (20 km) and the 3D road is a treadmill, so the runway never ends.
+
+## Phase 7 (feel pass)
+
+- Pitch: `PITCH_RESP` 7 → 16 (input smoothing time constant 0.14 s → 0.06 s), `G_LIMIT` 3.2 → 4.2 g so pull-ups bite at speed; touch stick full deflection at 38 px (was 46) with a 4 px dead zone (was 7). Stall (`V_STALL`, `CL_*`) and landing limits unchanged.
+- Rewards: rings collect within `RING_PICK` 6 m (drawn 4.4 m), sky cans within `CAN_PICK` 4.5 m (was 2.6); safe (non-risky) rings and pickups within 10 m slide toward the car at 9 m/s but never toward a hazard. Lone sky AIR odds 25% → 30%. Ring speed kicks fade 0.8× per ring so ring chains can't fly forever; ring pot 50 → 25.
+- Mach 0.5 bonus 250 → 1250.

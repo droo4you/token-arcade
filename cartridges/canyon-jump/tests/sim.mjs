@@ -423,3 +423,18 @@ test('near-misses pay: a wider band and a real payout on road and in the sky', (
   while (t.z < 70 && !t.over) { t.x = 1.2; S.step(t, {}); }
   assert.equal(t.counts.nearMiss, 1); assert.equal(t.pts.pickups, C.NEAR_ROAD_PTS); assert.equal(t.over, false);
 });
+
+test('pitch is snappy: full up stick swings a -0.2 rad dive to +0.1 rad climb in under 0.85 s at 100-180 m/s', () => {
+  for (const v of [100, 150, 180]) {
+    const s = S.newRun(1); s.phase = 'sky'; s.z = C.ROAD_LEN + 600; s.y = 100; s.m = v; s.gam = -0.2; let t = 0;
+    while (s.gam < 0.1 && t < 5) { S.step(s, { pitch: 1 }); s.events.length = 0; t += C.DT; }
+    assert.ok(t < 0.85, `${v} m/s: ${t.toFixed(2)} s`);
+  }
+});
+
+test('rewards: magnet pulls a safe ring onto a modest miss; Mach bonus is big but distance stays king', () => {
+  const s = launchAt(105); s.gam = 0.02; s.rings = [{ x: 8, y: s.y, z: s.z + 50, taken: false }]; s.sky.push = () => 0;
+  for (let i = 0; i < 120 && !s.over; i++) S.step(s, {});
+  assert.equal(s.counts.rings, 1, 'an 8 m miss still collects');
+  assert.ok(C.MACH_BONUS >= 1000);
+});

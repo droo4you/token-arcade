@@ -76,7 +76,7 @@
   const BTN = () => { const r = 12 + (G.safe?.r || 0), b = 12 + (G.safe?.b || 0); return { boost: { x: W - r - 62, y: H - b - 112, r: 52 }, trick: { x: W - r - 170, y: H - b - 52, r: 40 }, roll: { x: W - r - 168, y: H - b - 152, r: 38 },
     stab: { x: W - r - 104, y: H - b - 238, w: 188, h: 62, pill: true } }; };
   const inBtn = (p, k, B) => B.pill ? Math.abs(p.x - B.x) < B.w / 2 + 10 && Math.abs(p.y - B.y) < B.h / 2 + 10 : Math.hypot(p.x - B.x, p.y - B.y) < B.r * 1.25;
-  const STICK_R = 46;
+  const STICK_R = 38;
   function toLogical(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
   function onDown(e) {
     A.init(); canvas.focus?.();
@@ -136,7 +136,7 @@
     for (const d of lanes.tick(G.t)) if (G.run?.phase === 'road') i[d === 'left' ? 'leftEdge' : 'rightEdge'] = true;
     if (stick !== null && touches.has(stick)) {
       // Analog stick with a small dead zone: full deflection at STICK_R px. Drag up = nose up.
-      const t = touches.get(stick), dx = t.x - t.x0, dy = t.y - t.y0, dz = v => Math.abs(v) < 7 ? 0 : (v - Math.sign(v) * 7) / (STICK_R - 7);
+      const t = touches.get(stick), dx = t.x - t.x0, dy = t.y - t.y0, dz = v => Math.abs(v) < 4 ? 0 : (v - Math.sign(v) * 4) / (STICK_R - 4);
       i.steer = Math.max(-1, Math.min(1, dz(dx))); i.pitch = Math.max(-1, Math.min(1, -dz(dy)));
       G.stickVis = { x0: t.x0, y0: t.y0, dx: i.steer, dy: -i.pitch };
     }
