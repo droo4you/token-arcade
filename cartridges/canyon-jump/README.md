@@ -52,3 +52,8 @@ Run locally: `npm run dev:cartridges` from the repo root, then open `http://127.
 - Pitch: `PITCH_RESP` 7 → 16 (input smoothing time constant 0.14 s → 0.06 s), `G_LIMIT` 3.2 → 4.2 g so pull-ups bite at speed; touch stick full deflection at 38 px (was 46) with a 4 px dead zone (was 7). Stall (`V_STALL`, `CL_*`) and landing limits unchanged.
 - Rewards: rings collect within `RING_PICK` 6 m (drawn 4.4 m), sky cans within `CAN_PICK` 4.5 m (was 2.6); safe (non-risky) rings and pickups within 10 m slide toward the car at 9 m/s but never toward a hazard. Lone sky AIR odds 25% → 30%. Ring speed kicks fade 0.8× per ring so ring chains can't fly forever; ring pot 50 → 25.
 - Mach 0.5 bonus 250 → 1250.
+
+## Phase 8 (level 1 = find the flow)
+
+- Levels are split: one settings file per level in `src/levels/<id>.js` (level 1: `src/levels/red-rock.js`), collected by `src/levels.js`. Sky tuning lives in each level's `air` block and `CJSim.newRun(seed, level.air)` reads it (defaults to the default level).
+- Red Rock `air`: ceiling 260 m (was a global 200), sparse traffic (1-2 hazards per 80 m chunk, was up to 3), birds below 30 m, **hot air balloons** 30-200 m (low-poly, 4 colorways, slow deterministic drift, hitbox 4.2 m inside a 6 m envelope, near-misses count), satellites only 215-252 m at 10% per chunk. No jets on level 1.

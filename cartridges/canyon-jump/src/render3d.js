@@ -112,11 +112,15 @@ function init() {
   const navMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.25, envMapIntensity: 1.2 });
   navMat.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n float nav = step(0.95, max(vColor.r, vColor.g)) * step(vColor.b, 0.05) + step(0.99, min(min(vColor.r, vColor.g), vColor.b));\n totalEmissiveRadiance += vColor.rgb * nav * 6.0;'); };
   const satMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.7, envMapIntensity: 1.6, flatShading: true });
+  const balloonMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, flatShading: true, emissive: '#ffffff', emissiveIntensity: 0.06 });
+  const BALLOON_DRAW = level.air?.balloon?.drawR || 6;
   const ringGeo = P.ring(C.RING_R);
   const ringMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.5, emissive: '#ffb22e', emissiveIntensity: 1.6 });
   const riskyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.5, color: '#ff9ef0', emissive: '#ff4fd8', emissiveIntensity: 2.0 });
   const SK = { bird: pool(P.SKINS[level.skyObjects.bird](), birdMat, 64), wingR: pool(P.wing(1), birdMat, 64), wingL: pool(P.wing(-1), birdMat, 64),
     plane: pool(P.SKINS[level.skyObjects.plane](), navMat, 32), satellite: pool(P.SKINS[level.skyObjects.satellite](), satMat, 32),
+    balloon0: pool(P.SKINS[level.skyObjects.balloon](0), balloonMat, 24), balloon1: pool(P.SKINS[level.skyObjects.balloon](1), balloonMat, 24),
+    balloon2: pool(P.SKINS[level.skyObjects.balloon](2), balloonMat, 24), balloon3: pool(P.SKINS[level.skyObjects.balloon](3), balloonMat, 24),
     ring: pool(ringGeo, ringMat, 64, false), ringRisky: pool(ringGeo, riskyMat, 64, false) };
   const rr = rng(77);
   const FAR = C.ROAD_LEN + C.CANYON_W;
@@ -160,8 +164,10 @@ function init() {
       else { put(PK.orb, p.x, p.y, p.z, t * 3, 0, 0, 1.6); putBill(HALO.orb, p.x, p.y, p.z, 1.6); }
     }
     for (const o of s.sky) {
-      if (o.z < z0 || o.z > z1 || o.hit) continue; const m = SK[o.type]; if (!m) continue;
+      if (o.z < z0 || o.z > z1 || o.hit) continue;
       const p = S.skyObjPos(o, s.t);
+      if (o.type === 'balloon') { const m = SK['balloon' + ((o.hue || 0) % 4)]; if (m.count < m.instanceMatrix.count) put(m, p.x, p.y, o.z, s.t * 0.05 + o.phase, 0, Math.sin(s.t * 0.4 + o.phase) * 0.04, BALLOON_DRAW); continue; }
+      const m = SK[o.type]; if (!m) continue;
       if (o.type === 'bird') { // body bobs with the downstroke; wings flap around the shoulders
         const ph = s.t * 7 + o.phase, flap = Math.sin(ph) * 0.75 + 0.15, bank = Math.cos(s.t * 1.3 + o.phase) * 0.25, k = 1.25;
         put(m, p.x, p.y - Math.sin(ph) * 0.08, o.z, Math.PI, 0, bank, k);

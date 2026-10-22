@@ -165,11 +165,23 @@ export function sat() {
   parts.push(tint(xf(new THREE.SphereGeometry(0.06, 6, 4), { y: -0.9, x: 0.5 }), '#ff0000'));
   return merge(parts.map(p => p.index ? p.toNonIndexed() : p));
 }
+/* Hot air balloon (low-poly): a faceted lathe envelope in vertical gores of alternating colors, a skirt, rigging
+   lines and a wicker basket. Unit size: envelope radius 1 (scale by the level's drawR). hue 0..3 picks a palette. */
+const BALLOON_PAL = [['#ff3b5c', '#ffd23f'], ['#2fc4c9', '#fff4e0'], ['#7a3cff', '#ff8c3a'], ['#3ecf6a', '#ff4fd8']];
+export function balloon(hue = 0) {
+  const [c1, c2] = BALLOON_PAL[hue % BALLOON_PAL.length], parts = [], gores = 10;
+  const prof = [[0.02, 1.0], [0.55, 0.88], [0.92, 0.45], [1.0, 0.0], [0.86, -0.55], [0.5, -1.05], [0.3, -1.3]].map(([r, y]) => new THREE.Vector2(r, y));
+  for (let k = 0; k < gores; k++) parts.push(tint(new THREE.LatheGeometry(prof, 1, k / gores * TAU, TAU / gores), k % 2 ? c1 : c2, 0.06, k));
+  parts.push(tint(xf(new THREE.CylinderGeometry(0.3, 0.26, 0.12, gores, 1, true), { y: -1.33 }), '#3a2430'));
+  for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + 0.4; parts.push(tint(xf(new THREE.CylinderGeometry(0.012, 0.012, 0.55, 3), { x: Math.cos(a) * 0.22, z: Math.sin(a) * 0.22, y: -1.62 }), '#2a1a1a')); }
+  parts.push(tint(xf(new THREE.BoxGeometry(0.34, 0.26, 0.34), { y: -2.0 }), '#9a6a3a', 0.15, 3), tint(xf(new THREE.BoxGeometry(0.38, 0.05, 0.38), { y: -1.86 }), '#6b4426'));
+  const g = merge(parts.map(p => p.index ? p.toNonIndexed() : p)); g.computeVertexNormals(); return g;
+}
 /* Boost ring: a fat torus with bevel ring and inner chevron spokes. Radius = CJSim.C.RING_R. */
 export function ring(R = 3.2) {
   const parts = [tint(new THREE.TorusGeometry(R, 0.26, 10, 40), '#ffd23f'), tint(new THREE.TorusGeometry(R + 0.3, 0.08, 6, 40), '#ff9f1a'), tint(new THREE.TorusGeometry(R - 0.32, 0.06, 6, 40), '#fff3c0')];
   for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; parts.push(tint(xf(new THREE.BoxGeometry(0.5, 0.18, 0.18), { x: Math.cos(a) * (R + 0.15), y: Math.sin(a) * (R + 0.15), rz: a }), '#ffffff')); }
   return merge(parts.map(p => p.index ? p.toNonIndexed() : p));
 }
-export const SKINS = { saguaro, sandstone, tumbleweed, cone, crow, jet, sat, ring };
+export const SKINS = { saguaro, sandstone, tumbleweed, cone, crow, jet, sat, ring, balloon };
 export { col };

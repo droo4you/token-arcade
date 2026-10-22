@@ -347,6 +347,16 @@
     ctx.fillStyle = (Math.floor(performance.now() / 400) % 2) ? '#ff3b5c' : '#ffe9a8'; ctx.beginPath(); ctx.arc(-L * 0.12, H * 1.4, Math.max(1, k * 0.18), 0, 7); ctx.fill();
     ctx.restore();
   }
+  const BALLOON_COLS = [['#ff3b5c', '#ffd23f'], ['#2fc4c9', '#fff4e0'], ['#7a3cff', '#ff8c3a'], ['#3ecf6a', '#ff4fd8']];
+  function balloon(ctx, x, y, k, hue, R) {
+    const [c1, c2] = BALLOON_COLS[(hue || 0) % 4], r = R * k;
+    ctx.save(); ctx.translate(x, y);
+    for (let i = 0; i < 5; i++) { ctx.fillStyle = i % 2 ? c1 : c2; ctx.beginPath(); ctx.ellipse(0, 0, r * (1 - i * 0.2), r * 1.1, 0, 0, 7); ctx.fill(); }
+    ctx.strokeStyle = 'rgba(40,20,20,0.7)'; ctx.lineWidth = Math.max(1, k * 0.03);
+    ctx.beginPath(); ctx.moveTo(-r * 0.35, r * 1.0); ctx.lineTo(-r * 0.15, r * 1.6); ctx.moveTo(r * 0.35, r * 1.0); ctx.lineTo(r * 0.15, r * 1.6); ctx.stroke();
+    ctx.fillStyle = '#9a6a3a'; ctx.fillRect(-r * 0.17, r * 1.6, r * 0.34, r * 0.26);
+    ctx.restore();
+  }
   function satellite(ctx, x, y, k, t, ph) {
     ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(t * 0.6 + ph) * 0.4);
     const p = 2.6 * k, b = 0.95 * k;
@@ -549,7 +559,7 @@
     }
     for (const o of s.sky) if (!o.hit && o.z > zMin && o.z < zMax) items.push({ z: o.z, f: () => {
       const q = S.skyObjPos(o, s.t), p = cam.p(q.x, q.y, o.z); if (!p) return;
-      if (o.type === 'bird') bird(ctx, p.x, p.y, p.k, s.t, o.phase); else if (o.type === 'plane') plane(ctx, p.x, p.y, p.k, Math.sin(o.phase * 3) > 0 ? 1 : -1, cam.q); else satellite(ctx, p.x, p.y, p.k, s.t, o.phase);
+      if (o.type === 'balloon') balloon(ctx, p.x, p.y, p.k, o.hue, (s.cfg.balloon && s.cfg.balloon.drawR) || 6); else if (o.type === 'bird') bird(ctx, p.x, p.y, p.k, s.t, o.phase); else if (o.type === 'plane') plane(ctx, p.x, p.y, p.k, Math.sin(o.phase * 3) > 0 ? 1 : -1, cam.q); else satellite(ctx, p.x, p.y, p.k, s.t, o.phase);
     } });
     for (const pk of s.skyPickups) if (!pk.taken && pk.z > zMin && pk.z < zMax) items.push({ z: pk.z, f: () => {
       const p = cam.p(pk.x, pk.y, pk.z); if (!p) return; pk.type === 'air' ? airCan(ctx, p.x, p.y + p.k, p.k, t) : orb(ctx, p.x, p.y + p.k, p.k, t);

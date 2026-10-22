@@ -247,9 +247,9 @@ test('steering is responsive and stops drifting when released', () => {
 test('sky traffic lives in altitude bands and is never stacked into a wall', () => {
   const s = launch(24);
   for (let i = 0; i < 120 * 6; i++) { S.step(s, { up: true }); if (s.over) break; s.m = 100; }
-  assert.ok(s.y > C.BAND_SAT, 'climbing reaches the satellite band');
-  const types = new Set(s.sky.map(o => o.type)); assert.ok(types.has('plane') && types.has('satellite'), [...types].join());
-  for (const o of s.sky) assert.equal(o.type, o.y < C.BAND_PLANE ? 'bird' : o.y < C.BAND_SAT ? 'plane' : 'satellite');
+  const A = s.cfg; assert.ok(s.y > 150, 'climbing reaches the balloon band');
+  const types = new Set(s.sky.map(o => o.type)); assert.ok(types.has('balloon'), [...types].join());
+  for (const o of s.sky) if (o.type === 'satellite') assert.ok(o.y >= A.satellite.minY && o.y <= A.ceil - 8, `satellite at ${o.y}`); else assert.equal(o.type, S.bandType(s, o.y));
   for (const a of s.sky) for (const b of s.sky) if (a !== b && Math.abs(a.z - b.z) < 25) assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= a.r + b.r + 9, `stacked ${a.type}/${b.type}`);
 });
 
@@ -437,4 +437,29 @@ test('rewards: magnet pulls a safe ring onto a modest miss; Mach bonus is big bu
   for (let i = 0; i < 120 && !s.over; i++) S.step(s, {});
   assert.equal(s.counts.rings, 1, 'an 8 m miss still collects');
   assert.ok(C.MACH_BONUS >= 1000);
+});
+
+test('level 1 air: settings come from the level file; balloons are the main hazard, satellites rare and only near the ceiling', () => {
+  const L = require('../src/levels.js'), air = L.get('red-rock').air;
+  assert.equal(S.newRun(1).cfg, air, 'newRun reads the default level file');
+  assert.ok(air.ceil > 200, 'ceiling raised');
+  let n = { balloon: 0, satellite: 0, bird: 0, plane: 0 }, chunks = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const s = launchAt(110, seed); s.y = 120; s.sky.push = s.rings.push = s.skyPickups.push = Array.prototype.push;
+    while (s.skyChunk < 40) { s.z += 80; s.y = 60 + (s.skyChunk % 5) * 30; S.step(s, {}); if (s.over) { s.over = false; s.phase = 'sky'; } }
+    chunks += s.skyChunk; for (const o of s.sky) n[o.type]++;
+    for (const o of s.sky) if (o.type === 'satellite') assert.ok(o.y >= air.satellite.minY);
+  }
+  assert.ok(n.balloon > n.satellite * 5 && n.balloon > n.bird, JSON.stringify(n));
+  assert.equal(n.plane, 0, 'no jets on level 1');
+  assert.ok(n.satellite / chunks < 0.15, `satellites per chunk ${n.satellite / chunks}`);
+  // Balloons drift, deterministically, and the hitbox is smaller than the drawn envelope.
+  const b = { type: 'balloon', x: 0, y: 100, z: 0, phase: 1, dx: air.balloon.driftX, dy: air.balloon.driftY, rate: air.balloon.rate };
+  assert.notDeepEqual(S.skyObjPos(b, 0), S.skyObjPos(b, 10)); assert.deepEqual(S.skyObjPos(b, 3), S.skyObjPos(b, 3));
+  assert.ok(air.balloon.r < air.balloon.drawR);
+  // A balloon brushed (inside the near band, outside the hitbox) counts as a near miss and does not crash.
+  const t = launchAt(110, 3); t.sky.push = () => 0; t.y = 100; t.gam = 0; t.m = 100;
+  t.sky.length = 0; t.sky[0] = { type: 'balloon', x: 0, y: 100 + air.balloon.r + 3, z: t.z + 30, phase: 0, dx: 0, dy: 0, rate: 0, r: air.balloon.r, hit: false, near: false };
+  for (let i = 0; i < 60 && !t.over; i++) { S.step(t, {}); t.y = 100; t.gam = 0; }
+  assert.equal(t.over, false); assert.equal(t.counts.nearMiss, 1);
 });

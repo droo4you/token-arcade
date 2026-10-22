@@ -10,55 +10,9 @@
 (function (root) {
   'use strict';
 
-  const RED_ROCK = {
-    id: 'red-rock',
-    name: 'Red Rock Canyon',
-    tagline: 'Mojave sunset',
-    // Gameplay numbers (meters, m/s). Must equal CJSim.C until the sim takes a level.
-    sim: { ROAD_LEN: 2300, CANYON_W: 520, CANYON_DEPTH: 110, CLEAR_V: 90, RAMP_LEN: 44, RAMP_H: 6, LANE_W: 3.4 },
-    time: {
-      // Sun direction in degrees: elevation above the horizon, azimuth from straight down the road (+ = right).
-      sun: { elevation: 9, azimuth: 24, color: '#ffc08a', intensity: 3.4, disk: 0.032, glow: '#ff8c5a', glowStrength: 0.9 },
-      sky: { zenith: '#1d0f45', mid: '#6b2c7a', horizon: '#ff9468', below: '#c46a50', haze: 0.55, stars: 0.0 },
-      hemi: { sky: '#ffb9a8', ground: '#8a4632', intensity: 1.0 },
-      // Fill: a soft, shadowless bounce from behind the chase cam, so faces turned away from the low sun (the car's tail,
-      // the far gorge wall) still show their shape instead of going flat.
-      fill: { color: '#ffe2d4', intensity: 1.1, elevation: 28, azimuth: 195 },
-      fog: { color: '#e48a6e', near: 140, far: 1900 },
-      exposure: 1.0,
-      envIntensity: 1.0,
-    },
-    palette: {
-      sand: '#d98a5a', sandDark: '#b5643e', sandLight: '#f0b483',
-      asphalt: '#2a2430', asphaltLight: '#3b3341', laneLine: '#f4e6cc', edgeLine: '#fff1db',
-      rumble: ['#ff3b5c', '#fff4e0'], shoulder: '#9c5a3c',
-      mesa: ['#a6483a', '#c4613f', '#8c3a34', '#d98a5c', '#743030', '#b8573f'],
-      rock: '#a9533e', cactus: '#3e7a4c', scrub: '#8b7b46', pole: '#4f3427', wire: '#2a1a1a',
-      reflector: '#ff3b3b',
-    },
-    terrain: {
-      size: 7000,               // ground plane extent (m), centered on the road
-      flatHalfWidth: 26,        // flat shoulder band each side of the road
-      dunes: { amp: 7, scale: 0.006, detailAmp: 1.2, detailScale: 0.05 },
-      mesas: { count: 54, minDist: 280, maxDist: 2600, height: [45, 210], radius: [45, 180], seed: 11 },
-      scatter: { cactus: 320, rock: 260, scrub: 700, spread: 260, minX: 10, seed: 5 },
-      poles: { side: 1, spacing: 46, offset: 12, height: 9 },
-      reflectors: { spacing: 26, offset: 7.4 },
-      signs: [{ at: 1300, text: 'CANYON 1 KM' }, { at: 1800, text: 'CANYON 500 M' }, { at: 2120, text: 'JUMP AHEAD' }],
-    },
-    canyon: {
-      strata: ['#e9ad7e', '#cf6a45', '#b2463a', '#e08a58', '#93352f', '#c2603f', '#7a2a2c', '#5d2028'],
-      wallJitter: 7,            // m of horizontal roughness on the walls
-      ledges: 5,
-      river: { color: '#2fc4c9', width: 46 },
-    },
-    // Sim obstacle type -> model skin (src/3d/props.js). A Snake River level can swap these.
-    obstacles: { cactus: 'saguaro', rock: 'sandstone', tumbleweed: 'tumbleweed', cone: 'cone' },
-    skyObjects: { bird: 'crow', plane: 'jet', satellite: 'sat' },
-    pickups: { orb: '#ffcf3f', air: '#4ff0ff', pad: '#ff4fd8' },
-    car: { paint: '#f7f8fa', fill: '#33353a' },
-  };
-
+  // Each level lives in its own settings file under src/levels/ (loaded by a <script> before this one in the browser).
+  const DEFS = typeof module === 'object' && module.exports ? { 'red-rock': require('./levels/red-rock.js') } : (root.CJLevelDefs || {});
+  const RED_ROCK = DEFS['red-rock'];
   const LEVELS = [RED_ROCK];
   const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -97,11 +51,17 @@
     const c = L.canyon || {};
     need(Array.isArray(c.strata) && c.strata.length >= 2, 'canyon.strata needs 2+ colors'); (c.strata || []).forEach((x, i) => col(x, `canyon.strata[${i}]`));
     col(c.river?.color, 'canyon.river.color'); need(num(c.river?.width, 1, (s.CANYON_W || 0)), 'canyon.river.width <= gap');
-    const SIM_OBST = ['cactus', 'rock', 'tumbleweed', 'cone'], SIM_SKY = ['bird', 'plane', 'satellite'];
+    const SIM_OBST = ['cactus', 'rock', 'tumbleweed', 'cone'], SIM_SKY = ['bird', 'plane', 'satellite', 'balloon'];
     for (const k of SIM_OBST) need(typeof L.obstacles?.[k] === 'string', `obstacles.${k} skin required`);
     for (const k of SIM_SKY) need(typeof L.skyObjects?.[k] === 'string', `skyObjects.${k} skin required`);
     for (const k of ['orb', 'air', 'pad']) col(L.pickups?.[k], `pickups.${k}`);
     col(L.car?.paint, 'car.paint');
+    const a = L.air || {};
+    need(num(a.ceil, 80, 2000), 'air.ceil 80..2000');
+    need(Array.isArray(a.bands) && a.bands.length >= 1 && a.bands.every((b, i) => SIM_SKY.includes(b.type) && num(b.top, 1, a.ceil) && (i === 0 || b.top > a.bands[i - 1].top)), 'air.bands: known types, rising tops under ceil');
+    need(a.density && num(a.density.base, 0, 6) && num(a.density.max, a.density.base, 8), 'air.density');
+    for (const b of a.bands || []) need(num(a[b.type]?.r, 0.5, 20), `air.${b.type}.r`);
+    need(a.satellite && num(a.satellite.chance, 0, 1) && num(a.satellite.minY, 0, a.ceil - 8) && num(a.satellite.r, 0.5, 20), 'air.satellite chance/minY/r');
     return errs;
   }
   /* Keys where the level disagrees with the running sim (must be empty until the sim takes a level). */

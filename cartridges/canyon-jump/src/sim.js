@@ -50,8 +50,7 @@
     // A trick it cancels counts as landed (combo) if at least STAB_CREDIT done, otherwise it's just dropped. The pot is kept.
     STAB_T: 0.4, STAB_CD: 1, STAB_T_FREE: 0.9, STAB_CD_FREE: 3, STAB_GAM: -0.05, STAB_SINK: 0.3, STAB_CREDIT: 0.5,
     ORB_PTS: 50, AIR_PTS: 20, LANDING_BONUS: 500,
-    SKY_X: 36, SKY_CEIL: 200, SKY_CHUNK: 80,
-    BAND_PLANE: 35, BAND_SAT: 80, // altitude bands: birds below 35 m, planes 35–80 m, satellites above
+    SKY_X: 36, SKY_CHUNK: 80, // ceiling, traffic bands, density and hazard sizes are per level: level.air (src/levels/<id>.js)
     WARN_T: 1.6,
     // Mach 0.5 ≈ 617 km/h. Speed is m/s everywhere: road speed v on the ground, airspeed m in the air.
     // The road tops out at V_MAX (396 km/h), so Mach is earned in the sky: chain AIR boosts and/or trade altitude in a dive.
@@ -124,11 +123,16 @@
     return { obstacles, pickups };
   }
 
-  function newRun(seed) {
-    seed = seed >>> 0;
+  /* Sky settings for a run: the level's air block (defaults to the default level's file). */
+  function defaultAir() {
+    const L = root.CJLevels || (typeof require === 'function' ? require('./levels.js') : null);
+    return L.get(L.DEFAULT).air;
+  }
+  function newRun(seed, air) {
+    seed = seed >>> 0; air = air || defaultAir();
     const road = buildRoad(seed);
     return {
-      seed, t: 0, tick: 0, phase: 'road', over: false, reason: null,
+      seed, cfg: air, t: 0, tick: 0, phase: 'road', over: false, reason: null,
       z: 0, x: 0, y: 0, lane: 0, v: C.V0, vBase: C.V0, padBoost: 0, coinBoost: 0, launchV: 0,
       // sky: m = airspeed, gam = flight-path angle (rad, + = climbing), pIn = smoothed pitch input (-1 dive .. +1 climb)
       m: 0, vy: 0, vx: 0, gam: 0, pIn: 0, gLoad: 1, air: C.AIR_START, rot: 0, trick: 0, trickKind: null, trickDir: 1, trickDur: 0, lastTrickEnd: -9, stabT: 0, stabDur: 0, stabCd: 0, stabRot0: 0, stabRot1: 0,
@@ -226,11 +230,12 @@
     }
   }
 
-  function bandType(y) { return y < C.BAND_PLANE ? 'bird' : y < C.BAND_SAT ? 'plane' : 'satellite'; }
-  const SKY_R = { bird: 1.4, plane: 3.4, satellite: 2.8 };
+  function bandType(s, y) { const B = s.cfg.bands; for (const b of B) if (y < b.top) return b.type; return B[B.length - 1].type; }
+  /* Altitude zone name for the HUD: the main band at y, or SATELLITES above the satellite floor. */
+  function zoneAt(s, y) { return y >= s.cfg.satellite.minY ? 'satellite' : bandType(s, y); }
   // Worst-case vertical drift of each type's motion (see skyObjPos): rewards on a risky line are offset vertically,
   // so horizontal sway can only move a hazard further from them.
-  const SWAY_Y = { bird: 0.8, plane: 0, satellite: 0 };
+  const SWAY = { bird: 0.8, plane: 0, satellite: 0 }; const swayY = o => o.dy != null ? o.dy : SWAY[o.type] || 0;
   const RING_GAP = 1.6, CAN_GAP = 2.0;
   /* Sky traffic is spawned ~5 s ahead around the player's altitude, never stacked: objects in a chunk keep a
      flyable gap between them, and each type lives in its own altitude band. Rewards sit on risky lines: boost rings
@@ -242,43 +247,51 @@
     const z0 = C.ROAD_LEN + 140 + i * C.SKY_CHUNK;
     const overGap = z0 + C.SKY_CHUNK > C.ROAD_LEN && z0 < FAR_RIM();
     const yMin = overGap ? -C.CANYON_DEPTH + 18 : 8;
-    const density = Math.min(3, 1 + Math.floor(i / 4) + (r() < 0.45 ? 1 : 0));
+    const A = s.cfg, D = A.density, ceil = A.ceil, mainTop = A.bands[A.bands.length - 1].top;
+    const density = Math.min(D.max, D.base + Math.floor(i / D.rampChunks) + (r() < D.extraP ? 1 : 0));
     const placed = [];
     for (let k = 0; k < density * 3 && placed.length < density; k++) {
-      const y = clamp(s.y + (r() - 0.45) * 60, yMin, C.SKY_CEIL - 8), type = bandType(y), rad = SKY_R[type];
+      const y = clamp(s.y + (r() - 0.45) * 60, yMin, mainTop - 6), type = bandType(s, y), rad = A[type].r;
       const o = { type, z: z0 + r() * C.SKY_CHUNK, x: (r() * 2 - 1) * C.SKY_X * 0.85, y, phase: r() * 6.28, r: rad, hit: false, near: false };
+      if (type === 'balloon') { o.dx = A.balloon.driftX; o.dy = A.balloon.driftY; o.rate = A.balloon.rate; o.hue = Math.floor(r() * 4); }
       const near = placed.concat(s.sky.slice(-6));
       if (near.some(p => Math.abs(p.z - o.z) < 25 && Math.hypot(p.x - o.x, p.y - o.y) < p.r + o.r + 9)) continue;
       placed.push(o);
     }
+    // Satellites: rare, and only up near the ceiling (an opt-in risk for climbers).
+    if (r() < A.satellite.chance) {
+      const o = { type: 'satellite', z: z0 + r() * C.SKY_CHUNK, x: (r() * 2 - 1) * C.SKY_X * 0.85, y: A.satellite.minY + r() * Math.max(0, ceil - 8 - A.satellite.minY), phase: r() * 6.28, r: A.satellite.r, hit: false, near: false };
+      if (!placed.concat(s.sky.slice(-6)).some(p => Math.abs(p.z - o.z) < 25 && Math.hypot(p.x - o.x, p.y - o.y) < p.r + o.r + 9)) placed.push(o);
+    }
     s.sky.push(...placed);
     const all = placed.concat(s.sky.slice(-9));
     // A reward is legal if it never overlaps any hazard's hitbox wherever that hazard sways.
-    const clearOf = (x, y, z, rad) => all.every(o => Math.abs(o.z - z) > 12 || Math.hypot(o.x - x, o.y - y) - 4.5 > o.r + 1.1 + rad + SWAY_Y[o.type]);
+    const clearOf = (x, y, z, rad) => all.every(o => Math.abs(o.z - z) > 12 || Math.hypot(o.x - x, o.y - y) - 4.5 > o.r + 1.1 + rad + swayY(o));
     for (const o of placed) {
       const roll = r(), side = r() < 0.5 ? 1 : -1;
       if (roll < 0.45) { // boost ring above/below the hazard
-        const d = o.r + C.RING_R + RING_GAP + SWAY_Y[o.type], ry = clamp(o.y + side * d, yMin, C.SKY_CEIL - 6);
+        const d = o.r + C.RING_R + RING_GAP + swayY(o), ry = clamp(o.y + side * d, yMin, s.cfg.ceil - 6);
         if (Math.abs(ry - o.y) >= d - 1e-9) s.rings.push({ x: o.x, y: ry, z: o.z, taken: false, risky: true, host: o.type, phase: o.phase });
       } else if (roll < 0.75) { // AIR can tucked against it
-        const d = o.r + CAN_GAP + SWAY_Y[o.type], cy = clamp(o.y + side * d, yMin, C.SKY_CEIL - 5);
+        const d = o.r + CAN_GAP + swayY(o), cy = clamp(o.y + side * d, yMin, s.cfg.ceil - 5);
         if (Math.abs(cy - o.y) >= d - 1e-9) s.skyPickups.push({ type: 'air', x: o.x, y: cy, z: o.z, taken: false, risky: true, phase: o.phase });
       }
     }
     if (r() < 0.32) { // dive gate: three rings stepping down
       const gx = (r() * 2 - 1) * C.SKY_X * 0.6, gz = z0 + r() * C.SKY_CHUNK * 0.5;
       for (let k = 0; k < 3; k++) {
-        const ring = { x: gx, y: clamp(s.y - 6 - k * 7, yMin + 4, C.SKY_CEIL - 6), z: gz + k * 30, taken: false, risky: false, gate: k };
+        const ring = { x: gx, y: clamp(s.y - 6 - k * 7, yMin + 4, s.cfg.ceil - 6), z: gz + k * 30, taken: false, risky: false, gate: k };
         if (clearOf(ring.x, ring.y, ring.z, C.RING_R)) s.rings.push(ring);
       }
     }
     if (r() < 0.5) {
-      const p = { type: r() < 0.3 ? 'air' : 'orb', z: z0 + r() * C.SKY_CHUNK, x: (r() * 2 - 1) * 18, y: clamp(s.y + (r() - 0.3) * 30, yMin, C.SKY_CEIL - 5), taken: false };
+      const p = { type: r() < 0.3 ? 'air' : 'orb', z: z0 + r() * C.SKY_CHUNK, x: (r() * 2 - 1) * 18, y: clamp(s.y + (r() - 0.3) * 30, yMin, s.cfg.ceil - 5), taken: false };
       if (clearOf(p.x, p.y, p.z, 2.6)) s.skyPickups.push(p);
     }
   }
   // Motion is small and bounded so what you see 5 s out is where it will be.
   function skyObjPos(o, t) {
+    if (o.type === 'balloon') return { x: o.x + Math.sin(t * o.rate + o.phase) * o.dx, y: o.y + Math.sin(t * o.rate * 1.7 + o.phase * 2) * o.dy };
     if (o.type === 'bird') return { x: o.x + Math.sin(t * 1.3 + o.phase) * 2, y: o.y + Math.sin(t * 2.6 + o.phase) * 0.8 };
     if (o.type === 'plane') return { x: o.x + Math.sin(t * 0.35 + o.phase) * 4, y: o.y };
     return { x: o.x + Math.sin(t * 0.4 + o.phase) * 1.5, y: o.y };
@@ -341,7 +354,7 @@
       const dx = s.x - p.x, dy = s.y - p.y, d = Math.hypot(dx, dy); if (d > C.MAGNET_R || d < 1e-6) continue;
       const k = Math.min(d, C.MAGNET_V * dt) / d, nx = p.x + dx * k, ny = p.y + dy * k;
       // Never drag a reward toward a hazard: stop if the new spot would sit inside any nearby hazard's clearance.
-      if (s.sky.some(o => Math.abs(o.z - p.z) < 12 && Math.hypot(o.x - nx, o.y - ny) < o.r + 1.1 + C.RING_R + 4.5 + SWAY_Y[o.type] + 4)) continue;
+      if (s.sky.some(o => Math.abs(o.z - p.z) < 12 && Math.hypot(o.x - nx, o.y - ny) < o.r + 1.1 + C.RING_R + 4.5 + swayY(o) + 4)) continue;
       p.x = nx; p.y = ny;
     }
   }
@@ -389,7 +402,7 @@
     if (s.stabT > 0 && s.vy < 0) s.vy *= 1 - C.STAB_SINK; // thrusters push up a little against the sink
     const z0 = s.z; s.z += Math.max(4, s.m * Math.cos(s.gam)) * dt;
     s.y = s.y + s.vy * dt;
-    if (s.y >= C.SKY_CEIL) { s.y = C.SKY_CEIL; s.gam = Math.min(0, s.gam); s.vy = Math.min(0, s.vy); }
+    if (s.y >= s.cfg.ceil) { s.y = s.cfg.ceil; s.gam = Math.min(0, s.gam); s.vy = Math.min(0, s.vy); }
     s.maxAlt = Math.max(s.maxAlt, s.y);
     if (inWall(s.z, s.y) || (z0 < FAR_RIM() && s.z >= FAR_RIM() && s.y < 0)) { s.events.push({ e: 'crash', what: 'wall' }); end(s, 'short'); return; }
     if (z0 < FAR_RIM() && s.z >= FAR_RIM()) s.events.push({ e: 'rim' });
@@ -491,7 +504,7 @@
       combo: { pot: s.cmb.pot, mult: s.cmb.mult, n: s.cmb.n }, onRoad: s.onRoad };
   }
 
-  const api = { C, stabilize, trickProgress, speedOf, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp, groundY, agl, liftAccel, bot, LAUNCH_GAM, wallInset, inWall };
+  const api = { C, bandType, zoneAt, defaultAir, stabilize, trickProgress, speedOf, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp, groundY, agl, liftAccel, bot, LAUNCH_GAM, wallInset, inWall };
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CJSim = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

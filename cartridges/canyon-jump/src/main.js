@@ -222,7 +222,7 @@
           burst(cs.x, cs.y - 10, 36, ['#f4f1ee', '#a9b3cc', '#3a2a3f'], 420, 1.1);
           sparks(cs.x, cs.y - 10, 28);
           { const lost = ev.lost ? `  ·  combo lost (${fmtPts(ev.lost)})` : '';
-            const B = { botched: ['BOTCHED LANDING', 'finish the trick before you touch down' + lost], nosedive: ['NOSE-DIVED', 'level out before you land' + lost], wall: ['HIT THE WALL', 'climb above the far rim'] }[ev.what] || ['WIPEOUT', `hit a ${ev.what === 'satellite' ? 'satellite' : ev.what}`];
+            const B = { botched: ['BOTCHED LANDING', 'finish the trick before you touch down' + lost], nosedive: ['NOSE-DIVED', 'level out before you land' + lost], wall: ['HIT THE WALL', 'climb above the far rim'] }[ev.what] || ['WIPEOUT', `hit a ${ev.what === 'balloon' ? 'hot air balloon' : ev.what}`];
             G.banner = { text: B[0], sub: B[1], t: G.t, dur: 3, color: '#ff3b5c' }; } break;
         case 'land': A.sfx('land'); G.shake = 14; G.camDip = 1; G.hitStop = 0.06; dustRing(cs.x, cs.y, cs.k || 30); burst(cs.x, cs.y, 24, ['#e3925a', '#ffd9a8', '#fff'], 300, 1); G.landZ = s.z; G.landingRoll = Math.max(10, s.m * 0.6);
           G.banner = { text: ev.combo ? `COMBO +${fmtPts(ev.combo)}` : 'STUCK THE LANDING', sub: `${ev.combo ? `×${fmtMult(ev.mult)} cashed  ·  ` : ''}+${C.LANDING_BONUS} landing${ev.onRoad ? `  ·  +${C.ROAD_BONUS} on the road` : ''}${s.counts.autoFinish ? '  ·  trick auto-finished' : ''}`, t: G.t, dur: 3, color: ev.combo ? '#ffd23f' : '#5af0ff' };
@@ -473,7 +473,7 @@
       const farRim = C.ROAD_LEN + C.CANYON_W, toRim = Math.ceil(farRim - s.z);
       chip(px, py, pw, 44);
       text(toRim > 0 ? `FAR RIM IN ${toRim} m` : `+${Math.floor(s.z - farRim).toLocaleString('en-US')} m PAST THE RIM`, W / 2, py + 15, T.body, toRim > 0 ? '#ffd23f' : '#5af0ff', 'center', true, 800);
-      const band = s.y < 0 ? 'IN THE GORGE' : s.y < C.BAND_PLANE ? 'BIRDS' : s.y < C.BAND_SAT ? 'PLANES' : 'SATELLITES';
+      const band = s.y < 0 ? 'IN THE GORGE' : ({ bird: 'BIRDS', plane: 'PLANES', balloon: 'BALLOONS', satellite: 'SATELLITES' })[S.zoneAt(s, s.y)];
       const deg = Math.round((s.gam || 0) * 57.3);
       text(`ALT ${Math.round(s.y)} m  ·  ${deg > 0 ? '▲' : deg < 0 ? '▼' : '■'} ${Math.abs(deg)}°  ·  ${band}`, W / 2, py + 32, T.label, s.y < 0 ? '#ff9fb0' : '#ffd9e6', 'center', false, 700);
       // Combo pot: unbanked until a clean landing.
