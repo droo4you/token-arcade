@@ -143,8 +143,12 @@ body.playing #musicBtn{right:calc(max(14px,env(safe-area-inset-right)) + 88px);b
 }
 @media (max-width:600px){#launchUI{bottom:112px;font-size:12px}#hud{font-size:16px;line-height:18px}#hScore{font-size:20px}#hTrain,#hPow{font-size:16px}#grid{grid-template-columns:repeat(4,minmax(40px,60px))}}
 #musicBtn,#musicBtn.off{width:68px;height:42px;background:var(--panel);font:700 10px/14px 'Silkscreen',monospace;color:#fff;padding:3px;z-index:9}
+#controlStrip{display:none;position:fixed;top:66px;left:50%;transform:translateX(-50%);z-index:6;max-width:90vw;padding:8px 14px;background:#20172ee8;border:2px solid #fff8;color:white;text-align:center;font:14px/1.5 monospace;pointer-events:none}
+body.playing #controlStrip{display:block}#controlState{display:block;color:#ffd84a;font-weight:bold;letter-spacing:1px}
+@media(max-width:900px){#controlStrip{top:48px;font-size:11px;padding:3px 8px}}
 </style></head><body>
 <canvas id="c"></canvas>
+<div id="controlStrip"><strong id="controlState"></strong><span id="controlKeys"></span></div>
 <div id="hud" class="hid"><span id="hScore">0</span><span id="hPow" style="display:none"><span id="hPowIcon"></span><span id="hPowName"></span><span id="hPowBarW"><span id="hPowBar" style="display:block"></span></span></span><span id="hNuts"><img id="hNutImg" alt="" style="image-rendering:pixelated"><span id="hNutN">0</span><span id="hMeter"><span id="hMeterFill" style="display:block"></span></span></span><span id="hJump"></span><span id="hTrain"><i class="ico train"></i><b id="hTrainN">0</b><span id="hTrainM"></span></span><span id="hCombo">x1</span><span id="hDist">0 m</span></div>
 <div id="sunbar" class="hid"><div id="sunfill"></div></div>
 <div id="pop" style="opacity:0"></div><div id="announce"></div><div id="banner"></div>
@@ -173,7 +177,7 @@ body.playing #musicBtn{right:calc(max(14px,env(safe-area-inset-right)) + 88px);b
 
 <div class="card"><h2>Controls</h2><div class="two">
 <div><p><b>Desktop</b></p><ul>
-<li><span class="k">Hold</span> mouse / <span class="k">Space</span> = <b>dive</b>: gravity gets way stronger and you speed up on downhills. Let go before an uphill to launch!</li>
+<li><span class="k">Hold</span> mouse / <span class="k">S / ↓ / Space</span> = <b>dive</b>: gravity gets way stronger and you speed up on downhills. Let go before an uphill to launch!</li>
 <li><span class="k">↑</span>/<span class="k">W</span> = <b>jump</b> from the ground (uses a charge)</li>
 <li><span class="k">←</span><span class="k">→</span> / <span class="k">A</span><span class="k">D</span> = switch lanes in sprints</li>
 <li><span class="k">N</span> = music on/off</li></ul></div>
@@ -230,8 +234,8 @@ body.playing #musicBtn{right:calc(max(14px,env(safe-area-inset-right)) + 88px);b
 <li>Get hit with a train and your <b>last follower hops off</b> instead of you losing speed and power. Basically extra lives.</li></ul></div>
 
 <div class="card"><h2>Lane sprints &amp; DN frenzy</h2><ul>
-<li>Once per biome the camera swings behind you for a <b>510 m, 3-stage lane sprint</b> (Hedge Run, Dune Canyon, Crystal Tunnel, Cloud Bridge). Stage speeds rise from <b>36 to 42 to 48</b>.</li>
-<li>Lane sprints run in <b>3 stages</b>, each faster and busier: zigzags, corridors, slaloms, full-width hurdles (hop them) and splits with a rare nut on one side. Switch lanes with ←/→ or a swipe. Tap or jump for a <b>free hop</b> (no charge used) over barriers. Hitting a barrier counts as a hit. Nuts and buddies sit in the lanes too.</li>
+<li>Between hill sections the camera swings behind you for a <b>320 m, 2-stage lane sprint</b> (Hedge Run, Dune Canyon, Crystal Tunnel, Cloud Bridge). Stage speeds rise from <b>36 to 42</b>.</li>
+<li>Lane sprints run in <b>2 stages</b>, each faster and busier: zigzags, corridors, slaloms, full-width hurdles (hop them) and splits with a rare nut on one side. Switch lanes with ←/→ or a swipe. Press W / ↑ (or tap on touchscreens) for a <b>free hop</b> (no charge used) over barriers. Hitting a barrier counts as a hit. Nuts and buddies sit in the lanes too. Every sprint is followed by rolling hills and a big ramp before another biome transition.</li>
 <li>Every nut fills the <b>nut meter</b> (+1, rare +3). At <b>45</b> it's <b>DN FRENZY</b> for 5 s: nuts rain down (one every 1/6 s, 30 total) and a big magnet (9 m) pulls in nearby nuts.</li></ul></div>
 
 <div class="card"><h2>Quick tips</h2><ul>
@@ -613,12 +617,23 @@ for(const ch of CONFIG.characters){const b=document.createElement('button');b.ti
 document.querySelector(`#grid button[data-id="${selected}"]`).classList.add('sel');const characterReady=loadChar(selected); characterReady.catch(error=>hosted&&TA.error(error.message));
 
 // ---------- input ----------
+const diveKeys=new Set();const DIVE_KEYS=['Space','KeyS','ArrowDown'];
 let laneQ=0;let held=false,jumpQueued=false,bot=params.get('bot')==='1';
 const touchInput=SkrumpeyTouchInput.create({canvas:$('c'),dive:$('diveBtn'),jump:$('jumpBtn'),eventTarget:window,
  isPlaying:()=>state==='play',isLane:()=>Boolean(S.inLane),onActivate:()=>ac(),onJump:()=>{jumpQueued=true;},onLane:bits=>{laneQ|=bits;}});
-function resetInput(){held=false;jumpQueued=false;laneQ=0;touchInput.reset();}
+function desktopDiveHeld(){return held&&(S.phase==='launch'||!S.W.laneAt(S.x));}
+function updateControlStrip(){
+ const touch=matchMedia('(pointer:coarse)').matches;
+ const lane=Boolean(S.W.laneAt(S.x)),launch=S.phase==='launch';
+ const pressing=desktopDiveHeld()||touchInput.isHeld();
+ const label=launch?(pressing?'CHARGING LAUNCH':'READY TO LAUNCH'):lane?'RUNNER · HOP & SWITCH':pressing?'DIVING':!S.ground?'GLIDING':'ROLLING';
+ const keys=launch?(touch?'Hold to charge · Release to launch':'Hold S / ↓ / SPACE · Release to launch'):lane?(touch?'Swipe ← / → · Tap or JUMP to hop':'A / D or ← / → · Switch lanes | W / ↑ · Hop'):(touch?'Hold DIVE downhill · Release uphill | JUMP':'Hold S / ↓ / SPACE downhill · Release uphill | W / ↑ · Jump');
+ if($('controlState').textContent!==label)$('controlState').textContent=label;
+ if($('controlKeys').textContent!==keys)$('controlKeys').textContent=keys;
+}
+function resetInput(){diveKeys.clear();held=false;jumpQueued=false;laneQ=0;touchInput.reset();}
 addEventListener('blur',resetInput);document.addEventListener('visibilitychange',()=>{if(document.hidden)resetInput();});
-addEventListener('keydown',e=>{if(state==='play'&&!e.repeat){if(e.code==='ArrowLeft'||e.code==='KeyA')laneQ|=4;if(e.code==='ArrowRight'||e.code==='KeyD')laneQ|=8;}if(e.code==='KeyN')toggleMusic();if(CONFIG.jumpKeys.includes(e.code)){ac();if(!e.repeat&&state==='play')jumpQueued=true;e.preventDefault();}if(e.code==='Space'){ac();held=true;e.preventDefault();}if(e.code==='KeyM'&&!e.repeat)toggleMusic();});addEventListener('keyup',e=>{if(e.code==='Space')held=false;});
+addEventListener('keydown',e=>{if(state==='play'&&!e.repeat){if(e.code==='ArrowLeft'||e.code==='KeyA')laneQ|=4;if(e.code==='ArrowRight'||e.code==='KeyD')laneQ|=8;}if(e.code==='KeyN')toggleMusic();if(CONFIG.jumpKeys.includes(e.code)){ac();if(!e.repeat&&state==='play')jumpQueued=true;e.preventDefault();}if(DIVE_KEYS.includes(e.code)){ac();diveKeys.add(e.code);held=true;e.preventDefault();}if(e.code==='KeyM'&&!e.repeat)toggleMusic();});addEventListener('keyup',e=>{if(DIVE_KEYS.includes(e.code)){diveKeys.delete(e.code);held=diveKeys.size>0;}});
 document.addEventListener('click',()=>ac(),{once:true});
 $('musicBtn').addEventListener('click',e=>{e.stopPropagation();toggleMusic();});
 
@@ -687,7 +702,8 @@ function handleEvents(ev){for(const e of ev){
  else if(e.t==='jumpRefill'){pop('+1 JUMP','#b8ffb0');tone(660,0.1,'triangle',0.07,990);}
  else if(e.t==='sling'){announce(e.perfect?'PERFECT LAUNCH':'LAUNCH '+Math.round(e.q*100)+'%',e.perfect?'#ffd84a':'#ffffff');SFX.power();shake=Math.max(shake,e.perfect?1:0.5);emit(e.x,e.y+1,2,30,0xffd84a,12,0.6,0.7,-8);window.LAUNCHED=e;}
  else if(e.t==='rescue'){bigMoment();say('+1 · TRAIN '+e.n,'#b8ffb0',2,1.0);[523,659,784,1047].forEach((f,i)=>tone(f,0.16,'triangle',0.08,null,i*0.05));confetti(e.x,e.y);shake=Math.max(shake,0.35);window.LAST_RESCUE=e.n;}
- else if(e.t==='laneIn'){bigMoment();AQ.length=0;aT=Math.min(aT,0.05);say(CONFIG.laneThemes[SIM.BIOMES[e.biome%4]]+'','#8ff6ff',4,1.2,true);if(!window.LANE_HINTED){window.LANE_HINTED=1;say('← → LANES   ↑ HOP','#ffffff',3,1.0,true);}SFX.power();}
+ else if(e.t==='laneIn'){bigMoment();AQ.length=0;aT=Math.min(aT,0.05);say(CONFIG.laneThemes[SIM.BIOMES[e.biome%4]]+'','#8ff6ff',4,1.2,true);say('RUNNER · SWITCH LANES & HOP','#ffffff',3,1.5,true);SFX.power();}
+ else if(e.t==='exitBoost'){say('SPEED RAMP · RIDE THE HILLS','#ffd84a',4,1.4,true);SFX.whoosh();emit(S.x,S.y+1,1,24,0xffd84a,10,0.5,0.5,-6);}
  else if(e.t==='laneStage'){say(e.stage===e.of-1?'FINAL STAGE · FASTER':'STAGE '+(e.stage+1)+' · FASTER','#ffd84a',3,0.9,true);SFX.power();}
  else if(e.t==='laneOut'){const bk=SIM.BIOMES[W.biomeAt(S.x-5)%4];say({meadow:'HEDGE RUN DONE',dunes:'CANYON DONE',crystal:'TUNNEL DONE',clouds:'BRIDGE DONE'}[bk],'#ffffff',2,0.9);}
  else if(e.t==='barrierHit'){shake=Math.max(shake,1);}
@@ -736,7 +752,7 @@ function updateLaunch(x,y){const L=S.phase==='launch';$('launchUI').classList.to
 function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame);if(arcadePaused){last=t;acc=0;return;}const dtR=Math.min(0.05,(t-last)/1000);last=t;
  const playing=state==='play'||state==='menu';
  if(playing&&window.PAUSED){acc=0;} else if(playing){acc+=dtR*SPEED*(state==='menu'?1:1);let ev=[];
-  while(acc>=SIM.DT&&!S.over){prevX=S.x;prevY=S.y;const inp=(state==='menu'||bot)?SIM.botInput(S):(((held||touchInput.isHeld())?1:0)|(jumpQueued?2:0)|laneQ);jumpQueued=false;laneQ=0;
+  while(acc>=SIM.DT&&!S.over){prevX=S.x;prevY=S.y;const inp=(state==='menu'||bot)?SIM.botInput(S):(((desktopDiveHeld()||touchInput.isHeld())?1:0)|(jumpQueued?2:0)|laneQ);jumpQueued=false;laneQ=0;
    SIM.step(S,inp);if(state==='play')for(const e of S.ev)ev.push(e);acc-=SIM.DT;}
   handleEvents(ev);checkPause(ev);if(S.over){if(state==='play')end();else newWorld(12345+Math.floor(t));}}
  // render interpolation between the last two fixed sim steps (alpha = leftover accumulator)
@@ -749,7 +765,7 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
  const bi=W.biomeAt(x)%4;if(bi!==curBiome&&S.phase!=='launch'){curBiome=bi;if(state==='play')banner(BIO[bi].name);}
  // player
  const ang=S.ground?Math.atan(W.dh(x)):Math.atan2(S.vy,S.vx)*0.7;tilt+=(ang-tilt)*fk;player.position.set(x,y-0.1,2.2+(S.laneZ-2.2)*eLane);player.rotation.z=tilt*(1-eLane);yawG.rotation.y=CONFIG.characterYaw+(Math.PI/2-CONFIG.characterYaw)*eLane;
- const pressing=state==='play'?(bot?(SIM.botInput(S)&1):(held||touchInput.isHeld())):(SIM.botInput(S)&1);squash+=((pressing?0.82:1)-squash)*fk;yawG.scale.set(1/Math.sqrt(squash),squash,1/Math.sqrt(squash));
+ const pressing=state==='play'?(bot?(SIM.botInput(S)&1):(desktopDiveHeld()||touchInput.isHeld())):(SIM.botInput(S)&1);squash+=((pressing?0.82:1)-squash)*fk;yawG.scale.set(1/Math.sqrt(squash),squash,1/Math.sqrt(squash));
  player.visible=!(S.invuln>0&&Math.floor(t/70)%2===0);
  for(const k in overlays)overlays[k].visible=S.power===k&&eLane<0.5;
  const star=S.power==='star',beamP=S.power==='beam';const hue=(t*0.0006)%1;
@@ -792,7 +808,7 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
  cloudLayer.position.set(camera.position.x*0.75-450+((t*0.002)%70),camY+40,-160);cloudLayer.visible=night<0.8;
  // HUD
  document.body.classList.toggle('in-lane',Boolean(S.inLane));
- if(state==='play'){$('hScore').textContent=S.score;$('hCombo').textContent='x'+S.combo;$('hDist').textContent=Math.floor(S.x)+' m';$('hTrainN').textContent=S.train.length;$('hTrainM').textContent='x'+SIM.TM(S).toFixed(1);$('hNutN').textContent=S.gems+' '+COL.plural;$('hMeterFill').style.width=(S.frenzyT>0?100*S.frenzyT/SIM.P.frenzyTicks:100*S.nutMeter/SIM.P.frenzyNeed)+'%';{const jh=S.jumps+'/'+SIM.P.jumpMax;if(jh!==lastJH){lastJH=jh;$('hJump').innerHTML='<i class="ico jump"></i>'+'<i class="pip"></i>'.repeat(S.jumps)+'<i class="pip off"></i>'.repeat(SIM.P.jumpMax-S.jumps);}}$('jumpBtn').classList.toggle('empty',S.jumps<=0);$('sunfill').style.width=(f*100)+'%';
+ if(state==='play'){updateControlStrip();$('hScore').textContent=S.score;$('hCombo').textContent='x'+S.combo;$('hDist').textContent=Math.floor(S.x)+' m';$('hTrainN').textContent=S.train.length;$('hTrainM').textContent='x'+SIM.TM(S).toFixed(1);$('hNutN').textContent=S.gems+' '+COL.plural;$('hMeterFill').style.width=(S.frenzyT>0?100*S.frenzyT/SIM.P.frenzyTicks:100*S.nutMeter/SIM.P.frenzyNeed)+'%';{const jh=S.jumps+'/'+SIM.P.jumpMax;if(jh!==lastJH){lastJH=jh;$('hJump').innerHTML='<i class="ico jump"></i>'+'<i class="pip"></i>'.repeat(S.jumps)+'<i class="pip off"></i>'.repeat(SIM.P.jumpMax-S.jumps);}}$('jumpBtn').classList.toggle('empty',S.jumps<=0);$('sunfill').style.width=(f*100)+'%';
   const hp=$('hPow');if(S.power){hp.style.display='';hp.style.setProperty('--pc',S.power==='star'?'#ffd84a':'#5af0ff');$('hPowIcon').className='ico '+(S.power==='star'?'star':'beam');$('hPowName').textContent=(S.power==='star'?'Star ':'Beam ')+(S.powerT/60).toFixed(1)+'s';
    $('hPowBar').style.width=(100*S.powerT/(S.power==='star'?SIM.P.starTicks:SIM.P.beamTicks))+'%';}else hp.style.display='none';}
  updateSay(dtR);

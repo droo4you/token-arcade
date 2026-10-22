@@ -11,10 +11,11 @@ import { createSeededReplayVerifier } from "./seededReplay.ts";
  *  - 1.1.0: three-stage lane sprint with rising speed/density and new patterns (current cartridge sim.js).
  */
 const SIM_SOURCES: Record<string, URL> = {
+  "1.2.0": new URL("../../../cartridges/skrumpey-slide/releases/1.2.0/sim.js", import.meta.url),
   "1.0.0": new URL("./legacy/skrumpey-sim-1.0.0.js", import.meta.url),
   "1.1.0": new URL("../../../cartridges/skrumpey-slide/releases/1.1.0/sim.js", import.meta.url),
 };
-export const SKRUMPEY_CURRENT_VERSION = "1.1.0";
+export const SKRUMPEY_CURRENT_VERSION = "1.2.0";
 export const SKRUMPEY_VERSIONS = Object.keys(SIM_SOURCES);
 const scripts = new Map<string, Script>();
 function simScript(version: string): Script {
