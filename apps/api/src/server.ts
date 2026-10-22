@@ -16,6 +16,7 @@ import { MinicoinDeployer, MinicoinError, type MinicoinSettings } from "./minico
 import { createCoindleHandler } from "./coindle.ts";
 import { TestnetMinicoinService } from "./testnet-minicoin.ts";
 import { FundedRaids, FundedRaidError } from "./fundedRaids.ts";
+import { AutomaticPayouts } from "./automaticPayouts.ts";
 
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses"]);
 const MODES = new Set(["free", "ranked", "raid"]);
@@ -376,12 +377,13 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   const store = options.store ?? new ArcadeStore(process.env.ARCADE_DB_PATH || undefined, auth.localDemoMode);
   const adapters = options.adapters ?? new AdapterRegistry();
   const fundedRaids = new FundedRaids(store);
+  const payouts = new AutomaticPayouts(store, fundedRaids);
   const verifyingRaids = new Map<string, number>();
   const publicRaid = (raid: Raid): Raid => {
     if (!verifyingRaids.get(raid.id)) {
       raid = store.finalizeFreeRaid(raid.id, () => leaderboard(store, raid.gameId, "raid", raid.id, raid.objective, undefined, raid.rules)) ?? raid;
     }
-    return currentRaid(raid);
+    return payouts.decorate(currentRaid(raid));
   };
   const ownership = new DirectWalletOwnershipResolver(process.env.MONAD_RPC_URL);
   const minicoinSettings = options.minicoinSettings ?? {
@@ -408,7 +410,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
     supplyRecipient: process.env.TESTNET_SUPPLY_RECIPIENT,
   }, auth.localDemoMode);
 
-  return createServer(async (request, response) => {
+  const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
       const path = url.pathname;
@@ -427,6 +429,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const body = await readJson(request);
           const chainRaidId = requiredString(body.chainRaidId, "chainRaidId", 66);
           if (!/^0x[a-fA-F0-9]{64}$/.test(chainRaidId)) fail(400, "INVALID_INPUT", "Invalid chain raid ID");
+          await payouts.assertReady();
           return respond(response, 200, { raid: await fundedRaids.bind(saved, chainRaidId as `0x${string}`) });
         }
         fail(405, "METHOD_NOT_ALLOWED", "Unsupported funded raid action");
@@ -496,7 +499,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       if (method === "GET" && path === "/api/health") {
         return respond(response, 200, {
           ok: true, auth: { privy: auth.privyReady, localDemo: auth.localDemoMode, localDemoAdmin },
-          settlement: { ready: false, reason: "General paid entry and prize settlement are not configured", testnetRaid: { configured: Boolean(fundedRaids.vault), chainId: 10143 }, minicoin: { ready: minicoin.ready, ...(!minicoin.ready ? { reason: minicoin.reason } : {}), reconcileReady: minicoin.reconcileReady, rehearsalReady, rehearsalReconcileReady } },
+          settlement: { ready: false, reason: "General paid entry and prize settlement are not configured", testnetRaid: { configured: Boolean(fundedRaids.vault), chainId: 10143, automaticPayouts: payouts.enabled }, minicoin: { ready: minicoin.ready, ...(!minicoin.ready ? { reason: minicoin.reason } : {}), reconcileReady: minicoin.reconcileReady, rehearsalReady, rehearsalReconcileReady } },
           release: process.env.RENDER_GIT_COMMIT ?? null,
           cartridge: { installed: store.listGames(true).filter((game) => game.manifest.id !== WARMUP_GAME_ID).map((game) => game.manifest.id), verifierAdapters: adapters.keys() },
         });
@@ -990,6 +993,15 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       respond(response, 500, { error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
     }
   });
+  let payoutTimer: ReturnType<typeof setInterval> | undefined;
+  server.on("listening", () => {
+    if (!payouts.enabled) return;
+    payoutTimer = setInterval(() => void payouts.tick(publicRaid), 15_000);
+    payoutTimer.unref();
+    void payouts.tick(publicRaid);
+  });
+  server.on("close", () => clearInterval(payoutTimer));
+  return server;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {

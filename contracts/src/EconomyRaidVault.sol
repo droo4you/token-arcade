@@ -175,6 +175,23 @@ contract EconomyRaidVault is Ownable2Step, ReentrancyGuard {
 
     /// @notice Owner attests to an offchain verified winner and result artifact after the raid.
     function settleRaid(bytes32 raidId, address winner, bytes32 resultHash) external onlyOwner {
+        _settleRaid(raidId, winner, resultHash);
+    }
+
+    function payoutVersion() external pure returns (uint256) { return 1; }
+
+    /// @notice Settlement and delivery are atomic; the winner needs no gas or signature.
+    function settleAndPay(bytes32 raidId, address winner, bytes32 resultHash) external onlyOwner nonReentrant {
+        _settleRaid(raidId, winner, resultHash);
+        _pay(raidId, winner);
+    }
+
+    /// @notice Anyone may sponsor delivery, but cannot change the recorded recipient.
+    function payWinner(bytes32 raidId) external nonReentrant {
+        _pay(raidId, raids[raidId].winner);
+    }
+
+    function _settleRaid(bytes32 raidId, address winner, bytes32 resultHash) private {
         Raid storage raid = raids[raidId];
         if (raid.status != Status.Open || block.timestamp < raid.endsAt || block.timestamp >= raid.settleBy) {
             revert InvalidStatus();
@@ -192,15 +209,20 @@ contract EconomyRaidVault is Ownable2Step, ReentrancyGuard {
     /// @notice Winner claims the reserved WMON to a wallet of their choice before expiry.
     function claimPrize(bytes32 raidId, address to) external nonReentrant {
         Raid storage raid = raids[raidId];
-        if (raid.status != Status.Settled || block.timestamp >= raid.claimDeadline) revert InvalidStatus();
         if (msg.sender != raid.winner) revert NotWinner();
+        _pay(raidId, to);
+    }
+
+    function _pay(bytes32 raidId, address to) private {
+        Raid storage raid = raids[raidId];
+        if (raid.status != Status.Settled || block.timestamp >= raid.claimDeadline) revert InvalidStatus();
         if (to == address(0)) revert InvalidRaid();
 
         uint256 amount = raid.prize;
         raid.status = Status.Claimed;
         lockedBalance -= amount;
         wmon.safeTransfer(to, amount);
-        emit PrizeClaimed(raidId, msg.sender, to, amount);
+        emit PrizeClaimed(raidId, raid.winner, to, amount);
     }
 
     /// @notice Owner can cancel an unsettled raid when verification or game rules fail.

@@ -11,6 +11,59 @@ const compiled = compileContracts({
   "test/MockEntryToken.sol": fs.readFileSync(path.join(__dirname, "MockEntryToken.sol"), "utf8"),
 });
 
+test("atomic payout delivers to a zero-gas winner and cannot be repeated", async () => {
+  const { admin, other, wmon, vault } = await setup();
+  const recipient = ethers.Wallet.createRandom().address;
+  await (await wmon.mint(await vault.getAddress(), 400)).wait();
+  const raidId = await openRaid(vault);
+  const result = ethers.id("automatic-result");
+  await assert.rejects(vault.settleAndPay(raidId, recipient, result));
+  await advanceTo((await vault.raids(raidId)).endsAt);
+  await assert.rejects(vault.connect(other).settleAndPay(raidId, recipient, result));
+  assert.equal(await vault.payoutVersion(), 1n);
+  const receipt = await (await vault.connect(admin).settleAndPay(raidId, recipient, result)).wait();
+  const events = receipt.logs.map(log => { try { return vault.interface.parseLog(log); } catch { return null; } });
+  assert.equal(events.find(e => e?.name === "PrizeClaimed").args.winner, recipient);
+  assert.equal(events.find(e => e?.name === "PrizeClaimed").args.to, recipient);
+  assert.ok(events.find(e => e?.name === "RaidSettled"));
+  assert.equal(await ethers.provider.getBalance(recipient), 0n);
+  assert.equal(await wmon.balanceOf(recipient), 75n);
+  assert.equal((await vault.raids(raidId)).status, 3n);
+  assert.equal(await vault.lockedBalance(), 0n);
+  assert.equal(await vault.freeBalance(), 325n);
+  await assert.rejects(vault.settleAndPay(raidId, recipient, result));
+  await assert.rejects(vault.connect(other).payWinner(raidId));
+});
+
+test("sponsored retry pays only the stored winner", async () => {
+  const { winner, other, wmon, vault } = await setup();
+  await (await wmon.mint(await vault.getAddress(), 400)).wait();
+  const raidId = await openRaid(vault);
+  await assert.rejects(vault.payWinner(raidId));
+  await advanceTo((await vault.raids(raidId)).endsAt);
+  await (await vault.settleRaid(raidId, winner.address, ethers.id("result"))).wait();
+  await (await vault.connect(other).payWinner(raidId)).wait();
+  assert.equal(await wmon.balanceOf(winner.address), 75n);
+  assert.equal(await wmon.balanceOf(other.address), 0n);
+  await assert.rejects(vault.connect(winner).claimPrize(raidId, other.address));
+});
+
+test("failed atomic transfer rolls back settlement and preserves reserved funds", async () => {
+  const { winner, wmon, vault } = await setup();
+  await (await wmon.mint(await vault.getAddress(), 400)).wait();
+  const id = await openRaid(vault);
+  await advanceTo((await vault.raids(id)).endsAt);
+  await (await wmon.setRejectTransfers(true)).wait();
+  await assert.rejects(vault.settleAndPay(id, winner.address, ethers.id("result")));
+  assert.equal((await vault.raids(id)).status, 1n);
+  assert.equal(await vault.activeRaidId(), id);
+  assert.equal(await vault.lockedBalance(), 75n);
+  assert.equal(await wmon.balanceOf(winner.address), 0n);
+  await (await wmon.setRejectTransfers(false)).wait();
+  await (await vault.settleAndPay(id, winner.address, ethers.id("result"))).wait();
+  assert.equal(await wmon.balanceOf(winner.address), 75n);
+});
+
 async function deploy(file, name, signer, ...args) {
   const artifact = compiled[file][name];
   const factory = new ethers.ContractFactory(artifact.abi, `0x${artifact.evm.bytecode.object}`, signer);
@@ -160,6 +213,7 @@ test("an expired unclaimed winner prize is recycled, and config cannot exceed th
   const settled = await vault.raids(raidId);
   await assert.rejects(vault.connect(other).expirePrize(raidId));
   await advanceTo(settled.claimDeadline);
+  await assert.rejects(vault.connect(other).payWinner(raidId));
   await assert.rejects(vault.connect(winner).claimPrize(raidId, winner.address));
   await (await vault.connect(other).expirePrize(raidId)).wait();
   assert.equal((await vault.raids(raidId)).status, 6n);

@@ -381,6 +381,7 @@ function RaidPrizeClaim({ raid }: { raid: Raid }) {
   const auth = useArcadeAuth();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  if (raid.funding?.payoutMode === "automatic") return <div aria-live="polite"><strong>{raid.payout?.status === "paid" ? "Reward delivered" : raid.payout?.status === "attention" ? "Reward delivery needs attention" : "Sending reward automatically…"}</strong><p>Your reward goes to your arcade wallet. No signing or gas needed.</p>{raid.payout?.transactionHash && <a href={`https://testnet.monadvision.com/tx/${raid.payout.transactionHash}`} target="_blank" rel="noreferrer">View payment transaction ↗</a>}</div>;
   const claim = async () => {
     setBusy(true); setMessage("");
     try {
@@ -432,7 +433,7 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
     <Link href="/raids" className="back-link"><ArrowLeft size={17} /> All raids</Link>
     <GuideLink topic="raids">How raids work</GuideLink>
     {error && <ErrorNote error={`Standings could not refresh. Showing the last received results. ${error}`} />}
-    {raid.finalResult && <section className="result-panel" aria-live="polite"><Trophy size={31} /><div><span>FINAL RESULT</span><h2>{leaderboard[0] ? `${leaderboard[0].displayName} wins!` : "No qualifying runs"}</h2><p>{leaderboard[0] ? `Winning result: ${metricText(leaderboard[0].primaryMetric, raid.objective)}. Final standings are saved below.` : "This raid ended without an accepted result."} {raid.funding ? "The testnet prize becomes claimable after on-chain settlement." : "This community challenge has no prize."}</p>{raid.funding && data.playerId === leaderboard[0]?.playerId && <RaidPrizeClaim raid={raid} />}</div></section>}
+    {raid.finalResult && <section className="result-panel" aria-live="polite"><Trophy size={31} /><div><span>FINAL RESULT</span><h2>{leaderboard[0] ? `${leaderboard[0].displayName} wins!` : "No qualifying runs"}</h2><p>{leaderboard[0] ? `Winning result: ${metricText(leaderboard[0].primaryMetric, raid.objective)}. Final standings are saved below.` : "This raid ended without an accepted result."} {raid.funding ? "The testnet reward is settled after final standings are verified." : "This community challenge has no prize."}</p>{raid.funding && data.playerId === leaderboard[0]?.playerId && <RaidPrizeClaim raid={raid} />}</div></section>}
     <div className="raid-hero">
       <div><StatusBadge tone={isRaidOpen(raid, now) ? "good" : "wait"}>Raid {raidDisplayStatus(raid, now)}</StatusBadge><h1>{raid.name}</h1><p>Same course. Same rules. Put your best run on the board.</p>
         <div className="raid-quickfacts"><div><Clock3 size={19} /><span>{countdown}</span></div><div><Ticket size={19} /><span>{entryLabel}</span></div><div><Trophy size={19} /><span>{prizeLabel}</span></div></div>

@@ -1,12 +1,17 @@
-import { createPublicClient, http, parseAbi, keccak256, stringToHex, encodeFunctionData, getAddress, type Address, type Hex } from "viem";
+import { createPublicClient, parseAbi, keccak256, stringToHex, encodeFunctionData, getAddress, type Address, type Hex } from "viem";
 import type { Raid, GameRecord, Passport } from "../../../packages/sdk/src/index.ts";
 import type { ArcadeStore } from "./store.ts";
+import { testnetTransport } from "./testnetRpc.ts";
 
 export const fundedVaultAbi = parseAbi([
   "function gameId() view returns (bytes32)",
   "function wmon() view returns (address)",
   "function raids(bytes32) view returns (bytes32 rulesHash,bytes32 resultHash,uint256 prize,uint256 startsAt,uint256 endsAt,uint256 settleBy,uint256 claimWindow,uint256 claimDeadline,address winner,uint8 status)",
   "function settleRaid(bytes32 raidId,address winner,bytes32 resultHash)",
+  "function payoutVersion() view returns (uint256)",
+  "function owner() view returns (address)",
+  "function settleAndPay(bytes32 raidId,address winner,bytes32 resultHash)",
+  "function payWinner(bytes32 raidId)",
   "function claimPrize(bytes32 raidId,address to)",
 ]);
 export class FundedRaidError extends Error {
@@ -38,7 +43,7 @@ export class FundedRaids {
   }) {
     this.store = store;
     this.vault = settings.vault ? getAddress(settings.vault) : undefined;
-    this.client = createPublicClient({ transport: http(settings.rpcUrl || "https://testnet-rpc.monad.xyz", { timeout: 10_000, retryCount: 1 }) });
+    this.client = createPublicClient({ transport: testnetTransport(settings.rpcUrl) });
   }
   private async chain() {
     requireThat(this.vault, "Configure TESTNET_RAID_VAULT before using funded raids");
@@ -70,10 +75,12 @@ export class FundedRaids {
     requireThat(onchain[0] === rules.rulesHash, "On-chain rules must commit to this website raid before opening");
     requireThat(raid.reward.type === "erc20" && getAddress(raid.reward.asset) === token, "Prize token does not match vault custody");
     requireThat(onchain[2] > 0n, "Vault has no locked prize");
+    const automatic = process.env.TESTNET_AUTO_PAYOUTS === "true";
+    if (automatic) requireThat(await this.client.readContract({ address: vault, abi: fundedVaultAbi, functionName: "payoutVersion" }) === 1n, "Automatic payouts require the new vault");
     requireThat(!this.store.listRaids().some(r => r.funding?.vault === vault && r.funding.chainRaidId === chainRaidId), "Chain raid is already linked");
     const next: Raid = { ...raid, startsAt: new Date(Number(onchain[3]) * 1000).toISOString(), endsAt: new Date(Number(onchain[4]) * 1000).toISOString(),
       reward: { type: "erc20", asset: token, amount: onchain[2].toString() },
-      funding: { chainId: 10143, vault, chainRaidId, rulesHash: rules.rulesHash, gameVersion: this.game(raid).manifest.version, prizeWei: onchain[2].toString() }, status: "open" };
+      funding: { chainId: 10143, vault, chainRaidId, rulesHash: rules.rulesHash, gameVersion: this.game(raid).manifest.version, prizeWei: onchain[2].toString(), ...(automatic ? { payoutMode: "automatic" as const } : {}) }, status: "open" };
     this.store.saveRaid(next);
     return next;
   }
@@ -101,8 +108,9 @@ export class FundedRaids {
   async claim(raid: Raid, passport: Passport) {
     const plan = this.settlement(raid);
     requireThat(raid.finalResult!.entries[0].playerId === passport.playerId, "Only the recorded winner can claim");
-    const vault = await this.chain();
-    requireThat(vault === raid.funding!.vault, "Vault configuration changed");
+    await this.chain();
+    // Bindings are server-created custody records; preserve claims when the future vault rotates.
+    const vault = getAddress(raid.funding!.vault);
     const [onchain, block] = await Promise.all([
       this.client.readContract({ address: vault, abi: fundedVaultAbi, functionName: "raids", args: [raid.funding!.chainRaidId as Hex] }), this.client.getBlock(),
     ]);
