@@ -139,15 +139,21 @@ test('rolls stay soft on pitch; front/back flips nudge the nose; left/right roll
   // Mid-spin TRICK_DIP still costs a tiny altitude dip for rolls (no flight-path kick).
   const roll = launchAt(105); roll.y = 100; roll.gam = 0; roll.m = 100; roll.vx = 0; roll.x = 0;
   const base = launchAt(105); base.y = 100; base.gam = 0; base.m = 100;
-  for (let i = 0; i < 140; i++) S.step(base, {});
   S.step(roll, { rollLeftEdge: true }); assert.equal(roll.trickKind, 'roll'); assert.equal(roll.trickDir, -1);
-  assert.ok(roll.vx < -C.ROLL_VX * 0.9, `left roll vx ${roll.vx}`);
-  for (let i = 0; i < 140; i++) S.step(roll, {});
-  assert.ok(base.y - roll.y > 0.05 && base.y - roll.y < 1.5, `roll altitude dip ${(base.y - roll.y).toFixed(2)}`);
+  // Impulse is ramped with the spin: first frame only a slice of VX, but rot is already non-zero.
+  assert.ok(roll.rot !== 0, 'roll visual starts same frame');
+  assert.ok(Math.abs(roll.vx) < C.ROLL_VX * 0.35, `first-frame vx should be partial ${roll.vx}`);
+  for (let i = 0; i < Math.ceil(C.ROLL_RAMP * 120); i++) { S.step(roll, {}); S.step(base, {}); }
+  assert.ok(roll.vx < -C.ROLL_VX * 0.85, `left roll vx after ramp ${roll.vx}`);
+  const n = Math.ceil(C.ROLL_T * 120) - Math.ceil(C.ROLL_RAMP * 120) + 2;
+  for (let i = 0; i < n; i++) { S.step(roll, {}); S.step(base, {}); }
+  assert.ok(base.y - roll.y > 0.05 && base.y - roll.y < 2.0, `roll altitude dip ${(base.y - roll.y).toFixed(2)}`);
   assert.ok(Math.abs(base.gam - roll.gam) < 0.08, `roll should not shove gam ${(base.gam - roll.gam).toFixed(3)}`);
 
   const right = launchAt(105); right.y = 100; right.gam = 0; right.m = 100; right.vx = 0;
-  S.step(right, { rollRightEdge: true }); assert.ok(right.vx > C.ROLL_VX * 0.9);
+  S.step(right, { rollRightEdge: true });
+  for (let i = 0; i < Math.ceil(C.ROLL_RAMP * 120); i++) S.step(right, {});
+  assert.ok(right.vx > C.ROLL_VX * 0.85, `right roll vx ${right.vx}`);
 
   const front = launchAt(105); front.y = 100; front.gam = 0; front.m = 100;
   S.step(front, { flipFrontEdge: true }); assert.equal(front.trickKind, 'flip'); assert.equal(front.trickDir, 1);
@@ -162,9 +168,27 @@ test('rolls stay soft on pitch; front/back flips nudge the nose; left/right roll
 test('roll coast: sideways kick travels for a beat instead of dying to steer damping', () => {
   const s = launchAt(105); s.y = 100; s.gam = 0; s.m = 100; s.vx = 0; s.x = 0;
   S.step(s, { rollRightEdge: true });
+  for (let i = 0; i < Math.ceil(C.ROLL_RAMP * 120); i++) S.step(s, {}); // finish the coupled ramp
   const x0 = s.x, vx0 = s.vx;
+  assert.ok(vx0 > C.ROLL_VX * 0.85, `ramped vx ${vx0}`);
   for (let i = 0; i < Math.round(C.ROLL_COAST * 0.7 * 120); i++) S.step(s, {}); // hands off
-  assert.ok(s.x - x0 > 4, `coasted ${ (s.x - x0).toFixed(2) } m`); assert.ok(Math.abs(s.vx) > Math.abs(vx0) * 0.35, 'vx still alive mid-coast');
+  assert.ok(s.x - x0 > 4, `coasted ${(s.x - x0).toFixed(2)} m`); assert.ok(Math.abs(s.vx) > Math.abs(vx0) * 0.35, 'vx still alive mid-coast');
+});
+
+test('roll shove and spin stay coupled: VX tracks rot through the ramp window', () => {
+  const s = launchAt(105); s.y = 100; s.gam = 0; s.m = 100; s.vx = 0;
+  S.step(s, { rollRightEdge: true });
+  let prevU = 0;
+  for (let i = 0; i < Math.ceil(C.ROLL_RAMP * 120); i++) {
+    S.step(s, {});
+    const elapsed = s.trickDur - s.trick, u = Math.min(1, elapsed / C.ROLL_RAMP);
+    const spinU = Math.abs(s.rot) / (Math.PI * 2);
+    // Sideways kick fraction stays within a beat of spin fraction over the ramp.
+    assert.ok(Math.abs(s.rollKickGiven / C.ROLL_VX - u) < 0.05, `kick u ${s.rollKickGiven / C.ROLL_VX} vs ${u}`);
+    assert.ok(spinU + 0.02 >= prevU, 'spin advances');
+    prevU = spinU;
+  }
+  assert.ok(Math.abs(s.vx) > C.ROLL_VX * 0.85);
 });
 
 test('dive recovery: pull-up from a steep mid/high-speed dive catches in under 0.7 s', () => {

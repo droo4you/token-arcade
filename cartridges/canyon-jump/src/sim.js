@@ -34,7 +34,9 @@
     FLIP_T: 0.7, ROLL_T: 1.05, FLIP_PTS: 30, ROLL_PTS: 50, TRICK_CD: 0.2, TRICK_COST: 3,
     // Mid-spin lift dip stays soft (never a nosedive). Front/back flips also nudge flight-path angle a little so they
     // feel different and useful for aiming; left/right rolls kick a lateral impulse so you can dodge while spinning.
-    TRICK_DIP: 0.12, FLIP_GAM: 0.18, ROLL_VX: 22, ROLL_COAST: 0.55, TRICK_MIN_AGL: 8, VARIETY: 1.5,
+    TRICK_DIP: 0.12, FLIP_GAM: 0.18, ROLL_VX: 22, ROLL_COAST: 0.55, ROLL_RAMP: 0.2, TRICK_MIN_AGL: 8, VARIETY: 1.5,
+    // ROLL_RAMP: sideways impulse is delivered over the first 0.2 s of the spin (lockstep with rot), so the car
+    // doesn't slide then roll — the shove and the barrel start together.
     // Dive recovery: when the nose is clearly down and the stick is pulling up at mid/high speed, pitch snaps
     // faster and lift can briefly exceed G_LIMIT so pull-ups catch a nosedive without changing low-speed stall.
     DIVE_RECOVER_GAM: -0.22, DIVE_RECOVER_V: 70, DIVE_RECOVER_PITCH_K: 1.8, DIVE_RECOVER_G_K: 1.45, DIVE_RECOVER_RATE: 1.15,
@@ -140,7 +142,7 @@
       z: 0, x: 0, y: 0, lane: 0, v: C.V0, vBase: C.V0, padBoost: 0, coinBoost: 0, launchV: 0,
       // sky: m = airspeed, gam = flight-path angle (rad, + = climbing), pIn = smoothed pitch input (-1 dive .. +1 climb)
       m: 0, vy: 0, vx: 0, gam: 0, pIn: 0, gLoad: 1, air: C.AIR_START, rot: 0, trick: 0, trickKind: null, trickDir: 1, trickDur: 0, lastTrickEnd: -9, stabT: 0, stabDur: 0, stabCd: 0, stabRot0: 0, stabRot1: 0,
-      cmb: { pot: 0, mult: 1, n: 0, last: null }, bank: 0, boostCd: 0, chain: 0, lastBoostT: -9, boostT: 0, rollCoast: 0, launchT: 0,
+      cmb: { pot: 0, mult: 1, n: 0, last: null }, bank: 0, boostCd: 0, chain: 0, lastBoostT: -9, boostT: 0, rollCoast: 0, rollKick: 0, rollKickGiven: 0, launchT: 0,
       obstacles: road.obstacles, pickups: road.pickups,
       sky: [], skyPickups: [], rings: [], skyChunk: 0,
       pts: { pickups: 0, tricks: 0, landing: 0, mach: 0 },
@@ -328,9 +330,22 @@
     const d = dir || 1;
     s.trickKind = kind; s.trickDir = d; s.trickDur = kind === 'roll' ? C.ROLL_T : C.FLIP_T; s.trick = s.trickDur;
     s.m = Math.max(0, s.m - C.TRICK_COST);
-    if (kind === 'roll') { s.vx = clamp(s.vx + d * C.ROLL_VX, -C.STEER_V * 2.2, C.STEER_V * 2.2); s.rollCoast = C.ROLL_COAST; }
-    else s.gam = clamp(s.gam - d * C.FLIP_GAM, C.GAM_MIN, C.GAM_MAX); // front (+1) noses down; back (-1) noses up
+    if (kind === 'roll') {
+      // Don't dump VX this frame — deliver it across ROLL_RAMP in lockstep with rot (see deliverRollKick).
+      s.rollKick = d * C.ROLL_VX; s.rollKickGiven = 0; s.rollCoast = C.ROLL_COAST + C.ROLL_RAMP;
+      s.rot = d * 1e-4; // same-frame visual kick so the first rendered frame already shows spin starting
+    } else s.gam = clamp(s.gam - d * C.FLIP_GAM, C.GAM_MIN, C.GAM_MAX); // front (+1) noses down; back (-1) noses up
     s.events.push({ e: 'trick', kind, dir: d }); return true;
+  }
+  /* Deliver the roll's sideways shove in proportion to how far the barrel has spun through ROLL_RAMP. */
+  function deliverRollKick(s) {
+    if (!s.rollKick) return;
+    const spinning = s.trick > 0 && s.trickKind === 'roll';
+    const elapsed = spinning ? (s.trickDur - s.trick) : C.ROLL_RAMP;
+    const u = clamp(elapsed / C.ROLL_RAMP, 0, 1);
+    const want = s.rollKick * u, add = want - s.rollKickGiven;
+    if (add) { s.vx = clamp(s.vx + add, -C.STEER_V * 2.2, C.STEER_V * 2.2); s.rollKickGiven = want; }
+    if (u >= 1) s.rollKick = 0;
   }
 
   const trickProgress = s => s.trick > 0 ? 1 - s.trick / s.trickDur : 0;
@@ -373,7 +388,12 @@
     const sy = input.pitch != null ? clamp(input.pitch, -1, 1) : (input.up ? 1 : 0) - (input.down ? 1 : 0);
     // Steering: snaps to the stick, except during a short post-roll coast so the sideways kick actually travels.
     s.rollCoast = Math.max(0, (s.rollCoast || 0) - dt);
-    if (s.rollCoast > 0) {
+    const ramping = s.rollKick && Math.abs(s.rollKickGiven) < Math.abs(s.rollKick) * 0.999;
+    if (ramping) {
+      // While the shove is still coupling into the spin, only allow the stick to add — don't damp the kick away.
+      const stickVx = sx * C.STEER_V;
+      if (sx && Math.sign(stickVx) === Math.sign(s.rollKick || 1) && Math.abs(stickVx) > Math.abs(s.vx)) s.vx = lerpRate(s.vx, stickVx, C.STEER_RESP, dt);
+    } else if (s.rollCoast > 0) {
       const stickVx = sx * C.STEER_V;
       if (sx && Math.sign(stickVx) === Math.sign(s.vx || 1) && Math.abs(stickVx) > Math.abs(s.vx)) s.vx = lerpRate(s.vx, stickVx, C.STEER_RESP, dt);
       else s.vx *= Math.exp(-0.55 * dt); // slow bleed, not an instant kill
@@ -414,6 +434,7 @@
       s.trick -= dt; s.rot = s.trickDir * Math.PI * 2 * (1 - Math.max(0, s.trick) / s.trickDur);
       if (s.trick <= 0) { s.rot = 0; finishTrick(s); }
     }
+    deliverRollKick(s);
     s.stabCd = Math.max(0, s.stabCd - dt);
     if (s.stabT > 0) {
       // Thrusters: unwind the spin along a smoothstep (no snap), and pull the flight path to the landing attitude.
