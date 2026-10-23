@@ -37,6 +37,21 @@ export function createCartridgeServer() {
       if (url.pathname === '/sdk/hosts.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(`window.TA_HOST_ORIGINS=${JSON.stringify(hosts)};`); return; }
       let file;
       if (url.pathname === '/sdk/bridge.js') file = resolve('packages/sdk/browser/bridge.js');
+      else if (decodeURIComponent(url.pathname).startsWith('/skrumpey-slide/v3d')) {
+        // Preview build. Live /v/1.0.0 /v/1.1.0 /v/1.2.0 routes are unchanged.
+        const rest = decodeURIComponent(url.pathname).slice('/skrumpey-slide/v3d'.length).replace(/^\//, '') || 'index.html';
+        if (rest.split('/').some(p => p.startsWith('.') || p === '..')) { res.writeHead(404); res.end(); return; }
+        const gameRoot = resolve(root, 'skrumpey-slide/v3d');
+        file = resolve(gameRoot, rest);
+        if (!file.startsWith(gameRoot + sep) || !types[extname(file)]) { res.writeHead(404); res.end(); return; }
+      }
+      else if (/^\/skrumpey-slide\/(assets|vendor)\//.test(decodeURIComponent(url.pathname)) || decodeURIComponent(url.pathname) === '/skrumpey-slide/touch-input.js') {
+        const rest = decodeURIComponent(url.pathname).slice('/skrumpey-slide/'.length);
+        if (rest.split('/').some(p => p.startsWith('.') || p === '..')) { res.writeHead(404); res.end(); return; }
+        const gameRoot = resolve(root, 'skrumpey-slide');
+        file = resolve(gameRoot, rest);
+        if (!file.startsWith(gameRoot + sep) || !types[extname(file)]) { res.writeHead(404); res.end(); return; }
+      }
       else {
         const match = /^\/([a-z0-9-]+)\/v\/(1\.0\.0|1\.1\.0|1\.2\.0)\/(.*)$/.exec(decodeURIComponent(url.pathname));
         if (!match || !/^[a-z0-9-]+$/.test(match[1])) { res.writeHead(404); res.end('Cartridge not found'); return; }

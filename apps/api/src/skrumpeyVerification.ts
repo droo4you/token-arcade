@@ -8,12 +8,15 @@ import { createSeededReplayVerifier } from "./seededReplay.ts";
  * Each rules version is replayed with its own frozen sim, so a run only ever scores against the
  * version its session was issued for, and boards (filtered by gameVersion) never mix versions.
  *  - 1.0.0: original single 230 m lane sprint (frozen copy in ./legacy).
- *  - 1.1.0: three-stage lane sprint with rising speed/density and new patterns (current cartridge sim.js).
+ *  - 1.1.0: three-stage lane sprint with rising speed/density and new patterns.
+ *  - 1.2.0: two-stage sprints with hill recovery. This is the live raid version.
+ *  - 3d.1.0: preview-only hill/lane rhythm and biome verbs. Not issued for live raids.
  */
 const SIM_SOURCES: Record<string, URL> = {
   "1.2.0": new URL("../../../cartridges/skrumpey-slide/releases/1.2.0/sim.js", import.meta.url),
   "1.0.0": new URL("./legacy/skrumpey-sim-1.0.0.js", import.meta.url),
   "1.1.0": new URL("../../../cartridges/skrumpey-slide/releases/1.1.0/sim.js", import.meta.url),
+  "3d.1.0": new URL("../../../cartridges/skrumpey-slide/v3d/sim.js", import.meta.url),
 };
 export const SKRUMPEY_CURRENT_VERSION = "1.2.0";
 export const SKRUMPEY_VERSIONS = Object.keys(SIM_SOURCES);
