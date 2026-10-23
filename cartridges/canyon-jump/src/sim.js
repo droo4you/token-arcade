@@ -32,8 +32,9 @@
     DIVE_BOOST_GAM: -0.3, DIVE_BOOST_K: 1.5,
     // Tricks feed an unbanked combo: pot × multiplier pays out only on a clean landing past the far rim.
     FLIP_T: 0.7, ROLL_T: 1.05, FLIP_PTS: 30, ROLL_PTS: 50, TRICK_CD: 0.2, TRICK_COST: 3,
-    // Tricks are nearly pitch-neutral: mid-spin the car loses at most TRICK_DIP of its lift (a tiny dip, not a nosedive).
-    TRICK_DIP: 0.12, TRICK_MIN_AGL: 8, VARIETY: 1.5,
+    // Mid-spin lift dip stays soft (never a nosedive). Front/back flips also nudge flight-path angle a little so they
+    // feel different and useful for aiming; left/right rolls kick a lateral impulse so you can dodge while spinning.
+    TRICK_DIP: 0.12, FLIP_GAM: 0.18, ROLL_VX: 10, TRICK_MIN_AGL: 8, VARIETY: 1.5,
     // Near misses: sky band = hitbox + NEAR_BAND m; road band = edge gap < NEAR_ROAD_BAND (kept under the 1.35 m that would
     // flag every rock/tumbleweed in the next lane, so it still means a real shave). MULT_MAX 2.5 keeps distance king.
     MULT_STEP: 0.5, MULT_MAX: 2.5, NEAR_POT: 40, NEAR_BAND: 6, NEAR_ROAD_BAND: 1.3, NEAR_ROAD_PTS: 50, NEAR_MULT: 0.25, RING_POT: 25, RING_MULT: 0.25, RING_V: 8, RING_R: 4.4, RING_PICK: 6, RING_FADE: 0.8, // each ring's speed kick is 80% of the last, so ring chains can't keep a flight alive forever
@@ -317,10 +318,15 @@
     return clamp(C.G_SKY * CL * (V / C.LIFT_REF) * (V / C.LIFT_REF) * stallK, -C.G_LIMIT * C.G_SKY, C.G_LIMIT * C.G_SKY);
   }
   function addCombo(s, pot, mult) { s.cmb.pot += pot; s.cmb.mult = Math.min(C.MULT_MAX, s.cmb.mult + mult); if (s.cmb.mult > s.counts.bestMult) s.counts.bestMult = s.cmb.mult; }
+  /* kind 'flip'|'roll'; dir: flip +1 = front (nose down), -1 = back (nose up); roll +1 = right, -1 = left. */
   function startTrick(s, kind, dir) {
     if (s.trick > 0 || s.stabT > 0 || s.t - s.lastTrickEnd < C.TRICK_CD || agl(s) <= C.TRICK_MIN_AGL) return false;
-    s.trickKind = kind; s.trickDir = dir || 1; s.trickDur = kind === 'roll' ? C.ROLL_T : C.FLIP_T; s.trick = s.trickDur;
-    s.m = Math.max(0, s.m - C.TRICK_COST); s.events.push({ e: 'trick', kind, dir: s.trickDir }); return true;
+    const d = dir || 1;
+    s.trickKind = kind; s.trickDir = d; s.trickDur = kind === 'roll' ? C.ROLL_T : C.FLIP_T; s.trick = s.trickDur;
+    s.m = Math.max(0, s.m - C.TRICK_COST);
+    if (kind === 'roll') s.vx = clamp(s.vx + d * C.ROLL_VX, -C.STEER_V * 1.6, C.STEER_V * 1.6);
+    else s.gam = clamp(s.gam - d * C.FLIP_GAM, C.GAM_MIN, C.GAM_MAX); // front (+1) noses down; back (-1) noses up
+    s.events.push({ e: 'trick', kind, dir: d }); return true;
   }
 
   const trickProgress = s => s.trick > 0 ? 1 - s.trick / s.trickDur : 0;
@@ -330,7 +336,7 @@
     const base = s.trickKind === 'roll' ? C.ROLL_PTS : C.FLIP_PTS, varied = s.cmb.last && s.cmb.last !== s.trickKind;
     const pts = Math.round(base * (varied ? C.VARIETY : 1));
     s.cmb.n++; s.cmb.last = s.trickKind; addCombo(s, pts, s.cmb.n > 1 ? C.MULT_STEP : 0);
-    s.lastTrickEnd = s.t; s.events.push({ e: 'landed_trick', kind: s.trickKind, pts, varied, n: s.cmb.n, mult: s.cmb.mult, pot: s.cmb.pot, via });
+    s.lastTrickEnd = s.t; s.events.push({ e: 'landed_trick', kind: s.trickKind, dir: s.trickDir, pts, varied, n: s.cmb.n, mult: s.cmb.mult, pot: s.cmb.pot, via });
   }
   /* STABILIZE: fire the cold-gas thrusters. Returns false if still cooling down. */
   function stabilize(s) {
@@ -383,7 +389,11 @@
         s.boostCd = C.BOOST_CD; s.boostT = 0.4; s.counts.boosts++; if (dive) s.counts.diveBoosts++; s.events.push({ e: 'boost', dive, chain: s.chain, n: s.air }); }
       else s.events.push({ e: 'empty' });
     }
-    if (input.trickEdge) startTrick(s, 'flip', 1);
+    if (input.rollLeftEdge) startTrick(s, 'roll', -1);
+    else if (input.rollRightEdge) startTrick(s, 'roll', 1);
+    else if (input.flipFrontEdge) startTrick(s, 'flip', 1);
+    else if (input.flipBackEdge) startTrick(s, 'flip', -1);
+    else if (input.trickEdge) startTrick(s, 'flip', input.flipDir || 1);
     else if (input.rollEdge) startTrick(s, 'roll', input.rollDir || (sx < 0 ? -1 : 1));
     if (input.stabEdge) stabilize(s);
     if (s.trick > 0) {

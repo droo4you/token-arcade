@@ -343,12 +343,17 @@ function init() {
     // car
     const onGround = s.phase === 'road' || (s.over && s.reason === 'road') || (s.over && s.reason === 'landed');
     car.group.position.set(s.x, (s.y || 0) + (onGround ? (view.bob || 0) : 0), -s.z);
-    const pitch = s.phase === 'sky' ? clamp((s.gam || 0) + (s.pIn || 0) * 0.07, -1.1, 0.9) : s.phase === 'fall' ? -0.5 : (s.phase === 'road' && s.z > C.ROAD_LEN - C.RAMP_LEN ? 0.13 : 0);
-    car.update({ spin: view.spin || 0, bank: s.bank || 0, roll: (view.roll || 0) * (s.trick > 0 || s.stabT > 0 ? 1 : 0.6), pitch, boost: Math.max(G.boostT || 0, 0), glow: G.boostT || 0 });
-    // In the sky the car flies its path: nose follows the flight-path angle (plus a little angle of attack from the
-    // stick), a barrel roll swings it round a helix around the line, a kickflip spins it in place.
-    if (s.phase === 'sky' || (s.over && s.reason !== 'road' && s.phase === 'sky')) {
-      if ((s.trick > 0 || s.stabT > 0) && s.trickKind === 'roll' && s.rot) { const a = s.rot, R = 1.3; car.group.position.x += Math.sin(a) * R * s.trickDir; car.group.position.y += (1 - Math.cos(a)) * R * 0.6; }
+    // Flight-path pitch, plus trick spin on the right axis: rolls spin around the line (z), flips tumble end-over-end (x).
+    let pitch = s.phase === 'sky' ? clamp((s.gam || 0) + (s.pIn || 0) * 0.07, -1.1, 0.9) : s.phase === 'fall' ? -0.5 : (s.phase === 'road' && s.z > C.ROAD_LEN - C.RAMP_LEN ? 0.13 : 0);
+    let rollVis = (s.bank || 0) * 0.14;
+    const spinning = (s.trick > 0 || s.stabT > 0) && s.rot;
+    if (spinning && s.trickKind === 'flip') pitch += s.rot; // front/back flip: tumble around pitch
+    else if (spinning && s.trickKind === 'roll') rollVis = s.rot; // left/right barrel: spin around roll
+    else rollVis = (view.roll || 0) * 0.6;
+    car.update({ spin: view.spin || 0, bank: s.bank || 0, roll: rollVis, pitch, boost: Math.max(G.boostT || 0, 0), glow: G.boostT || 0 });
+    // Barrel rolls ride a small helix around the flight path so left and right look distinct in the chase cam.
+    if ((s.phase === 'sky' || s.phase === 'fall') && spinning && s.trickKind === 'roll') {
+      const a = s.rot, R = 1.3; car.group.position.x += Math.sin(a) * R; car.group.position.y += (1 - Math.cos(a)) * R * 0.55;
     }
     // Measured car velocity (world units / render second): includes slow-mo and hit-stop, so gas jets stay attached.
     { const P0 = car.group.position; if (carPrev && dt > 0) { carVel.x = clamp((P0.x - carPrev.x) / dt, -200, 200); carVel.y = clamp((P0.y - carPrev.y) / dt, -200, 200); carVel.z = clamp((P0.z - carPrev.z) / dt, -260, 260); } carPrev = { x: P0.x, y: P0.y, z: P0.z }; }

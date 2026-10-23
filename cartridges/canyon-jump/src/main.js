@@ -51,10 +51,13 @@
   addEventListener('resize', resize); resize();
 
   /* ---------------- input ---------------- */
-  const held = new Set(); const edges = { left: false, right: false, boost: false, trick: false, roll: false, stab: false };
+  const held = new Set();
+  const edges = { left: false, right: false, boost: false, stab: false, rollLeft: false, rollRight: false, flipFront: false, flipBack: false };
   const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
-    // Space / Shift = STABILIZE (thrusters). Boost is Z (next to X/C) or J (next to K/L).
-    Space: 'stab', ShiftLeft: 'stab', ShiftRight: 'stab', KeyZ: 'boost', KeyJ: 'boost', KeyX: 'trick', KeyK: 'trick', KeyC: 'roll', KeyL: 'roll' };
+    // Space / Shift = STABILIZE. Z/J = boost. Four tricks: C/Q left roll, L/E right roll, X/K front flip, V/, back flip.
+    Space: 'stab', ShiftLeft: 'stab', ShiftRight: 'stab', KeyZ: 'boost', KeyJ: 'boost',
+    KeyC: 'rollLeft', KeyQ: 'rollLeft', KeyL: 'rollRight', KeyE: 'rollRight',
+    KeyX: 'flipFront', KeyK: 'flipFront', KeyV: 'flipBack', Comma: 'flipBack' };
   function onKey(e, down) {
     const a = KEYMAP[e.code];
     if (down) A.init();
@@ -69,14 +72,25 @@
   const kd = e => onKey(e, true), ku = e => onKey(e, false);
   addEventListener('keydown', kd); addEventListener('keyup', ku);
 
-  // Touch: swipe for lanes on the road; in the sky, the left side is an analog stick (up/down = pitch, sideways = steer),
-  // the right side has BOOST / FLIP / ROLL (tap the right side = boost, swipe up = kickflip, swipe sideways = barrel roll).
+  // Touch: road = lane gestures; sky = fixed bottom-left joystick (pitch/steer) + right-side action cluster
+  // (STABILIZE, 2×2 rolls/flips, BOOST). Right-side swipes still map to tricks as a fallback.
   const touches = new Map(); let stick = null; const lanes = window.CJInput.create();
-  // STABILIZE is a wide thumb pill above the boost/flip/roll cluster, on the right, well clear of the left stick.
-  const BTN = () => { const r = 12 + (G.safe?.r || 0), b = 12 + (G.safe?.b || 0); return { boost: { x: W - r - 62, y: H - b - 112, r: 52 }, trick: { x: W - r - 170, y: H - b - 52, r: 40 }, roll: { x: W - r - 168, y: H - b - 152, r: 38 },
-    stab: { x: W - r - 104, y: H - b - 238, w: 188, h: 62, pill: true } }; };
-  const inBtn = (p, k, B) => B.pill ? Math.abs(p.x - B.x) < B.w / 2 + 10 && Math.abs(p.y - B.y) < B.h / 2 + 10 : Math.hypot(p.x - B.x, p.y - B.y) < B.r * 1.25;
-  const STICK_R = 38;
+  const TRICK_KEYS = ['rollLeft', 'rollRight', 'flipFront', 'flipBack'];
+  const BTN = () => {
+    const r = 12 + (G.safe?.r || 0), b = 12 + (G.safe?.b || 0), l = 12 + (G.safe?.l || 0);
+    const tr = 34, gap = 8, cx = W - r - 168, cy = H - b - 118;
+    return {
+      boost: { x: W - r - 58, y: H - b - 108, r: 52 },
+      stab: { x: W - r - 118, y: H - b - 248, w: 200, h: 58, pill: true },
+      rollLeft: { x: cx - tr - gap / 2, y: cy - tr - gap / 2, r: tr },
+      rollRight: { x: cx + tr + gap / 2, y: cy - tr - gap / 2, r: tr },
+      flipFront: { x: cx - tr - gap / 2, y: cy + tr + gap / 2, r: tr },
+      flipBack: { x: cx + tr + gap / 2, y: cy + tr + gap / 2, r: tr },
+      stick: { x: l + 72, y: H - b - 88, r: 56 },
+    };
+  };
+  const inBtn = (p, B) => B.pill ? Math.abs(p.x - B.x) < B.w / 2 + 10 && Math.abs(p.y - B.y) < B.h / 2 + 10 : Math.hypot(p.x - B.x, p.y - B.y) < B.r * 1.25;
+  const STICK_R = 48;
   function toLogical(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
   function onDown(e) {
     A.init(); canvas.focus?.();
@@ -88,22 +102,24 @@
     if (hitBtn(p, 'pause')) { togglePause(); return; }
     const run = G.run, b = BTN();
     if (run.phase === 'sky' && G.touch) {
-      for (const k of ['stab', 'boost', 'trick', 'roll']) if (inBtn(p, k, b[k])) { edges[k] = true; G.btnFlash = { k, t: G.t }; touches.set(e.pointerId, { btn: k }); return; }
+      for (const k of ['stab', 'boost', ...TRICK_KEYS]) if (inBtn(p, b[k])) { edges[k] = true; G.btnFlash = { k, t: G.t }; touches.set(e.pointerId, { btn: k }); return; }
+      if (inBtn(p, b.stick)) { stick = e.pointerId; touches.set(e.pointerId, { x0: b.stick.x, y0: b.stick.y, x: p.x, y: p.y, t0: G.t, used: false, stick: true }); return; }
     }
-    // Road: lane gestures go through CJInput (one gesture = at most one lane change).
     touches.set(e.pointerId, { x0: p.x, y0: p.y, x: p.x, y: p.y, t0: G.t, used: false });
     if (run.phase === 'road') lanes.down(e.pointerId, p.x, p.y, G.t, W / 2);
-    if (run.phase === 'sky' && p.x < W * 0.6) stick = e.pointerId;
+    // Sky fallback: anywhere on the left half still grabs the stick (thumb can start off the pad).
+    if (run.phase === 'sky' && p.x < W * 0.45 && stick === null) stick = e.pointerId;
   }
   function onMove(e) {
     const tch = touches.get(e.pointerId); if (!tch || tch.btn) return;
     const p = toLogical(e); tch.x = p.x; tch.y = p.y;
     const run = G.run; if (!run || G.screen !== 'play') return;
     if (run.phase === 'road') { const d = lanes.move(e.pointerId, p.x, p.y); if (d) edges[d] = true; }
-    if (run.phase === 'sky' && stick !== e.pointerId && !tch.used) {
+    if (run.phase === 'sky' && stick !== e.pointerId && !tch.used && !tch.stick) {
       const dx = p.x - tch.x0, dy = tch.y0 - p.y;
-      if (dy > 45 && dy > Math.abs(dx)) { edges.trick = true; tch.used = true; }
-      else if (Math.abs(dx) > 45 && Math.abs(dx) > dy) { edges.roll = true; G.rollDir = dx > 0 ? 1 : -1; tch.used = true; }
+      if (dy > 45 && dy > Math.abs(dx)) { edges.flipFront = true; tch.used = true; }
+      else if (dy < -45 && -dy > Math.abs(dx)) { edges.flipBack = true; tch.used = true; }
+      else if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) { edges[dx > 0 ? 'rollRight' : 'rollLeft'] = true; tch.used = true; }
     }
   }
   function onUp(e) {
@@ -130,19 +146,23 @@
   }
 
   function readInput() {
-    const i = { leftEdge: edges.left, rightEdge: edges.right, boostEdge: edges.boost, trickEdge: edges.trick, rollEdge: edges.roll, stabEdge: edges.stab,
+    const i = { leftEdge: edges.left, rightEdge: edges.right, boostEdge: edges.boost, stabEdge: edges.stab,
+      rollLeftEdge: edges.rollLeft, rollRightEdge: edges.rollRight, flipFrontEdge: edges.flipFront, flipBackEdge: edges.flipBack,
       left: held.has('left'), right: held.has('right'), up: held.has('up'), down: held.has('down') };
-    if (edges.roll) i.rollDir = held.has('left') ? -1 : held.has('right') ? 1 : (G.rollDir || 1);
     for (const d of lanes.tick(G.t)) if (G.run?.phase === 'road') i[d === 'left' ? 'leftEdge' : 'rightEdge'] = true;
+    const pad = BTN().stick;
     if (stick !== null && touches.has(stick)) {
-      // Analog stick with a small dead zone: full deflection at STICK_R px. Drag up = nose up.
-      const t = touches.get(stick), dx = t.x - t.x0, dy = t.y - t.y0, dz = v => Math.abs(v) < 4 ? 0 : (v - Math.sign(v) * 4) / (STICK_R - 4);
-      i.steer = Math.max(-1, Math.min(1, dz(dx))); i.pitch = Math.max(-1, Math.min(1, -dz(dy)));
-      G.stickVis = { x0: t.x0, y0: t.y0, dx: i.steer, dy: -i.pitch };
-    }
+      const t = touches.get(stick), ox = t.stick ? pad.x : t.x0, oy = t.stick ? pad.y : t.y0;
+      const dx = t.x - ox, dy = t.y - oy, len = Math.hypot(dx, dy), lim = Math.min(len, STICK_R), ang = Math.atan2(dy, dx);
+      const kx = Math.cos(ang) * lim, ky = Math.sin(ang) * lim;
+      const dz = v => Math.abs(v) < 4 ? 0 : (v - Math.sign(v) * 4) / (STICK_R - 4);
+      i.steer = Math.max(-1, Math.min(1, dz(kx))); i.pitch = Math.max(-1, Math.min(1, -dz(ky)));
+      G.stickVis = { x0: ox, y0: oy, dx: i.steer, dy: -i.pitch, active: true };
+    } else if (G.touch && G.run?.phase === 'sky') {
+      G.stickVis = { x0: pad.x, y0: pad.y, dx: 0, dy: 0, active: false };
+    } else G.stickVis = null;
     if (AUTOPILOT && G.run) Object.assign(i, autopilot(G.run));
-    if (stick === null) G.stickVis = null;
-    edges.left = edges.right = edges.boost = edges.trick = edges.roll = edges.stab = false;
+    edges.left = edges.right = edges.boost = edges.stab = edges.rollLeft = edges.rollRight = edges.flipFront = edges.flipBack = false;
     return i;
   }
   // The sim's reference pilot (CJSim.bot) flies the standalone ?autopilot=1 preview (used for capture); never active in the arcade.
@@ -216,7 +236,8 @@
           burst(cs.x, cs.y - 6, 22, ['#ffffff', '#e8f6ff', '#c9e6ff'], 260, 0.55, -20); break;
         case 'landed_trick': A.sfx('landed_trick', ev.n - 1); G.shake = Math.max(G.shake, 9); G.hitStop = Math.max(G.hitStop, 0.06); G.slowT = Math.max(G.slowT || 0, 0.14); G.comboPulse = 1; G.fovKick = Math.max(G.fovKick, 0.5);
           if (ev.via === 'auto') break; // touchdown auto-finish: the landing banner tells it
-          popup(`${ev.kind === 'roll' ? 'BARREL ROLL' : 'KICKFLIP'} +${ev.pts}${ev.varied ? ' MIX' : ''}`, ev.kind === 'roll' ? '#ff4fd8' : '#ffd23f', true, ev.n > 1 ? `COMBO ×${fmtMult(ev.mult)}` : null);
+          const label = ev.kind === 'roll' ? (ev.dir < 0 ? 'ROLL ←' : 'ROLL →') : (ev.dir < 0 ? 'BACK FLIP' : 'FRONT FLIP');
+          popup(`${label} +${ev.pts}${ev.varied ? ' MIX' : ''}`, ev.kind === 'roll' ? '#ff4fd8' : '#ffd23f', true, ev.n > 1 ? `COMBO ×${fmtMult(ev.mult)}` : null);
           burst(cs.x, cs.y - 20, 26, ['#ffd23f', '#ff4fd8', '#5af0ff', '#fff'], 300, 0.7, 0, true); break;
         case 'crash': A.sfx('crash'); G.shake = 24; G.flash = 0.7; G.flashColor = '#ff3b5c'; G.hitStop = 0.16; G.slowT = 0.6;
           burst(cs.x, cs.y - 10, 36, ['#f4f1ee', '#a9b3cc', '#3a2a3f'], 420, 1.1);
@@ -487,7 +508,7 @@
       }
       const stall = s.m < C.V_STALL + 6 && !s.over, blink = Math.floor(G.t * 6) % 2;
       const warn = !s.over && landWarn(s);
-      const status = s.stabT > 0 ? 'STABILIZING…' : s.trick > 0 ? (s.trickKind === 'roll' ? 'BARREL ROLL…' : 'KICKFLIP…') : stall ? (blink ? 'STALL: DIVE!' : '') : s.gam > 0.05 ? '▲ CLIMBING' : s.gam < -0.05 ? '▼ DIVING' : 'LEVEL';
+      const status = s.stabT > 0 ? 'STABILIZING…' : s.trick > 0 ? (s.trickKind === 'roll' ? (s.trickDir < 0 ? 'ROLL ←…' : 'ROLL →…') : (s.trickDir < 0 ? 'BACK FLIP…' : 'FRONT FLIP…')) : stall ? (blink ? 'STALL: DIVE!' : '') : s.gam > 0.05 ? '▲ CLIMBING' : s.gam < -0.05 ? '▼ DIVING' : 'LEVEL';
       meter(mx, my, mw, 14, s.m, SPEED_MAX, C.V_STALL, '#ff7a1a', '#5af0ff', `${KMH(s.m)} km/h${s.counts.mach ? '  ·  MACH 0.5 ✓' : ''}`,
         { text: status, color: s.stabT > 0 ? '#e8f6ff' : stall ? '#ff5a78' : s.gam < -0.05 ? '#5af0ff' : '#ffd23f' }, s.counts.mach ? { ...MACH_MARK, done: true } : MACH_MARK);
       if (warn && s.stabT <= 0) { const big = warn === 'pull', wy = H * (G.portrait ? 0.42 : 0.4); ctx.globalAlpha = 0.55 + 0.45 * Math.sin(G.t * 20);
@@ -498,10 +519,12 @@
       if (!s.over) attitude(s);
       const flipReady = s.trick <= 0 && s.t - s.lastTrickEnd >= C.TRICK_CD && S.agl(s) > C.TRICK_MIN_AGL;
       if (G.touch && !s.over) {
-        const b = BTN(); btn(b.boost, s.gam <= C.DIVE_BOOST_GAM && s.air > 0 ? 'DIVE' : 'BOOST', '#5af0ff', s.air > 0 && s.boostCd <= 0, s.air > 99 ? '99+' : `${s.air}`); btn(b.trick, 'FLIP', '#ffd23f', flipReady && s.stabT <= 0); btn(b.roll, 'ROLL', '#ff4fd8', flipReady && s.stabT <= 0); stabBtn(b.stab, s);
-        if (G.stickVis) { const v = G.stickVis; ctx.globalAlpha = 0.5; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(v.x0, v.y0, STICK_R, 0, 7); ctx.stroke();
-          ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(v.x0 + v.dx * STICK_R, v.y0 + v.dy * STICK_R, 16, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
-        else if (s.t - s.launchT < 3) text('drag left side: ▲▼ pitch  ◀▶ steer', W * 0.25, H - mg().b - 70, T.body, '#fff', 'center', true, 700);
+        const b = BTN(), ready = flipReady && s.stabT <= 0;
+        btn(b.boost, s.gam <= C.DIVE_BOOST_GAM && s.air > 0 ? 'DIVE' : 'BOOST', '#5af0ff', s.air > 0 && s.boostCd <= 0, s.air > 99 ? '99+' : `${s.air}`, 'boost');
+        btn(b.rollLeft, 'ROLL←', '#ff4fd8', ready, null, 'rollLeft'); btn(b.rollRight, 'ROLL→', '#ff4fd8', ready, null, 'rollRight');
+        btn(b.flipFront, 'FLIP↓', '#ffd23f', ready, null, 'flipFront'); btn(b.flipBack, 'FLIP↑', '#ffd23f', ready, null, 'flipBack');
+        stabBtn(b.stab, s);
+        drawStick();
       }
     } else if (s.phase === 'fall') {
       text('↓', W / 2, H - 60, 40, '#ff5a78');
@@ -566,11 +589,22 @@
     ctx.globalAlpha = 1;
   }
   const clampA = g => Math.max(-1.2, Math.min(0.9, g));
-  function btn(b, label, color, on, badge) {
-    const pressed = G.btnFlash && G.btnFlash.k === label.toLowerCase().replace('flip', 'trick').replace('dive', 'boost') && G.t - G.btnFlash.t < 0.12;
+  function btn(b, label, color, on, badge, flashKey) {
+    const pressed = G.btnFlash && G.btnFlash.k === (flashKey || label.toLowerCase()) && G.t - G.btnFlash.t < 0.12;
     ctx.globalAlpha = on ? 0.95 : 0.35; ctx.fillStyle = pressed ? color : 'rgba(22,10,36,0.72)'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * (pressed ? 0.94 : 1), 0, 7); ctx.fill();
-    ctx.lineWidth = 4; ctx.strokeStyle = color; ctx.stroke(); text(label, b.x, b.y, 15, pressed ? '#1a0d26' : color, 'center', false);
+    ctx.lineWidth = 3.5; ctx.strokeStyle = color; ctx.stroke(); text(label, b.x, b.y, label.length > 5 ? 12 : 14, pressed ? '#1a0d26' : color, 'center', false);
     if (badge) { const br = badge.length > 2 ? 15 : badge.length > 1 ? 13 : 11; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(b.x + b.r * 0.7, b.y - b.r * 0.7, br, 0, 7); ctx.fill(); text(badge, b.x + b.r * 0.7, b.y - b.r * 0.7, 12, '#1a0d26', 'center', false); }
+    ctx.globalAlpha = 1;
+  }
+  /* Fixed bottom-left virtual joystick: always visible in the sky so the pitch/steer pad is obvious. */
+  function drawStick() {
+    const v = G.stickVis; if (!v) return;
+    const R = STICK_R, active = !!v.active;
+    ctx.globalAlpha = active ? 0.55 : 0.38;
+    ctx.fillStyle = 'rgba(22,10,36,0.55)'; ctx.beginPath(); ctx.arc(v.x0, v.y0, R + 10, 0, 7); ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath(); ctx.arc(v.x0, v.y0, R, 0, 7); ctx.stroke();
+    ctx.globalAlpha = active ? 0.9 : 0.55; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(v.x0 + v.dx * R, v.y0 + v.dy * R, active ? 20 : 16, 0, 7); ctx.fill();
+    ctx.globalAlpha = 0.55; text('▲▼ pitch', v.x0, v.y0 - R - 16, 11, '#fff', 'center', false, 700);
     ctx.globalAlpha = 1;
   }
   function logo(y, size) {
@@ -592,7 +626,7 @@
     const steps = [
       ['STRAIGHTAWAY', G.touch ? 'Tap or swipe left / right to change lanes. Dodge everything, grab AIR cans and speed pads.' : '← / → or A / D to change lanes. Dodge everything, grab AIR cans and speed pads.', '#ffd23f'],
       ['LAUNCH', `Hit the ramp above the CLEAR line (${KMH(C.CLEAR_V)} km/h) or you drop into the canyon.`, '#ff4fd8'],
-      ['SKY', G.touch ? 'Left side = stick: up/down pitch (dive for speed, climb for height). BOOST spends an AIR can (chain 3 fast for MACH 0.5; boosting in a dive hits harder). FLIP, ROLL build a combo. STABILIZE fires thrusters to level out: land past the far rim to cash it.' : '↑/↓ pitch: dive for speed, climb for height. ←/→ steer. Z boost (chain 3 fast for MACH 0.5), X kickflip, C barrel roll. SPACE / SHIFT stabilize to level out, then land past the far rim to cash the combo.', '#5af0ff'],
+      ['SKY', G.touch ? 'Bottom-left joystick: ▲▼ pitch, ◀▶ steer. BOOST spends AIR (chain 3 for MACH 0.5). ROLL←/→ drift sideways; FLIP↓/↑ nose down/up. STABILIZE levels out — land past the far rim to cash the combo.' : '↑/↓ pitch, ←/→ steer. Z boost. C/Q left roll, L/E right roll, X/K front flip, V/, back flip. SPACE / SHIFT stabilize, land past the far rim to cash the combo.', '#5af0ff'],
     ];
     const cw = Math.min(880, W - M.l - M.r - 8), cx = W / 2 - cw / 2, cy = ly + size * 0.88 + 28, stack = cw < 640;
     ctx.font = font(13, 600);

@@ -57,3 +57,10 @@ Run locally: `npm run dev:cartridges` from the repo root, then open `http://127.
 
 - Levels are split: one settings file per level in `src/levels/<id>.js` (level 1: `src/levels/snake-river.js`), collected by `src/levels.js`. Sky tuning lives in each level's `air` block and `CJSim.newRun(seed, level.air)` reads it (defaults to the default level).
 - Snake River `air` (soft find-the-flow): ceiling 260 m (was a global 200), sparse traffic (1-2 hazards per 80 m chunk, was up to 3), birds below 30 m, **hot air balloons** 30-200 m (low-poly, 4 colorways, slow deterministic drift, hitbox 4.2 m inside a 6 m envelope, near-misses count), satellites only 215-252 m at 10% per chunk. No jets on level 1.
+
+## Phase 9 (mobile controls + four tricks)
+
+- Fixed bottom-left virtual joystick (base + knob) for pitch/steer in the sky.
+- Four trick buttons under STABILIZE, left of BOOST: ROLL← / ROLL→ / FLIP↓ (front) / FLIP↑ (back).
+- Rolls impart `ROLL_VX` (10 m/s) lateral impulse; front/back flips nudge `FLIP_GAM` (0.18 rad) nose down/up. Mid-spin `TRICK_DIP` stays 0.12. Combo still treats both rolls as `roll` and both flips as `flip` for variety.
+- Desktop: C/Q left roll, L/E right roll, X/K front flip, V/, back flip; Z/J boost; Space/Shift stabilize.

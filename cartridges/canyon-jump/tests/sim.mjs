@@ -135,11 +135,28 @@ test('landing mid-trick or in a steep dive crashes and loses the combo', () => {
   assert.equal(d.reason, 'botched'); assert.ok(d.landGam < -C.LAND_MAX_DIVE); assert.equal(S.score(d).tricks, 0);
 });
 
-test('tricks are nearly pitch-neutral: a flip or roll costs a tiny dip, never a nosedive', () => {
-  const run = (k) => { const s = launchAt(105); s.y = 100; s.gam = 0; s.m = 100; if (k) S.step(s, { [k]: true }); for (let i = 0; i < 140; i++) S.step(s, {}); return s; };
-  const base = run(null);
-  for (const k of ['trickEdge', 'rollEdge']) { const t = run(k); const dy = base.y - t.y;
-    assert.ok(dy > 0.05 && dy < 1.5, `${k} dip ${dy.toFixed(2)} m`); assert.ok(base.gam - t.gam < 0.05, `${k} nose drop ${(base.gam - t.gam).toFixed(3)} rad`); }
+test('rolls stay soft on pitch; front/back flips nudge the nose; left/right rolls kick laterally', () => {
+  // Mid-spin TRICK_DIP still costs a tiny altitude dip for rolls (no flight-path kick).
+  const roll = launchAt(105); roll.y = 100; roll.gam = 0; roll.m = 100; roll.vx = 0; roll.x = 0;
+  const base = launchAt(105); base.y = 100; base.gam = 0; base.m = 100;
+  for (let i = 0; i < 140; i++) S.step(base, {});
+  S.step(roll, { rollLeftEdge: true }); assert.equal(roll.trickKind, 'roll'); assert.equal(roll.trickDir, -1);
+  assert.ok(roll.vx < -C.ROLL_VX * 0.9, `left roll vx ${roll.vx}`);
+  for (let i = 0; i < 140; i++) S.step(roll, {});
+  assert.ok(base.y - roll.y > 0.05 && base.y - roll.y < 1.5, `roll altitude dip ${(base.y - roll.y).toFixed(2)}`);
+  assert.ok(Math.abs(base.gam - roll.gam) < 0.08, `roll should not shove gam ${(base.gam - roll.gam).toFixed(3)}`);
+
+  const right = launchAt(105); right.y = 100; right.gam = 0; right.m = 100; right.vx = 0;
+  S.step(right, { rollRightEdge: true }); assert.ok(right.vx > C.ROLL_VX * 0.9);
+
+  const front = launchAt(105); front.y = 100; front.gam = 0; front.m = 100;
+  S.step(front, { flipFrontEdge: true }); assert.equal(front.trickKind, 'flip'); assert.equal(front.trickDir, 1);
+  assert.ok(front.gam < -C.FLIP_GAM * 0.9 && front.gam > -C.FLIP_GAM - 0.05, `front flip gam ${front.gam}`);
+  assert.ok(front.gam > -0.5, 'front flip must not nosedive past the soft FLIP_GAM nudge');
+
+  const back = launchAt(105); back.y = 100; back.gam = 0; back.m = 100;
+  S.step(back, { flipBackEdge: true }); assert.equal(back.trickDir, -1);
+  assert.ok(back.gam > C.FLIP_GAM * 0.9, `back flip gam ${back.gam}`);
 });
 
 test('rings give speed and combo; risky rewards hug hazards but never overlap a hitbox anywhere they sway', () => {
