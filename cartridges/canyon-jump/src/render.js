@@ -4,11 +4,12 @@
   'use strict';
   const S = root.CJSim, C = S.C;
   const SEG = 6, DRAW_DIST = 720, ROAD_HALF = C.LANE_W * 1.5 + 1.3, CANYON_DEPTH = C.CANYON_DEPTH;
+  // 2D fallback palette matches level 1 (Snake River / Twin Falls): cool daylight, basalt walls, sage flats.
   const PAL = {
-    skyTop: '#1b0f3b', skyMid: '#5b1f6e', skyLow: '#e0475f', skyHorizon: '#ffa24a', sun1: '#fff1a8', sun2: '#ff5a78',
-    mesaFar: '#8a3a6e', mesaMid: '#6a2a5c', mesaNear: '#47204a',
-    sandA: '#e3925a', sandB: '#d98450', road: '#3a2a3f', roadB: '#35263a', lane: '#ffe9c4', rumbleA: '#ff3b5c', rumbleB: '#fff4e0',
-    canyon: ['#b2463a', '#8f3330', '#c4593f', '#7a2a2c', '#5d2028', '#3f1520'], river: '#2fc4c9',
+    skyTop: '#1a3a6e', skyMid: '#5a8ab8', skyLow: '#a8c0d8', skyHorizon: '#c8d8e8', sun1: '#fff6d8', sun2: '#ffd59a',
+    mesaFar: '#4a5058', mesaMid: '#3a3e46', mesaNear: '#2e3238',
+    sandA: '#9a9a78', sandB: '#8a8a6a', road: '#2a2c30', roadB: '#24262a', lane: '#e8e4d4', rumbleA: '#ff3b5c', rumbleB: '#fff4e0',
+    canyon: ['#6a7078', '#4a5058', '#3a3e46', '#5a6068', '#2e3238', '#1e2228'], river: '#1a6a78',
   };
   const hash = (n) => { n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
   const lerp = (a, b, t) => a + (b - a) * t;

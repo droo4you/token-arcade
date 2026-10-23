@@ -440,7 +440,7 @@ test('rewards: magnet pulls a safe ring onto a modest miss; Mach bonus is big bu
 });
 
 test('level 1 air: settings come from the level file; balloons are the main hazard, satellites rare and only near the ceiling', () => {
-  const L = require('../src/levels.js'), air = L.get('red-rock').air;
+  const L = require('../src/levels.js'), air = L.get('snake-river').air;
   assert.equal(S.newRun(1).cfg, air, 'newRun reads the default level file');
   assert.ok(air.ceil > 200, 'ceiling raised');
   let n = { balloon: 0, satellite: 0, bird: 0, plane: 0 }, chunks = 0;

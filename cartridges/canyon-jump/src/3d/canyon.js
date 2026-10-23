@@ -219,6 +219,22 @@ export function buildCanyon(level, S, terrainHeight) {
   const fr = floorAndRiver(level, S, group, seed);
   const ramp = buildRamp(C, S); group.add(ramp.group);
   const land = landingZone(level, S); group.add(land.group);
+  if (level.canyon.plaque) {
+    const pl = level.canyon.plaque, side = pl.side || -1, z = C.ROAD_LEN + (pl.zOff || -24);
+    const tex = canvasTex(512, 256, (g, w, h) => {
+      g.fillStyle = '#2a2c30'; g.fillRect(0, 0, w, h);
+      g.strokeStyle = '#c8b070'; g.lineWidth = 10; g.strokeRect(12, 12, w - 24, h - 24);
+      g.fillStyle = '#e8d8a8'; g.font = '700 48px "Trebuchet MS", system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(pl.text || 'SKYCYCLE', w / 2, h * 0.42);
+      g.font = '600 32px "Trebuchet MS", system-ui, sans-serif'; g.fillStyle = '#a8b0b8';
+      g.fillText(pl.sub || '', w / 2, h * 0.72);
+    }, { aniso: 4 });
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.6), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55, metalness: 0.15, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.04 }));
+    face.position.set(side * 9.2, 1.1, -z); face.rotation.y = side > 0 ? -0.2 : 0.2; group.add(face);
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), new THREE.MeshStandardMaterial({ color: '#3a3a36', metalness: 0.4, roughness: 0.5 }));
+    post.position.set(side * 9.2, 0.55, -z); post.castShadow = true; group.add(post);
+  }
+
   return {
     group,
     update(t) {

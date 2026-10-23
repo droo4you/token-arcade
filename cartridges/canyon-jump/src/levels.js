@@ -4,16 +4,16 @@
    palette, terrain and canyon geometry params, and which model skins the sim's obstacle types use.
    The 3D renderer (src/3d/) builds the whole world from one of these objects.
 
-   Phase 1: one level (red-rock). The sim still runs on its frozen constants (CJSim.C), so a level's
+   Level 1: snake-river (Twin Falls). Grand Canyon and a bigger jump come later. The sim still runs on its frozen constants (CJSim.C), so a level's
    `sim` block must match them; tests/levels.mjs enforces that. Phase 2 threads `sim` into
    CJSim.newRun(seed, level) so each canyon can have its own gap width and clear speed. */
 (function (root) {
   'use strict';
 
   // Each level lives in its own settings file under src/levels/ (loaded by a <script> before this one in the browser).
-  const DEFS = typeof module === 'object' && module.exports ? { 'red-rock': require('./levels/red-rock.js') } : (root.CJLevelDefs || {});
-  const RED_ROCK = DEFS['red-rock'];
-  const LEVELS = [RED_ROCK];
+  const DEFS = typeof module === 'object' && module.exports ? { 'snake-river': require('./levels/snake-river.js') } : (root.CJLevelDefs || {});
+  const SNAKE = DEFS['snake-river'];
+  const LEVELS = [SNAKE];
   const HEX = /^#[0-9a-f]{6}$/i;
 
   /* Returns a list of problems (empty when the level is usable). */
@@ -68,7 +68,7 @@
   function simMismatches(L, C) { return Object.keys(L.sim).filter(k => C[k] !== L.sim[k]); }
   function get(id) { return LEVELS.find(l => l.id === id) || LEVELS[0]; }
 
-  const api = { LEVELS, DEFAULT: RED_ROCK.id, get, validate, simMismatches };
+  const api = { LEVELS, DEFAULT: SNAKE.id, get, validate, simMismatches };
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CJLevels = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

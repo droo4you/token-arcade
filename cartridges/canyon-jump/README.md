@@ -37,7 +37,7 @@ A level is one plain object; the 3D world is built entirely from it, so a new ca
 | `obstacles` / `skyObjects` | sim obstacle type -> model skin (`saguaro`, `sandstone`, `tumbleweed`, `cone`, `crow`, `jet`, `sat`) |
 | `pickups`, `car` | glow colors for coins / AIR / pads, paint color |
 
-`CJLevels.validate(level)` returns a list of problems; `tests/levels.mjs` validates every level. Phase 1 ships one level (`red-rock`). The sim still runs on its frozen constants, so a level's `sim` block must equal `CJSim.C` (the test enforces it); phase 2 passes `level.sim` into `CJSim.newRun(seed, level)` so each canyon can have its own gap and clear speed.
+`CJLevels.validate(level)` returns a list of problems; `tests/levels.mjs` validates every level. Level 1 is `snake-river` (Twin Falls / Evel Knievel gap). Grand Canyon is planned as level 2. The sim still runs on its frozen constants, so a level's `sim` block must equal `CJSim.C` (the test enforces it); phase 2 passes `level.sim` into `CJSim.newRun(seed, level)` so each canyon can have its own gap and clear speed.
 - `src/main.js`: input, camera (2D path), HUD overlay canvas on top of the WebGL canvas, screens, Token Arcade bridge (Free Play only; Passport/Raid mounts are refused).
 
 Run locally: `npm run dev:cartridges` from the repo root, then open `http://127.0.0.1:8788/canyon-jump/v/1.0.0/index.html` (standalone) — `?autopilot=1&seed=3` plays itself for previews. Tests: `cartridges/canyon-jump/tests/*.mjs`, part of `npm test` (includes a search over every lane choice with the real sim proving a passable path exists on 60 seeds, and a flight-balance check).
@@ -55,5 +55,5 @@ Run locally: `npm run dev:cartridges` from the repo root, then open `http://127.
 
 ## Phase 8 (level 1 = find the flow)
 
-- Levels are split: one settings file per level in `src/levels/<id>.js` (level 1: `src/levels/red-rock.js`), collected by `src/levels.js`. Sky tuning lives in each level's `air` block and `CJSim.newRun(seed, level.air)` reads it (defaults to the default level).
-- Red Rock `air`: ceiling 260 m (was a global 200), sparse traffic (1-2 hazards per 80 m chunk, was up to 3), birds below 30 m, **hot air balloons** 30-200 m (low-poly, 4 colorways, slow deterministic drift, hitbox 4.2 m inside a 6 m envelope, near-misses count), satellites only 215-252 m at 10% per chunk. No jets on level 1.
+- Levels are split: one settings file per level in `src/levels/<id>.js` (level 1: `src/levels/snake-river.js`), collected by `src/levels.js`. Sky tuning lives in each level's `air` block and `CJSim.newRun(seed, level.air)` reads it (defaults to the default level).
+- Snake River `air` (soft find-the-flow): ceiling 260 m (was a global 200), sparse traffic (1-2 hazards per 80 m chunk, was up to 3), birds below 30 m, **hot air balloons** 30-200 m (low-poly, 4 colorways, slow deterministic drift, hitbox 4.2 m inside a 6 m envelope, near-misses count), satellites only 215-252 m at 10% per chunk. No jets on level 1.

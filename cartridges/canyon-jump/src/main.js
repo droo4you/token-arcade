@@ -586,13 +586,15 @@
   function drawTitle() {
     const M = mg(), narrow = W < 700, size = Math.min(78, (W - 40) / 7.2), ly = M.t + (G.portrait ? H * 0.1 : H * 0.15);
     logo(ly, size);
-    text('floor it.  send it.  stick it.', W / 2, ly + size * 0.68, T.body + 2, '#fff4e0', 'center', true, 700);
+    const lvl = (window.CJLevels && window.CJLevels.get(window.CJLevels.DEFAULT)) || null;
+    text(lvl ? `${lvl.name.toUpperCase()}  ·  ${lvl.tagline}` : 'floor it.  send it.  stick it.', W / 2, ly + size * 0.62, T.body + 1, '#c8d8e8', 'center', true, 700);
+    text('floor it.  send it.  stick it.', W / 2, ly + size * 0.88, T.body + 2, '#fff4e0', 'center', true, 700);
     const steps = [
       ['STRAIGHTAWAY', G.touch ? 'Tap or swipe left / right to change lanes. Dodge everything, grab AIR cans and speed pads.' : '← / → or A / D to change lanes. Dodge everything, grab AIR cans and speed pads.', '#ffd23f'],
       ['LAUNCH', `Hit the ramp above the CLEAR line (${KMH(C.CLEAR_V)} km/h) or you drop into the canyon.`, '#ff4fd8'],
       ['SKY', G.touch ? 'Left side = stick: up/down pitch (dive for speed, climb for height). BOOST spends an AIR can (chain 3 fast for MACH 0.5; boosting in a dive hits harder). FLIP, ROLL build a combo. STABILIZE fires thrusters to level out: land past the far rim to cash it.' : '↑/↓ pitch: dive for speed, climb for height. ←/→ steer. Z boost (chain 3 fast for MACH 0.5), X kickflip, C barrel roll. SPACE / SHIFT stabilize to level out, then land past the far rim to cash the combo.', '#5af0ff'],
     ];
-    const cw = Math.min(880, W - M.l - M.r - 8), cx = W / 2 - cw / 2, cy = ly + size * 0.68 + 30, stack = cw < 640;
+    const cw = Math.min(880, W - M.l - M.r - 8), cx = W / 2 - cw / 2, cy = ly + size * 0.88 + 28, stack = cw < 640;
     ctx.font = font(13, 600);
     const lines = str => { const out = []; let line = ''; const maxW = stack ? cw - 36 : cw / 3 - 34; for (const w of str.split(' ')) { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; } if (line) out.push(line); return out; };
     const blocks = steps.map(st => lines(st[1]));
