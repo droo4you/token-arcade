@@ -150,7 +150,11 @@ test("phone hold survives a dropped pointer capture and still hops in a lane", (
   lane = true;
   canvas.emit("pointerdown", { pointerId: 3, clientX: 180, clientY: 400 });
   target.emit("pointermove", { pointerId: 3, clientX: 80, clientY: 404 });
-  assert.deepEqual(lanes, [4]);
+  assert.deepEqual(lanes, [8], "swipe left steps toward screen-left in the chase view");
+  target.emit("pointerup", { pointerId: 3, clientX: 70, clientY: 404 });
+  canvas.emit("pointerdown", { pointerId: 6, clientX: 180, clientY: 400 });
+  target.emit("pointermove", { pointerId: 6, clientX: 280, clientY: 404 });
+  assert.deepEqual(lanes, [8, 4], "swipe right steps toward screen-right");
   assert.equal(input.isHeld(), false);
   target.emit("pointerup", { pointerId: 3, clientX: 70, clientY: 404 });
   assert.deepEqual(jumps, []);

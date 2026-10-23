@@ -35,7 +35,7 @@ Hooks: `?seed=1&bot=1&auto=1&mute=1&speed=4`. Hold to dive, release to fly. On a
 
 The run swaps, it does not pick a winner:
 
-1. Meadow hills — classic dive / fly on a ribbon with width. Side-view camera, the hill in profile. On a tall phone the view opens wide enough that Skrumpey and the next slope stay on screen. Hold widens the FOV and tucks in; release floats back.
+1. Meadow hills — classic dive / fly on a ribbon with width. Side-view camera, the hill in profile. On a tall phone it sits back and a little behind the crest so the next slopes stay readable, with Skrumpey left of center. Hold widens the FOV and tucks in; release floats back.
 2. Three-stage, three-lane sprint (the 1.1.0 length: hurdles, corridors, slaloms, splits). The camera eases around to a third-person view behind and above so lane changes and hops read. It eases back to the side view when the hills return.
 3. Dunes — a steep hill. A bad landing keeps 55% speed instead of 80%.
 4. Lane sprint.

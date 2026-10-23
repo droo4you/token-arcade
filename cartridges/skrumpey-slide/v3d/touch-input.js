@@ -30,7 +30,8 @@
       const dx=e.clientX-p.x,dy=e.clientY-p.y;
       if(Math.hypot(dx,dy)<28)return;
       p.moved=true;
-      if(isPlaying() && p.lane && isLane() && Math.abs(dx)>Math.abs(dy))onLane(dx<0?4:8);
+      // Chase camera: screen-left is +lat (bit 8). Bit 4 steps the other way.
+      if(isPlaying() && p.lane && isLane() && Math.abs(dx)>Math.abs(dy))onLane(dx<0?8:4);
     },opts);
     eventTarget.addEventListener('pointerup',end);
     eventTarget.addEventListener('pointercancel',end);

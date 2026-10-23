@@ -676,7 +676,7 @@ function updateControlStrip(){
 }
 function resetInput(){diveKeys.clear();held=false;jumpQueued=false;laneQ=0;touchInput.reset();}
 addEventListener('blur',resetInput);document.addEventListener('visibilitychange',()=>{if(document.hidden)resetInput();});
-addEventListener('keydown',e=>{if(state==='play'&&!e.repeat){if(e.code==='ArrowLeft'||e.code==='KeyA')laneQ|=4;if(e.code==='ArrowRight'||e.code==='KeyD')laneQ|=8;}if(e.code==='KeyN')toggleMusic();if(CONFIG.jumpKeys.includes(e.code)){ac();if(!e.repeat&&state==='play')jumpQueued=true;e.preventDefault();}if(DIVE_KEYS.includes(e.code)){ac();diveKeys.add(e.code);held=true;e.preventDefault();}if(e.code==='KeyM'&&!e.repeat)toggleMusic();});addEventListener('keyup',e=>{if(DIVE_KEYS.includes(e.code)){diveKeys.delete(e.code);held=diveKeys.size>0;}});
+addEventListener('keydown',e=>{if(state==='play'&&!e.repeat){if(e.code==='ArrowLeft'||e.code==='KeyA')laneQ|=8;if(e.code==='ArrowRight'||e.code==='KeyD')laneQ|=4;}if(e.code==='KeyN')toggleMusic();if(CONFIG.jumpKeys.includes(e.code)){ac();if(!e.repeat&&state==='play')jumpQueued=true;e.preventDefault();}if(DIVE_KEYS.includes(e.code)){ac();diveKeys.add(e.code);held=true;e.preventDefault();}if(e.code==='KeyM'&&!e.repeat)toggleMusic();});addEventListener('keyup',e=>{if(DIVE_KEYS.includes(e.code)){diveKeys.delete(e.code);held=diveKeys.size>0;}});
 document.addEventListener('click',()=>ac(),{once:true});
 $('musicBtn').addEventListener('click',e=>{e.stopPropagation();toggleMusic();});
 
@@ -777,7 +777,7 @@ function perfSample(dt){if(FIXED_Q)return;pfSum+=dt;pfN++;pfT+=dt;if(pfT<1)retur
 if(params.has('quality')){curPR=+params.get('quality');renderer.setPixelRatio(curPR);}
 // ---------- frame ----------
 const tmpC=new THREE.Color(),tmpC2=new THREE.Color(),nightTop=C(CONFIG.night.skyTop),nightBot=C(CONFIG.night.skyBottom),nightFog=C(CONFIG.night.fog);
-const trailC=new THREE.Color();let prevX=0,prevY=0;const _cp=new THREE.Vector3(),_cl=new THREE.Vector3(),camL=new THREE.Vector3(),_sideP=new THREE.Vector3(),_sideL=new THREE.Vector3(),_chaseP=new THREE.Vector3(),_chaseL=new THREE.Vector3();let launchB=1,laneB=0,eLane=0,camMix=0,camBehind=0,camSide=0,camK=0;let camDist=18,camY=0,camX=0,tilt=0,squash=1,lastShotT=-1;
+const trailC=new THREE.Color();let prevX=0,prevY=0;const _cp=new THREE.Vector3(),_cl=new THREE.Vector3(),camL=new THREE.Vector3(),_sideP=new THREE.Vector3(),_sideL=new THREE.Vector3(),_chaseP=new THREE.Vector3(),_chaseL=new THREE.Vector3(),_ndc=new THREE.Vector3(),_ahead=new THREE.Vector3(),_sunA=new THREE.Vector3(),_sunB=new THREE.Vector3();let launchB=1,laneB=0,eLane=0,camMix=0,camBehind=0,camSide=0,camK=0;let camDist=18,camY=0,camX=0,tilt=0,squash=1,lastShotT=-1;
 let speedFlash=0,fovNow=54,camReady=false,gorgeA=0,diveA=0,glideA=0;
 const speedGrp=new THREE.Group();const speedMats=[];
 for(let i=0;i<28;i++){const mat=new THREE.MeshBasicMaterial({color:i%3?0xfff3c4:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});const mesh=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.12,2.8+((i*13)%9)*0.35),mat);mesh.position.set(((i%7)-3)*0.72,((i%5)-2)*0.55,-3.2-(i%8)*1.15);speedGrp.add(mesh);speedMats.push(mat);}
@@ -847,13 +847,15 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
  const k=camMix*camMix*(3-2*camMix);
  const phone=MOBILE&&camera.aspect<1;
  const fcam=pathFrame(x);
- // Stay outside shoulder props (they sit near ±17). On a tall phone a pure narrow side
- // view pushes the character off the short axis, so the portrait side view is wider and
- // looks at the body, with the next slope still ahead of them.
- const sideDist=Math.max(phone?18:24,(phone?20:26)+glideA*2.2+gorgeA*(phone?5:10)+launchB*1.6-diveA*(phone?1:2.2));
- const sideUp=(phone?3.4:6.4)+glideA*1.3+gorgeA*3.2+launchB*0.6-diveA*0.5;
- const lookAhead=(phone?3.2:9)+gorgeA*(phone?5:12)-diveA*1.2;
- _sideP.set(fcam.cx-fcam.rx*sideDist, y+sideUp, fcam.cz-fcam.rz*sideDist);
+ // Shoulder props sit near ±17 and the near ridge is at ±38, so the side camera
+ // stays in that gap. A pure side offset plus a very wide lens turned the slope
+ // into a thin strip. Sitting a little behind the crest, level with it, puts
+ // Skrumpey left of center and the next hills ahead of him.
+ const sideDist=Math.min(36,(phone?30:32)+glideA*1.2+gorgeA*(phone?2:6)+launchB*0.3-diveA*0.6);
+ const sideBehind=(phone?4:5)+gorgeA*(phone?6:10)+glideA*1.5-diveA*0.5;
+ const sideUp=(phone?4:5.4)+glideA*2.2+gorgeA*4.5-diveA*0.3;
+ const lookAhead=(phone?11:16)+gorgeA*(phone?8:12)-diveA*1.5;
+ _sideP.set(fcam.cx-fcam.rx*sideDist-fcam.tx*sideBehind, y+sideUp, fcam.cz-fcam.rz*sideDist-fcam.tz*sideBehind);
  worldXYZ(x+lookAhead, y+1.6, 0, _sideL);
  const chaseBack=phone?10.2:12.6, chaseUp=phone?4.8:5.8, chaseAhead=phone?14:17;
  _chaseP.set(fcam.cx-fcam.tx*chaseBack+fcam.rx*lat*0.42, y+chaseUp, fcam.cz-fcam.tz*chaseBack+fcam.rz*lat*0.42);
@@ -861,14 +863,19 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
  _cp.lerpVectors(_sideP,_chaseP,k);
  _cl.lerpVectors(_sideL,_chaseL,k);
  const fovSide=phone
-  ? THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(30))/Math.max(0.42,camera.aspect)))*(1+diveA*0.08+gorgeA*0.06)
-  : 44+diveA*14-glideA*3+gorgeA*8+launchB*2;
+  ? THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(38+diveA*2+gorgeA*3))/Math.max(0.42,camera.aspect)))
+  : 50+diveA*6-glideA*2+gorgeA*6+launchB*1;
  let fovTarget=fovSide*(1-k)+(phone?56:50)*k;
  shake*=Math.pow(0.002,dtR);_cp.x+=(Math.random()-.5)*shake;_cp.y+=(Math.random()-.5)*shake;
  // The hill/lane blend is already eased by camMix. Extra position lag slid the side camera backward and spoiled the profile.
- camReady=true;camera.position.copy(_cp);camL.copy(_cl);camera.lookAt(camL);
+ camReady=true;camera.position.copy(_cp);
  fovNow+=(fovTarget-fovNow)*Math.min(1,dtR*5);
  const aspect=Math.max(0.35,camera.aspect);camera.fov=fovNow*(aspect<1?Math.min(MOBILE?1.05:1.35,(MOBILE?1.05:0.9)/aspect):1);camera.updateProjectionMatrix();
+ // Settled hill and lane views already frame him. Mid-blend, the lerp can park
+ // him past the short edge for a few frames; aim back only when that happens.
+ const tanH=Math.tan(THREE.MathUtils.degToRad(camera.fov)*0.5)*aspect;
+ for(let n=0;n<2;n++){camera.lookAt(_cl);camera.updateMatrixWorld();_ndc.copy(player.position).project(camera);if(_ndc.z<-1||_ndc.z>1)break;const err=_ndc.x-Math.max(-0.62,Math.min(0.88,_ndc.x));if(Math.abs(err)<0.03)break;const e=camera.matrixWorld.elements,dist=Math.max(6,camera.position.distanceTo(_cl)),shift=err*dist*tanH;_cl.x+=e[0]*shift;_cl.y+=e[1]*shift;_cl.z+=e[2]*shift;}
+ camL.copy(_cl);camera.lookAt(camL);
  const relX=camera.position.x-player.position.x,relZ=camera.position.z-player.position.z;
  camBehind=-(relX*fcam.tx+relZ*fcam.tz);camSide=relX*fcam.rx+relZ*fcam.rz;camK=k;
  camX=camera.position.x;camY=camera.position.y;camDist=sideDist*(1-k)+chaseBack*k;
@@ -881,7 +888,7 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
  biomeBlend(x,'skyTop',tmpC).lerp(nightTop,night*0.85);skyU.top.value.copy(tmpC);
  biomeBlend(x,'skyBottom',tmpC2).lerp(nightBot,night*0.85);tmpC2.lerp(C('#ff7a3c'),sunset*0.55*(1-night));skyU.bottom.value.copy(tmpC2);
  biomeBlend(x,'fog',scene.fog.color).lerp(nightFog,night*0.85);scene.fog.color.lerp(C('#ffb07a'),sunset*0.35*(1-night));
- scene.fog.near=22+eLane*8;scene.fog.far=150+eLane*20+(1-eLane)*70;
+ scene.fog.near=46+(28-46)*eLane;scene.fog.far=320+(180-320)*eLane;
  const crystal=SIM.BIOMES[bi]==='crystal';starsMat.opacity=Math.max(night,crystal?0.85:0);
  sunL.intensity=(0.55+1.9*f)*(crystal?0.55:1);hemi.intensity=0.85+0.55*f;
  biomeBlend(x,'sun',sunL.color);sunL.color.lerp(C('#ff8a3a'),sunset*0.65);sunL.color.lerp(nightTop,night*0.45);
@@ -890,7 +897,14 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
  const sunF=pathFrame(x+90);const sunElev=4+f*42-sunset*10;
  sunL.position.set(sunF.cx+sunF.rx*26,y+sunElev+30,sunF.cz+sunF.rz*10);sunL.target.position.copy(player.position);
  sky.position.copy(camera.position);starPts.position.copy(camera.position);
- sunDisc.position.set(sunF.cx+sunF.rx*40,y+sunElev,sunF.cz-40);sunGlow.position.copy(sunDisc.position);sunDisc.lookAt(camera.position);
+ // The disc sits on the far shoulder. A side camera looks straight at it, and the
+ // glow (hundreds of units across) was washing out the next hills. Park it behind
+ // that camera until the chase view, where the old placement still reads.
+ const sunHide=pathFrame(x-12);
+ _sunA.set(sunHide.cx-sunHide.rx*150,y+sunElev+48,sunHide.cz-sunHide.rz*150);
+ _sunB.set(sunF.cx+sunF.rx*40,y+sunElev,sunF.cz-40);
+ sunDisc.position.lerpVectors(_sunA,_sunB,k);sunGlow.position.copy(sunDisc.position);sunDisc.lookAt(camera.position);
+ sunGlow.scale.setScalar(70+190*k);
  sunDisc.material.color.setHSL(0.07+f*0.05,1,0.55+0.2*f);sunDisc.visible=sunGlow.visible=!crystal||sunset>0.2;
  const skyF=pathFrame(x+40);cloudLayer.position.set(skyF.cx,y+28+Math.sin(t*0.0004)*4,skyF.cz);cloudLayer.visible=night<0.85;
  const verbEl=$('verb');if(verbEl){const name=S.inLane?'LANES · '+ (CONFIG.laneThemes[SIM.BIOMES[W.biomeAt(x)]]||'SPRINT'):S.nimbus?(pressingCam?'NIMBUS · DIVE-BOMB':'NIMBUS · FLOAT'):({meadow:'MEADOW · DIVE / FLY',dunes:'DUNES · SOFT SAND',crystal:'CRYSTAL · LONG AIR',clouds:'CLOUD ISLES'})[SIM.BIOMES[bi]];if(verbEl.textContent!==name)verbEl.textContent=name;}
@@ -905,7 +919,7 @@ frameId=requestAnimationFrame(t=>{last=t;frame(t);});
 // test/debug hooks (not used by gameplay)
 if(!hosted) window.GAME={CONFIG,start,get state(){return state},get sim(){return S},setBot:v=>bot=v,select:id=>document.querySelector(`#grid button[data-id="${id}"]`).click(),
  resume:()=>{window.PAUSED=null;},give:p=>{S.power=p;S.powerT=p==='star'?SIM.P.starTicks:SIM.P.beamTicks;},mute:v=>muted=v,
- get cam(){return {x:+camera.position.x.toFixed(2),y:+camera.position.y.toFixed(2),z:+camera.position.z.toFixed(2),fov:+camera.fov.toFixed(1),lx:+camL.x.toFixed(2),ly:+camL.y.toFixed(2),lz:+camL.z.toFixed(2),mode:camK<0.35?'side':camK>0.65?'chase':'blend',mix:+camK.toFixed(2),behind:+camBehind.toFixed(1),side:+camSide.toFixed(1)};},
+ get cam(){_ndc.copy(player.position).project(camera);const px=_ndc.x,py=_ndc.y;if(S&&W)worldXYZ(S.x+80,W.h(S.x+80)+1.2,0,_ahead);else _ahead.copy(player.position);_ahead.project(camera);return {x:+camera.position.x.toFixed(2),y:+camera.position.y.toFixed(2),z:+camera.position.z.toFixed(2),fov:+camera.fov.toFixed(1),lx:+camL.x.toFixed(2),ly:+camL.y.toFixed(2),lz:+camL.z.toFixed(2),mode:camK<0.35?'side':camK>0.65?'chase':'blend',mix:+camK.toFixed(2),behind:+camBehind.toFixed(1),side:+camSide.toFixed(1),px:+px.toFixed(2),py:+py.toFixed(2),ax:+_ahead.x.toFixed(2),ay:+_ahead.y.toFixed(2)};},
  mobile:MOBILE,touch:touchInput};
 if(params.get('auto')==='1')setTimeout(()=>start(params.get('mode')==='ranked'?'ranked':'free'),300);
 
