@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { test } from "node:test";
@@ -125,6 +126,43 @@ test("a 3d.1.0 replay verifies on its own version and cannot score a live sessio
   assert.match((await v.verify({ ...cfg, gameVersion: "1.2.0" } as GameRunConfig, { ...res, gameVersion: "1.2.0" } as GameRunResult)).reason!, /rules 3d\.1\.0/);
 });
 
+test("phone hold survives a dropped pointer capture and still hops in a lane", () => {
+  const require = createRequire(import.meta.url);
+  const { create } = require("../../../cartridges/skrumpey-slide/v3d/touch-input.js") as { create: Function };
+  const el = () => {
+    const ls = new Map<string, Function[]>();
+    return { addEventListener(type: string, fn: Function) { const list = ls.get(type) || []; list.push(fn); ls.set(type, list); },
+      emit(type: string, e: Record<string, unknown>) { for (const fn of ls.get(type) || []) fn({ preventDefault() {}, cancelable: true, pointerType: "touch", button: 0, currentTarget: this, ...e }); },
+      setPointerCapture() { throw new Error("mouse only"); } };
+  };
+  const canvas = el(), dive = el(), jump = el(), target = el();
+  let playing = true, lane = false; const jumps: string[] = []; const lanes: number[] = [];
+  const input = create({ canvas, dive, jump, eventTarget: target, isPlaying: () => playing, isLane: () => lane, onJump: () => jumps.push("jump"), onLane: (b: number) => lanes.push(b), onActivate: () => {} });
+  canvas.emit("pointerdown", { pointerId: 1, clientX: 40, clientY: 200 });
+  assert.equal(input.isHeld(), true);
+  target.emit("lostpointercapture", { pointerId: 1, clientX: 40, clientY: 200 });
+  assert.equal(input.isHeld(), true, "iOS dropping capture must not cancel the dive hold");
+  target.emit("pointerup", { pointerId: 1, clientX: 40, clientY: 200 });
+  assert.equal(input.isHeld(), false);
+  dive.emit("pointerdown", { pointerId: 2, clientX: 30, clientY: 700 });
+  assert.equal(input.isHeld(), true, "the DIVE button holds too");
+  target.emit("pointerup", { pointerId: 2, clientX: 30, clientY: 700 });
+  lane = true;
+  canvas.emit("pointerdown", { pointerId: 3, clientX: 180, clientY: 400 });
+  target.emit("pointermove", { pointerId: 3, clientX: 80, clientY: 404 });
+  assert.deepEqual(lanes, [4]);
+  assert.equal(input.isHeld(), false);
+  target.emit("pointerup", { pointerId: 3, clientX: 70, clientY: 404 });
+  assert.deepEqual(jumps, []);
+  canvas.emit("pointerdown", { pointerId: 4, clientX: 180, clientY: 400 });
+  target.emit("pointerup", { pointerId: 4, clientX: 184, clientY: 406 });
+  assert.deepEqual(jumps, ["jump"]);
+  jump.emit("pointerdown", { pointerId: 5, clientX: 300, clientY: 700 });
+  assert.deepEqual(jumps, ["jump", "jump"]);
+  playing = false;
+  assert.equal(input.isHeld(), false);
+});
+
 test("preview path is served beside the frozen raid cartridges", async () => {
   const { createCartridgeServer } = await import("../../../scripts/cartridges.mjs") as { createCartridgeServer: () => Server };
   const server = createCartridgeServer();
@@ -133,7 +171,16 @@ test("preview path is served beside the frozen raid cartridges", async () => {
   try {
     const preview = await fetch(`${origin}/skrumpey-slide/v3d/`);
     assert.equal(preview.status, 200);
-    assert.match(await preview.text(), /Skrumpey Slide 3D/);
+    const previewHtml = await preview.text();
+    assert.match(previewHtml, /Skrumpey Slide 3D/);
+    assert.match(previewHtml, /src="touch-input\.js"/);
+    assert.match(previewHtml, /low-power/);
+    const touchJs = await (await fetch(`${origin}/skrumpey-slide/v3d/touch-input.js`)).text();
+    assert.match(touchJs, /pointerType==='mouse'/);
+    assert.doesNotMatch(touchJs, /lostpointercapture/);
+    const livePage = await (await fetch(`${origin}/skrumpey-slide/v/1.1.0/`)).text();
+    assert.match(livePage, /src="touch-input\.js"/);
+    assert.doesNotMatch(livePage, /low-power/);
     const previewSim = await (await fetch(`${origin}/skrumpey-slide/v3d/sim.js`)).text();
     assert.match(previewSim, /RULES_VERSION='3d\.1\.0'/);
     const live = await (await fetch(`${origin}/skrumpey-slide/v/1.1.0/sim.js`)).text();

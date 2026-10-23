@@ -27,7 +27,7 @@ npm run dev:cartridges
 
 Open http://127.0.0.1:8788/skrumpey-slide/v3d/
 
-Hooks: `?seed=1&bot=1&auto=1&mute=1&speed=4`. Hold to dive, release to fly. In a lane sprint, swipe or A/D to switch lanes and W / ↑ to hop.
+Hooks: `?seed=1&bot=1&auto=1&mute=1&speed=4`. Hold to dive, release to fly. On a phone, hold the screen or the DIVE button, and swipe or tap during a lane sprint. Phones start at pixel ratio 1, without antialiasing or shadow maps, so the menu and the first hill stay responsive. `?mobile=1` forces that path. `?mobile=0` keeps the desktop renderer.
 
 `node cartridges/skrumpey-slide/v3d/build-arcade.mjs` writes `v3d/arcade.html` for a host embed. It stamps `proof.rules` from `SIM.RULES_VERSION` (`3d.1.0`). Do not point a live raid at this file.
 

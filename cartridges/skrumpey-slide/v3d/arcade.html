@@ -2,7 +2,7 @@
 <link rel="icon" href="data:,"><title>Skrumpey Slide 3D</title>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#111;font-family:system-ui,-apple-system,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;touch-action:none}
-#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .ov{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(#1a103855,#1a1038cc);text-align:center;padding:12px;box-sizing:border-box}
 .hid{display:none!important}
 h1{margin:0 0 4px;font-size:clamp(30px,6vw,60px);letter-spacing:1px;text-shadow:0 4px 0 #2a1a50,0 8px 20px #0008}
@@ -11,7 +11,7 @@ h1{margin:0 0 4px;font-size:clamp(30px,6vw,60px);letter-spacing:1px;text-shadow:
 #grid button{padding:0;border:3px solid #fff3;border-radius:14px;background:#ffffff22;cursor:pointer;overflow:hidden;transition:transform .1s}
 #grid button:hover{transform:translateY(-2px)}#grid button.sel{border-color:#ffd84a;box-shadow:0 0 0 3px #ffd84a66}
 #grid img{width:100%;display:block;image-rendering:pixelated}
-.btn{font:inherit;font-weight:800;font-size:18px;padding:11px 24px;margin:4px;border:0;border-radius:999px;background:#ffd84a;color:#2a1a40;cursor:pointer;box-shadow:0 4px 0 #b8901a}
+.btn{font:inherit;font-weight:800;font-size:18px;padding:11px 24px;margin:4px;border:0;border-radius:999px;background:#ffd84a;color:#2a1a40;cursor:pointer;box-shadow:0 4px 0 #b8901a;touch-action:manipulation}
 .btn.alt{background:#8fd3ff;box-shadow:0 4px 0 #4a8db8}
 #hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:10px 16px;font-weight:800;font-size:22px;text-shadow:0 2px 0 #0009;pointer-events:none}
 #hPow{display:flex;align-items:center;gap:8px;font-size:16px;padding:4px 12px 4px 6px;border-radius:99px;background:#000a;box-shadow:0 0 18px var(--pc,#fff8)}#hPowIcon{font-size:26px;line-height:1;filter:drop-shadow(0 0 6px var(--pc))}#hPowBarW{width:110px;height:8px;background:#fff3;border-radius:4px;overflow:hidden}#hPowBar{height:100%;background:var(--pc);width:100%}
@@ -133,7 +133,9 @@ h1{font-size:66px;line-height:66px;letter-spacing:0}
 #diveBtn small{font-size:10px}#jumpBtn{right:max(14px,env(safe-area-inset-right))}
 #laneHint{display:none;position:fixed;bottom:max(24px,env(safe-area-inset-bottom));left:max(12px,env(safe-area-inset-left));right:104px;font-size:14px;text-align:center;text-shadow:2px 2px var(--ink);pointer-events:none}
 body.playing #musicBtn{right:calc(max(14px,env(safe-area-inset-right)) + 88px);bottom:max(14px,env(safe-area-inset-bottom))}
-@media (any-pointer:coarse),(max-width:900px){body.playing #diveBtn,body.playing #jumpBtn{display:block}body.playing.in-lane #diveBtn{display:none}body.playing.in-lane #laneHint{display:block}body.playing.in-lane #musicBtn{bottom:104px}}
+@media (any-pointer:coarse),(max-width:900px){body.playing #diveBtn,body.playing #jumpBtn{display:block}body.playing.in-lane #diveBtn{display:none}body.playing.in-lane #laneHint{display:block}body.playing #musicBtn{top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));bottom:auto}body.playing.in-lane #musicBtn{bottom:auto}}
+#glerr{position:fixed;left:10px;right:10px;top:max(10px,env(safe-area-inset-top));z-index:60;background:#3a1020;color:#fff;border:3px solid #ff8a8a;padding:12px 14px;font:700 16px/1.35 sans-serif;box-shadow:4px 4px 0 #1a1038}
+#glerr p{margin:0 0 8px}#glerr .btn{margin:0}
 .ov{overflow-y:auto;justify-content:safe center;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));touch-action:pan-y}
 .ov>*{flex-shrink:0}
 @media (max-height:500px) and (orientation:landscape){
@@ -260,7 +262,16 @@ body.playing #controlStrip{display:block}#controlState{display:block;color:#ffd8
  <div><button class="btn" id="bAgain">Again</button><button class="btn alt" id="bMenu">Menu</button><button class="btn alt" id="bHow2">How to Play</button></div>
 </div>
 <div id="loading"></div><button id="musicBtn" title="Music on/off (N)" aria-label="Music on/off"></button><div id="launchUI" class="hid"><div id="lmTxt">Hold to pull back, let go to launch</div><div id="lmW"><div id="lm"></div><div id="lmSweet"></div></div></div><button id="diveBtn" aria-label="Hold to dive">DIVE<br><small>HOLD</small></button><button id="jumpBtn" aria-label="Jump">JUMP</button><div id="laneHint">SWIPE LEFT / RIGHT · TAP TO HOP</div>
-<script src="../touch-input.js"></script><script src="/sdk/hosts.js"></script><script src="/sdk/bridge.js"></script><script src="sim.js"></script>
+<script src="touch-input.js"></script><script src="/sdk/hosts.js"></script><script src="/sdk/bridge.js"></script><script src="sim.js"></script>
+<script>
+if(window.HTMLScriptElement&&HTMLScriptElement.supports&&!HTMLScriptElement.supports('importmap')){
+  addEventListener('DOMContentLoaded',function(){
+    var d=document.createElement('div');d.id='glerr';
+    d.textContent='This browser cannot load the 3D preview. Update iOS or Chrome and reload.';
+    document.body.appendChild(d);
+  });
+}
+</script>
 <script type="importmap">{"imports":{"three":"../vendor/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -301,19 +312,32 @@ const $=id=>document.getElementById(id);const params=new URLSearchParams(hosted 
 THREE.DefaultLoadingManager.onError=url=>{ if(hosted) TA.error('Could not load game asset: '+url); };
 const SPEED=Math.max(1,Math.min(16,+params.get('speed')||1));
 const C=h=>new THREE.Color(h);
+// Phones: coarse pointer, or a touch screen whose short side is phone/tablet sized.
+// ?mobile=1 forces it. ?mobile=0 keeps the desktop path (for a narrow desktop window).
+const MOBILE=params.get('mobile')==='1'||(params.get('mobile')!=='0'&&(matchMedia('(pointer:coarse)').matches||((navigator.maxTouchPoints||0)>0&&Math.min(screen.width,screen.height)<1000)));
+function showGlError(msg){let el=$('glerr');if(!el){el=document.createElement('div');el.id='glerr';el.innerHTML='<p></p><button type="button" class="btn">Reload</button>';el.querySelector('button').onclick=()=>location.reload();document.body.appendChild(el);}el.querySelector('p').textContent=msg;el.hidden=false;}
+let glDead=false;
 // ---------- renderer ----------
-const renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:true,preserveDrawingBuffer:true,powerPreference:'high-performance'});
-const MAX_PR=Math.min(2,devicePixelRatio);let curPR=MAX_PR;renderer.setPixelRatio(curPR);window.RENDERER=renderer;renderer.outputColorSpace=THREE.SRGBColorSpace;
+let renderer;
+try{
+  renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:!MOBILE,alpha:false,stencil:false,powerPreference:MOBILE?'low-power':'high-performance',preserveDrawingBuffer:params.get('shot')==='1',failIfMajorPerformanceCaveat:false});
+}catch(err){showGlError('WebGL failed to start on this phone. Reload, or update the browser. '+(err&&err.message||err));throw err;}
+if(!renderer.getContext()){showGlError('WebGL failed to start on this phone. Reload, or update the browser.');throw new Error('no webgl');}
+const MAX_PR=MOBILE?1:Math.min(2,devicePixelRatio||1);let curPR=MAX_PR;renderer.setPixelRatio(curPR);window.RENDERER=renderer;renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
-renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x4fa8ff,1);
+renderer.shadowMap.enabled=!MOBILE;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+$('c').addEventListener('webglcontextlost',e=>{e.preventDefault();glDead=true;showGlError('Graphics stopped on this device. Reload to keep playing.');});
+$('c').addEventListener('webglcontextrestored',()=>{glDead=false;const el=$('glerr');if(el)el.hidden=true;});
 const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(40,1,0.5,3000);
 const hemi=new THREE.HemisphereLight(0xdfefff,0x8a7a68,1.6);scene.add(hemi);
-const sunL=new THREE.DirectionalLight(0xfff2dd,2.6);sunL.castShadow=true;sunL.shadow.mapSize.set(1024,1024);
+const sunL=new THREE.DirectionalLight(0xfff2dd,2.6);sunL.castShadow=!MOBILE;sunL.shadow.mapSize.set(MOBILE?512:1024,MOBILE?512:1024);
 Object.assign(sunL.shadow.camera,{left:-70,right:70,top:50,bottom:-50,near:1,far:260});sunL.shadow.bias=-0.0006;sunL.shadow.normalBias=0.04;sunL.shadow.radius=4;
 scene.add(sunL);scene.add(sunL.target);
 scene.fog=new THREE.Fog(0xcfe9f5,28,220);
+function viewSize(){const vv=window.visualViewport;return {w:Math.max(1,vv?vv.width:document.documentElement.clientWidth),h:Math.max(1,vv?vv.height:document.documentElement.clientHeight)};}
 function resize(){
- const w=Math.max(1,document.documentElement.clientWidth),h=Math.max(1,document.documentElement.clientHeight);
+ const {w,h}=viewSize();
  renderer.setSize(w,h,false);camera.aspect=w/h;
  // Preserve horizontal visibility in portrait without enlarging the character.
  camera.fov=THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(20))*Math.max(1,1.25/camera.aspect)));
@@ -327,7 +351,7 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(1500,24,12),new THREE.ShaderMa
  vertexShader:'varying vec3 vP;void main(){vP=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
  fragmentShader:'uniform vec3 top;uniform vec3 bottom;varying vec3 vP;void main(){float t=smoothstep(-0.15,0.55,vP.y);gl_FragColor=vec4(mix(bottom,top,t),1.);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}'}));
 sky.renderOrder=-10;scene.add(sky);
-const starGeo=new THREE.BufferGeometry();{const a=[];const r=SIM.rng(7);for(let i=0;i<500;i++){const th=r()*Math.PI-Math.PI/2*0.1,ph=r()*Math.PI;a.push(Math.cos(ph)*1300,200+r()*900,-Math.abs(Math.sin(ph))*1300-100);}starGeo.setAttribute('position',new THREE.Float32BufferAttribute(a,3));}
+const starGeo=new THREE.BufferGeometry();{const a=[];const r=SIM.rng(7);const n=MOBILE?80:500;for(let i=0;i<n;i++){const th=r()*Math.PI-Math.PI/2*0.1,ph=r()*Math.PI;a.push(Math.cos(ph)*1300,200+r()*900,-Math.abs(Math.sin(ph))*1300-100);}starGeo.setAttribute('position',new THREE.Float32BufferAttribute(a,3));}
 const starsMat=new THREE.PointsMaterial({color:0xffffff,size:3,sizeAttenuation:false,transparent:true,opacity:0,fog:false,depthWrite:false});
 const starPts=new THREE.Points(starGeo,starsMat);scene.add(starPts);
 const sunDisc=new THREE.Mesh(new THREE.CircleGeometry(40,32),new THREE.MeshBasicMaterial({color:0xfff0b0,fog:false,toneMapped:false}));scene.add(sunDisc);
@@ -416,14 +440,14 @@ function buildChunk(ci){const pos=[],col=[];const x0=ci*CH,n=Math.round(CH/SEG);
   for(const edge of [-half,half]){const sign=edge<0?-1:1,o2=edge+sign*1.15;quad([xa,yAt(xa,edge),edge],[xb,yAt(xb,edge),edge],[xb,yAt(xb,edge)-drop,o2],[xa,yAt(xa,edge)-drop,o2],skirt,skirt.clone().multiplyScalar(0.66));}
  }
  const grp=new THREE.Group();
- if(pos.length){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));const m=new THREE.Mesh(g,terrMat);m.receiveShadow=true;m.castShadow=true;grp.add(m);}
- for(const [z,key,amp,base] of [[-38,'mid',16,10],[38,'mid',14,12],[-82,'far',26,18],[82,'far',22,16]]){const p2=[],c2=[];
+ if(pos.length){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));const m=new THREE.Mesh(g,terrMat);m.receiveShadow=!MOBILE;m.castShadow=!MOBILE;grp.add(m);}
+ for(const [z,key,amp,base] of (MOBILE?[[-38,'mid',16,10],[38,'mid',14,12]]:[[-38,'mid',16,10],[38,'mid',14,12],[-82,'far',26,18],[82,'far',22,16]])){const p2=[],c2=[];
   for(let k=0;k<8;k++){const xa=x0+k*CH/8,xb=xa+CH/8;const f=t=>base+amp*(0.5+0.5*Math.sin(t*0.045+1.2))+Math.sin(t*0.16)*2.2;const ya=f(xa),yb=f(xb);const cc=biomeBlend(xa,key).multiplyScalar(0.88+hash(k,ci)*0.18);
    p2.push(xa,ya-30,z,xb,yb-30,z,xb,yb,z,xa,ya-30,z,xb,yb,z,xa,ya,z);for(let q=0;q<6;q++)c2.push(cc.r,cc.g,cc.b);}
   const rg=new THREE.BufferGeometry();rg.setAttribute('position',new THREE.Float32BufferAttribute(p2,3));rg.setAttribute('color',new THREE.Float32BufferAttribute(c2,3));grp.add(new THREE.Mesh(rg,ridgeMat));}
  // props sit on the shoulders of the ribbon; warpGroup bends the chunk onto the path
  const r=SIM.rng((worldSeed*131+ci*7919)>>>0);const L=[];
- for(let i=0;i<5;i++){const x=x0+r()*CH;if(W.inGap(x)||W.inGap(x+3)||W.inGap(x-3))continue;const bk=SIM.BIOMES[W.biomeAt(x)];const kinds=BIOME_PROPS[bk];
+ for(let i=0;i<(MOBILE?2:5);i++){const x=x0+r()*CH;if(W.inGap(x)||W.inGap(x+3)||W.inGap(x-3))continue;const bk=SIM.BIOMES[W.biomeAt(x)];const kinds=BIOME_PROPS[bk];
   const kind=kinds[Math.floor(r()*kinds.length)];const z=(r()<0.5?-1:1)*(10.5+r()*6);const y=W.h(x)-0.15;L.push(...PROPS[kind](r,x,y,z,kind==='tree'?0.8+r()*0.6:1));}
  for(const e of W.ents)if(e.type==='landmark'&&e.x>=x0&&e.x<x0+CH){const bk=SIM.BIOMES[e.biome];L.push(...PROPS[LANDMARK[bk]](r,e.x,W.h(e.x)+1,(e.x&1?1:-1)*13));}
  if(SIM.BIOMES[W.biomeAt(x0)]==='clouds')for(let i=0;i<3;i++)L.push(...PROPS.puff(r,x0+r()*CH,W.h(x0)+16+r()*14,(r()-0.5)*22,1.5));
@@ -580,12 +604,13 @@ const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,color:0xffd84a
 const aura=new THREE.Mesh(new THREE.TorusGeometry(2.6,0.25,6,24),new THREE.MeshBasicMaterial({color:0xffd84a,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false}));aura.position.y=1.7;player.add(aura);
 const pLight=new THREE.PointLight(0xffd84a,0,18,1.5);pLight.position.y=2;player.add(pLight);
 function prepModel(o){const conv=src=>{if(!src||src.isMeshToonMaterial||src.isSpriteMaterial)return src;return new THREE.MeshToonMaterial({map:src.map||null,color:src.color?src.color.clone():new THREE.Color('#ffffff'),gradientMap:TOON,emissive:src.emissive?src.emissive.clone():new THREE.Color(0),emissiveMap:src.emissiveMap||null,emissiveIntensity:src.emissiveIntensity||0,transparent:!!src.transparent,opacity:src.opacity??1,alphaTest:src.alphaTest||0,side:src.side});};o.traverse(m=>{if(m.isMesh){m.castShadow=true;m.receiveShadow=false;if(m.material)m.material=Array.isArray(m.material)?m.material.map(conv):conv(m.material);}});return o;}
+function fallbackChar(){const box=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.7,0.9),new THREE.MeshToonMaterial({color:0xff7ad0,gradientMap:TOON}));box.position.y=0.85;yawG.clear();yawG.add(box);yawG.rotation.y=Math.PI/2;}
 async function loadChar(id){$('loading').textContent='Loading Skrumpey #'+id+'…';
- const base=prepModel((await loadGLB(CONFIG.assetPath.glb+id+'.glb')).clone());
+ let base;try{base=prepModel((await loadGLB(CONFIG.assetPath.glb+id+'.glb')).clone());}catch(err){console.warn(err);fallbackChar();$('loading').textContent='Model skipped — you can still play.';return;}
  const b=new THREE.Box3().setFromObject(base),c=b.getCenter(new THREE.Vector3()),sz=b.getSize(new THREE.Vector3());
  rig.clear();rig.position.set(-c.x,-b.min.y,-c.z);rig.add(base);
  const s=new THREE.Group();s.add(rig);charScale=CONFIG.characterHeight/Math.max(sz.y,sz.x*0.8);s.scale.setScalar(charScale);yawG.clear();yawG.add(s);yawG.rotation.y=CONFIG.characterYaw;
- for(const [k,f] of Object.entries(CONFIG.powerParts)){const o=prepModel((await loadGLB(CONFIG.assetPath.parts+f)).clone());
+ for(const [k,f] of Object.entries(CONFIG.powerParts)){let o;try{o=prepModel((await loadGLB(CONFIG.assetPath.parts+f)).clone());}catch(err){console.warn(err);continue;}
   o.traverse(m=>{if(m.isMesh){m.material.emissive=new THREE.Color(k==='star'?0xffc040:0x40e8ff);m.material.emissiveIntensity=k==='star'?0.6:1.2;}});
   let holder=o;if(k==='beam'){ // trait beams point straight up in model space: pivot at their base and tip them forward (+Z = face) so they aim along travel
    const bb=new THREE.Box3().setFromObject(o);const piv=new THREE.Group();piv.position.set((bb.min.x+bb.max.x)/2,bb.min.y,(bb.min.z+bb.max.z)/2);o.position.sub(piv.position);piv.add(o);piv.rotation.x=Math.PI/2*0.92;holder=piv;}
@@ -595,10 +620,12 @@ async function loadChar(id){$('loading').textContent='Loading Skrumpey #'+id+'�
 
 // ---------- Skrumpey train ----------
 const buddyTpl=[];
-async function loadBuddies(){await Promise.all(CONFIG.buddies.map(async(id,i)=>{const base=prepModel((await loadGLB(CONFIG.assetPath.glb+id+'.glb')).clone());
+async function loadBuddies(){if(MOBILE)await new Promise(r=>setTimeout(r,600));
+ for(let i=0;i<CONFIG.buddies.length;i++){const id=CONFIG.buddies[i];try{const base=prepModel((await loadGLB(CONFIG.assetPath.glb+id+'.glb')).clone());
   const b=new THREE.Box3().setFromObject(base),c=b.getCenter(new THREE.Vector3()),sz=b.getSize(new THREE.Vector3());
   const rig=new THREE.Group();rig.position.set(-c.x,-b.min.y,-c.z);rig.add(base);const sc=new THREE.Group();sc.add(rig);sc.scale.setScalar(CONFIG.buddyHeight/Math.max(sz.y,sz.x*0.8));
-  const yaw=new THREE.Group();yaw.add(sc);yaw.rotation.y=CONFIG.characterYaw;buddyTpl[i]=yaw;}));window.BUDDIES_LOADED=true;}
+  const yaw=new THREE.Group();yaw.add(sc);yaw.rotation.y=CONFIG.characterYaw;buddyTpl[i]=yaw;}catch(err){console.warn('buddy',id,err);}}
+ window.BUDDIES_LOADED=true;}
 const buddiesReady=loadBuddies(); buddiesReady.catch(error=>hosted&&TA.error(error.message));
 const helpTex=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');g.fillStyle='#fff';g.beginPath();g.arc(32,28,24,0,7);g.fill();g.beginPath();g.moveTo(24,46);g.lineTo(32,62);g.lineTo(40,46);g.fill();
  g.fillStyle='#ff5a7a';g.font='900 36px system-ui';g.textAlign='center';g.textBaseline='middle';g.fillText('!',32,29);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;})();
@@ -743,9 +770,9 @@ function handleEvents(ev){for(const e of ev){
 // ---------- adaptive quality: lower pixel ratio / shadows when frame time is high, raise when there is headroom ----------
 let pfSum=0,pfN=0,pfT=0,quality=3;const FIXED_Q=params.has('quality');
 function perfSample(dt){if(FIXED_Q)return;pfSum+=dt;pfN++;pfT+=dt;if(pfT<1)return;const avg=pfSum/pfN*1000;pfSum=pfN=pfT=0;
- if(avg>24&&curPR>0.6){curPR=Math.max(0.6,curPR*0.8);renderer.setPixelRatio(curPR);resize();}
- else if(avg>24&&curPR<=0.6&&sunL.castShadow){sunL.castShadow=false;}
- else if(avg<12&&curPR<MAX_PR){curPR=Math.min(MAX_PR,curPR*1.15);renderer.setPixelRatio(curPR);resize();}
+ if(avg>28&&curPR>(MOBILE?0.5:0.6)){curPR=Math.max(MOBILE?0.5:0.6,+(curPR*0.75).toFixed(2));renderer.setPixelRatio(curPR);resize();}
+ else if(avg>28&&sunL.castShadow){sunL.castShadow=false;}
+ else if(!MOBILE&&avg<12&&curPR<MAX_PR){curPR=Math.min(MAX_PR,curPR*1.15);renderer.setPixelRatio(curPR);resize();}
  window.QUALITY={pr:+curPR.toFixed(2),shadows:sunL.castShadow,avgMs:+avg.toFixed(1)};}
 if(params.has('quality')){curPR=+params.get('quality');renderer.setPixelRatio(curPR);}
 // ---------- frame ----------
@@ -779,7 +806,7 @@ function updateLaunch(x,y){const L=S.phase==='launch';$('launchUI').classList.to
  arrow.visible=L&&S.pull>0;if(arrow.visible){worldXYZ(x-pull*0.4,y+1.5,0,arrow.position);faceFrame(arrow,pathFrame(x),SIM.P.launchAngle);arrow.scale.setScalar(0.35+m*0.55);
   arrow.children.forEach(c=>{if(c.material&&c.material.color)c.material.color.setHex(m>=SIM.P.perfectLaunchQ?0xffd84a:0xffffff);});}}
 function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame);if(arcadePaused){last=t;acc=0;return;}const dtR=Math.min(0.05,(t-last)/1000);last=t;
- const playing=state==='play'||state==='menu';
+ const playing=state==='play'||(state==='menu'&&!MOBILE);
  if(playing&&window.PAUSED){acc=0;} else if(playing){acc+=dtR*SPEED*(state==='menu'?1:1);let ev=[];
   while(acc>=SIM.DT&&!S.over){prevX=S.x;prevY=S.y;const inp=(state==='menu'||bot)?SIM.botInput(S):(((desktopDiveHeld()||touchInput.isHeld())?1:0)|(jumpQueued?2:0)|laneQ);jumpQueued=false;laneQ=0;
    SIM.step(S,inp);if(state==='play')for(const e of S.ev)ev.push(e);acc-=SIM.DT;}
@@ -823,6 +850,7 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
  const camLat=lat*(0.15+eLane*0.15);
  const lookLat=lat*(0.35+eLane*0.55);
  back=back*(1-eLane)+(12.5)*eLane; up=up*(1-eLane)+5.1*eLane; ahead=ahead*(1-eLane)+18*eLane;
+ if(MOBILE&&camera.aspect<1){back*=0.72;up*=0.82;}
  const fcam=pathFrame(x);
  _cp.set(fcam.cx-fcam.tx*back+fcam.rx*(camLat+launchB*7), y+up, fcam.cz-fcam.tz*back+fcam.rz*(camLat+launchB*7));
  worldXYZ(x+ahead, y+(eLane?1.05:3.1)+alt*0.04, lookLat, _cl);
@@ -830,12 +858,12 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
  const damp=camReady?Math.min(1,dtR*(S.phase==='launch'?3.2:7)):1;camReady=true;
  camera.position.lerp(_cp,damp);camL.lerp(_cl,damp);camera.lookAt(camL);
  fovNow+=(fovTarget-fovNow)*Math.min(1,dtR*5);
- const aspect=Math.max(0.35,camera.aspect);camera.fov=fovNow*(aspect<1?Math.min(1.35,0.9/aspect):1);camera.updateProjectionMatrix();
+ const aspect=Math.max(0.35,camera.aspect);camera.fov=fovNow*(aspect<1?Math.min(MOBILE?1.05:1.35,(MOBILE?1.05:0.9)/aspect):1);camera.updateProjectionMatrix();
  camX=camera.position.x;camY=camera.position.y;camDist=back;
  speedFlash=Math.max(0,speedFlash-dtR*1.7,diveA*Math.min(1,spd/55)*0.45);
  speedGrp.visible=speedFlash>0.03;speedMats.forEach((mat,i)=>{mat.opacity=speedFlash*0.9;speedGrp.children[i].scale.z=1+speedFlash*2.2;});
  player.scale.setScalar(1);
- updateChunks(x,80);
+ updateChunks(x,MOBILE?28:80);
  const f=Math.max(0,Math.min(1,S.daylight/SIM.P.dayTicks));const night=f>0.35?0:1-f/0.35;
  const sunset=f<0.72?Math.min(1,(0.72-f)/0.5):0;
  biomeBlend(x,'skyTop',tmpC).lerp(nightTop,night*0.85);skyU.top.value.copy(tmpC);
@@ -860,12 +888,13 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
   const hp=$('hPow');if(S.power){hp.style.display='';hp.style.setProperty('--pc',S.power==='star'?'#ffd84a':'#5af0ff');$('hPowIcon').className='ico '+(S.power==='star'?'star':'beam');$('hPowName').textContent=(S.power==='star'?'Star ':'Beam ')+(S.powerT/60).toFixed(1)+'s';
    $('hPowBar').style.width=(100*S.powerT/(S.power==='star'?SIM.P.starTicks:SIM.P.beamTicks))+'%';}else hp.style.display='none';}
  updateSay(dtR);
- renderer.render(scene,camera);}
+ if(!glDead){try{renderer.render(scene,camera);}catch(err){glDead=true;showGlError('Graphics failed on this device. Reload to keep playing.');console.warn(err);}}}
 frameId=requestAnimationFrame(t=>{last=t;frame(t);});
 // test/debug hooks (not used by gameplay)
 if(!hosted) window.GAME={CONFIG,start,get state(){return state},get sim(){return S},setBot:v=>bot=v,select:id=>document.querySelector(`#grid button[data-id="${id}"]`).click(),
  resume:()=>{window.PAUSED=null;},give:p=>{S.power=p;S.powerT=p==='star'?SIM.P.starTicks:SIM.P.beamTicks;},mute:v=>muted=v,
- get cam(){return {x:+camera.position.x.toFixed(2),y:+camera.position.y.toFixed(2),z:+camera.position.z.toFixed(2),fov:+camera.fov.toFixed(1),lx:+camL.x.toFixed(2),ly:+camL.y.toFixed(2),lz:+camL.z.toFixed(2)};}};
+ get cam(){return {x:+camera.position.x.toFixed(2),y:+camera.position.y.toFixed(2),z:+camera.position.z.toFixed(2),fov:+camera.fov.toFixed(1),lx:+camL.x.toFixed(2),ly:+camL.y.toFixed(2),lz:+camL.z.toFixed(2)};},
+ mobile:MOBILE,touch:touchInput};
 if(params.get('auto')==='1')setTimeout(()=>start(params.get('mode')==='ranked'?'ranked':'free'),300);
 
 // The arcade chooses the mode; direct cartridge previews use casual play.
