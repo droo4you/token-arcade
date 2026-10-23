@@ -348,12 +348,15 @@ function init() {
     let rollVis = (s.bank || 0) * 0.14;
     const spinning = (s.trick > 0 || s.stabT > 0) && s.rot;
     if (spinning && s.trickKind === 'flip') pitch += s.rot; // front/back flip: tumble around pitch
-    else if (spinning && s.trickKind === 'roll') rollVis = s.rot; // left/right barrel: spin around roll
+    // Chase cam looks forward (along -Z). Three.js +roll (CCW about +Z) reads counterclockwise from behind —
+    // negate so ROLL→ (trickDir +1, drifts right) barrels clockwise and ROLL← counterclockwise.
+    else if (spinning && s.trickKind === 'roll') rollVis = -s.rot;
     else rollVis = (view.roll || 0) * 0.6;
     car.update({ spin: view.spin || 0, bank: s.bank || 0, roll: rollVis, pitch, boost: Math.max(G.boostT || 0, 0), glow: G.boostT || 0 });
-    // Barrel rolls ride a small helix around the flight path so left and right look distinct in the chase cam.
+    // Helix follows the impulse direction (sim +x = right), not the negated mesh spin.
     if ((s.phase === 'sky' || s.phase === 'fall') && spinning && s.trickKind === 'roll') {
-      const a = s.rot, R = 1.3; car.group.position.x += Math.sin(a) * R; car.group.position.y += (1 - Math.cos(a)) * R * 0.55;
+      const a = Math.abs(s.rot), R = 1.3, side = s.trickDir || 1;
+      car.group.position.x += Math.sin(a) * R * side; car.group.position.y += (1 - Math.cos(a)) * R * 0.55;
     }
     // Measured car velocity (world units / render second): includes slow-mo and hit-stop, so gas jets stay attached.
     { const P0 = car.group.position; if (carPrev && dt > 0) { carVel.x = clamp((P0.x - carPrev.x) / dt, -200, 200); carVel.y = clamp((P0.y - carPrev.y) / dt, -200, 200); carVel.z = clamp((P0.z - carPrev.z) / dt, -260, 260); } carPrev = { x: P0.x, y: P0.y, z: P0.z }; }
