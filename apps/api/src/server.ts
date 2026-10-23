@@ -414,6 +414,10 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   const coindle = createCoindleHandler();
   const rapid = createCoindleRapid({
     db: store.db, getSession: (runId) => store.getSession(runId),
+    history: async (ticker) => {
+      const reply = await coindle({ method: "GET" }, new URL(`http://local/api/coindle/history?ticker=${encodeURIComponent(ticker)}`));
+      return reply?.status === 200 ? (reply.body as { points: { price: number }[] }).points : [];
+    },
     prices: async () => {
       const reply = await coindle({ method: "GET" }, new URL("http://local/api/coindle/prices"));
       return reply?.status === 200 ? reply.body as PriceTiers : {};
@@ -538,13 +542,14 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const rows = store.db.prepare("SELECT player_id, guest_id, received_at, json FROM free_play_summaries WHERE (? IS NULL OR game_id = ?) ORDER BY received_at DESC LIMIT 500").all(gameId, gameId) as { player_id: string | null; guest_id: string; received_at: string; json: string }[];
         return respond(response, 200, { summaries: rows.map(row => ({ ...JSON.parse(row.json), playerId: row.player_id, guestId: row.guest_id, receivedAt: row.received_at })) });
       }
-      const rapidRoute = path.match(/^\/api\/coindle\/rapid\/([0-9a-f-]{36})\/(start|state|guess|skip|finish)$/);
+      const rapidRoute = path.match(/^\/api\/coindle\/rapid\/([0-9a-f-]{36})\/(start|state|guess|skip|finish|hint)$/);
       if (rapidRoute) {
         // The issued runId (unguessable, only returned to the signed-in player) is the capability here, so the
         // separate-origin cartridge can play without holding the player's Privy token.
         const [, runId, action] = rapidRoute;
-        if (action === "state" ? method !== "GET" : method !== "POST") fail(405, "METHOD_NOT_ALLOWED", "Unsupported method");
+        if (action === "state" || action === "hint" ? method !== "GET" : method !== "POST") fail(405, "METHOD_NOT_ALLOWED", "Unsupported method");
         try {
+          if (action === "hint") return respond(response, 200, await rapid.hint(runId, Number(url.searchParams.get("puzzle"))));
           if (action === "start") return respond(response, 200, rapid.start(runId));
           if (action === "state") return respond(response, 200, { state: rapid.state(runId) });
           if (action === "skip") return respond(response, 200, rapid.skip(runId));

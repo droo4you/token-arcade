@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import GuessRow from "./GuessRow";
+import Sparkline from "./Sparkline";
 import CoinAutocomplete from "./CoinAutocomplete";
 import { coinByTicker, rapidApi, RapidApiError, toGuessResult, type RapidState } from "@/lib/rapid";
 import type { GuessResult } from "@/lib/types";
@@ -131,6 +132,10 @@ export default function RapidFire({ runId, raid, onBegin, onComplete }: {
         <span>Coin #{state?.puzzle ?? 1}</span>
         <span>Guess {Math.min((state?.guessesThisCoin ?? 0) + 1, state?.maxGuessesPerCoin ?? 6)} of {state?.maxGuessesPerCoin ?? 6}</span>
       </div>
+      {state?.priceHint && <div className="mb-3 rounded-xl p-3" style={card}>
+        <p className="mb-2 text-xs font-semibold" style={{ color: "var(--text-muted)" }}>90-Day Price Hint</p>
+        <Sparkline key={`${runId}:${state.puzzle}`} runId={runId} puzzle={state.puzzle} color="var(--accent)" />
+      </div>}
       <CoinAutocomplete onSelect={(ticker) => void guess(ticker)} guessedTickers={rows.map((row) => row.coin.ticker)} disabled={busy} />
       {message && <p className="mt-2 text-sm" style={{ color: "var(--result-red)" }}>{message}</p>}
       {rows.length > 0 && <div className="mt-3"><div>

@@ -13,14 +13,20 @@ export function createCartridgeServer() {
     res.setHeader('Referrer-Policy', 'strict-origin');
     try {
       const url = new URL(req.url, 'http://localhost');
-      const rapid = /^\/api\/coindle\/rapid\/[0-9a-f-]{36}\/(start|state|guess|skip|finish)$/.exec(url.pathname);
+      const rapid = /^\/api\/coindle\/rapid\/[0-9a-f-]{36}\/(start|state|guess|skip|finish|hint)$/.exec(url.pathname);
       if (rapid) {
         // Rapid Fire judge: forwarded as-is (bounded body), no cookies or auth headers.
-        const method = rapid[1] === 'state' ? 'GET' : 'POST';
+        const method = ['state', 'hint'].includes(rapid[1]) ? 'GET' : 'POST';
         if (req.method !== method) { res.writeHead(405); res.end(); return; }
         let body = '';
         if (method === 'POST') for await (const chunk of req) { body += chunk; if (body.length > 1024) { res.writeHead(413); res.end(); return; } }
-        const reply = await fetch(new URL(url.pathname, process.env.ARCADE_API_ORIGIN || 'http://127.0.0.1:8787'), {
+        const upstream = new URL(url.pathname, process.env.ARCADE_API_ORIGIN || 'http://127.0.0.1:8787');
+        if (rapid[1] === 'hint') {
+          const puzzle = url.searchParams.get('puzzle') || '';
+          if (!/^[1-9][0-9]{0,5}$/.test(puzzle)) { res.writeHead(400); res.end(); return; }
+          upstream.searchParams.set('puzzle', puzzle);
+        }
+        const reply = await fetch(upstream, {
           method, signal: AbortSignal.timeout(12_000), ...(method === 'POST' ? { body: body || '{}', headers: { 'Content-Type': 'application/json' } } : {}),
         });
         res.writeHead(reply.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
