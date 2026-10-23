@@ -126,6 +126,15 @@ function init() {
   const FAR = C.ROAD_LEN + C.CANYON_W;
   const clouds = createClouds({ count: 120, z0: C.ROAD_LEN - 300, z1: FAR + 14000, yMin: 40, yMax: 240, xSpan: 650, top: level.time.clouds?.top || '#ffd9cf', bottom: level.time.clouds?.bottom || '#a0709f', rand: rr });
   scene.add(clouds.mesh);
+  // Twin Falls gorge mist / spray: soft billboards low in the canyon (quality-scaled with clouds).
+  const mistDen = level.canyon?.mist?.density ?? 0;
+  const mist = mistDen > 0 ? createClouds({
+    count: Math.round(16 * mistDen), seed: 41, size: 0.4,
+    z0: C.ROAD_LEN + 120, z1: C.ROAD_LEN + C.CANYON_W - 120,
+    yMin: -C.CANYON_DEPTH + 3, yMax: -C.CANYON_DEPTH + 22,
+    xSpan: 500, top: '#e8f4f8', bottom: '#8ab4bc', rand: rng(41),
+  }) : null;
+  if (mist) { mist.mesh.renderOrder = 3; mist.material.uniforms.fade.value = 0.55; scene.add(mist.mesh); }
   const streaks = createStreaks(170, rr); scene.add(streaks.mesh);
   // glow halos for pickups (additive sprites): keep the "glow" readable in the no-bloom tier too
   const haloTex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
@@ -220,6 +229,7 @@ function init() {
     composer = null; bloom = null; grade = null;
   }
   const cloudTotal = clouds.mesh.geometry.instanceCount;
+  const mistTotal = mist ? mist.mesh.geometry.instanceCount : 0;
   let shadowOn = null, shadowSize = 0;
   function applyLevel(lv, w, h) {
     const L = LEVELS[lv], prevTier = tier; tier = lv;
@@ -235,6 +245,7 @@ function init() {
     disposeComposer();
     if (L.post && floatRT) buildComposer(w, h, pr, L);
     clouds.mesh.geometry.instanceCount = Math.max(1, Math.round(cloudTotal * L.clouds));
+    if (mist) mist.mesh.geometry.instanceCount = Math.max(0, Math.round(mistTotal * L.clouds));
     world.setDrawDistance(L.dist);
     stats.level = L.name; stats.pr = pr; stats.buf = `${renderer.domElement.width}x${renderer.domElement.height}`; stats.mpx = renderer.domElement.width * renderer.domElement.height / 1e6;
     if (prevTier !== lv) stats.log.push(`${(performance.now() / 1000).toFixed(1)}s ${prevTier < 0 ? 'start' : prevTier > lv ? 'down' : 'up'} -> ${L.name} (${stats.buf})`);
@@ -376,6 +387,15 @@ function init() {
       while (emitAcc > 1) { emitAcc -= 1; const sx = Math.random() < 0.5 ? -0.85 : 0.85;
         fx.emit({ x: s.x + sx, y: 0.1, z: -(s.z - 1.3), vx: sx * 1.4 + (s.bank || 0) * -4, vy: 0.5, vz: 1 + s.v * 0.08, jitter: 1.4, jitterY: 0.8, life: 0.7, s0: 0.2, s1: 1.1, color: pal.sandLight, alpha: 0.2, drag: 1.6, grav: -0.15 }); }
       if (G.boostT > 0.05) fx.emit({ x: s.x + (Math.random() - 0.5) * 1.5, y: 0.7, z: -(s.z - 2.2), vz: 6, jitter: 0.6, life: 0.35, s0: 0.25, s1: 0.05, color: level.pickups.air, hdr: 3, alpha: 0.9, drag: 0.5 }, 2);
+    }
+    // Twin Falls mist spray: soft rising puffs near the river when the cam is over / looking into the gorge (quality-gated).
+    if (mistDen > 0 && L.fx > 0.2 && s.z > C.ROAD_LEN - 80 && s.z < C.ROAD_LEN + C.CANYON_W + 120) {
+      const nearRiver = s.phase === 'fall' || (s.phase === 'sky' && (s.y || 0) < 40) || s.z > C.ROAD_LEN + C.CANYON_W * 0.35;
+      if (nearRiver && Math.random() < dt * 4 * L.fx * mistDen) {
+        const mx = (Math.random() - 0.5) * 90, mz = C.ROAD_LEN + 40 + Math.random() * (C.CANYON_W - 80);
+        fx.emit({ x: mx, y: -C.CANYON_DEPTH + 2 + Math.random() * 10, z: -mz, vx: (Math.random() - 0.5) * 1.2, vy: 2 + Math.random() * 4, vz: (Math.random() - 0.5) * 1.2,
+          jitter: 2, jitterY: 1.5, life: 2.4, s0: 1.2, s1: 4.5, color: '#d0e8f0', alpha: 0.14, drag: 0.35, grav: -0.4 }, 1 + (Math.random() < 0.35 ? 1 : 0));
+      }
     }
     // STABILIZE: white cold-gas jets from the car's four corners and both sides while the thrusters burn.
     if (s.phase === 'sky' && s.stabT > 0 && !s.over) thrusters(s, dt * L.fx);

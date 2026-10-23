@@ -28,8 +28,9 @@ function wall(level, S, terrainHeight, rimZ, dir, seed) {
       const y = d < 0 ? top + 0.6 : top - d * (top + D) / D;
       // erosion into the rock: fluted columns on cliffs, wavy benches, and big buttresses / side canyons away from the flight line
       // gullies: ridged noise stretched vertically at two scales, deepest on the cliff bands
-      const gully = Math.pow(ridged(x * 0.022 + seed, d * 0.006), 2.2) * 9 + Math.pow(ridged(x * 0.07 + seed * 2, d * 0.02), 2) * 3.2;
-      const flute = gully + fbm(x * 0.012 + seed, d * 0.03, 3) * cz.wallJitter;
+      // Columnar basalt: tall, tight vertical flutes (small d-scale) + broader buttresses — Twin Falls cliffs, not mesa benches.
+      const gully = Math.pow(ridged(x * 0.038 + seed, d * 0.0035), 2.5) * 12 + Math.pow(ridged(x * 0.11 + seed * 2, d * 0.012), 2.1) * 4.5;
+      const flute = gully + fbm(x * 0.018 + seed, d * 0.018, 3) * cz.wallJitter;
       const butt = (0.3 + 0.7 * smooth(40, 260, ax)) * (Math.pow(fbm(x * 0.0035 + seed * 3, 0.5, 3), 1.6) * 90 + ridged(x * 0.006 + seed, d * 0.004) * 18);
       const off = d < 0 ? 0 : (flute * (1 - benchK(d) * 0.6) + butt) * smooth(0, 3, d);
       const z = rimZ + dir * (S.wallInset(Math.max(0, d)) - off);
@@ -39,10 +40,11 @@ function wall(level, S, terrainHeight, rimZ, dir, seed) {
       const bf = clamp((d / D) * (strata.length - 1) + (fbm(x * 0.006 + seed, d * 0.01, 2) - 0.5) * 0.9, 0, strata.length - 1.001), b0 = Math.floor(bf), bt = smooth(0.25, 0.75, bf - b0);
       c.copy(strata[b0]).lerp(strata[b0 + 1], bt);
       const thin = Math.pow(Math.abs(Math.sin((d + fbm(x * 0.01, 2, 2) * 3) * 0.9)), 18); c.lerp(tmp.set(strata[0]), thin * 0.35);
-      const streak = Math.pow(noise2(x * 0.35 + seed, d * 0.02), 3) * (1 - benchK(d));
-      c.multiplyScalar(0.86 + 0.22 * fbm(x * 0.05, d * 0.15, 2) - streak * 0.35 - clamp(gully / 12, 0, 1) * 0.28 * (1 - benchK(d)));
-      if (benchK(d) > 0.2) c.lerp(tmp.set(level.palette.sandLight), benchK(d) * 0.35);
-      c.multiplyScalar(1 - 0.32 * smooth(0.3, 1, d / D));
+      const streak = Math.pow(noise2(x * 0.4 + seed, d * 0.015), 3) * (1 - benchK(d));
+      // Darker joints in the flutes, cooler pale ledges, deeper shade toward the river.
+      c.multiplyScalar(0.82 + 0.26 * fbm(x * 0.06, d * 0.12, 2) - streak * 0.4 - clamp(gully / 11, 0, 1) * 0.34 * (1 - benchK(d)));
+      if (benchK(d) > 0.2) c.lerp(tmp.set('#9aa2a8'), benchK(d) * 0.28);
+      c.multiplyScalar(1 - 0.38 * smooth(0.25, 1, d / D));
       if (d < 0.5) c.lerp(tmp.set(level.palette.sand), 0.6);
       colr[v * 3] = c.r; colr[v * 3 + 1] = c.g; colr[v * 3 + 2] = c.b; v++;
     }
@@ -100,7 +102,7 @@ function floorAndRiver(level, S, group, seed) {
   for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) { const a = i * 5 + k, b = a + 5; ri.push(a, b, a + 1, a + 1, b, b + 1); }
   const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(rp, 3)); rg.setAttribute('color', new THREE.Float32BufferAttribute(rc, 3)); rg.setAttribute('uv', new THREE.Float32BufferAttribute(ru, 2)); rg.setIndex(ri); rg.computeVertexNormals();
   const nrm = waterNormalTex();
-  const riverMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.06, metalness: 0.15, normalMap: nrm, normalScale: new THREE.Vector2(0.6, 0.6), emissive: level.canyon.river.color, emissiveIntensity: 0.22, envMapIntensity: 1.5 });
+  const riverMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.06, metalness: 0.15, normalMap: nrm, normalScale: new THREE.Vector2(0.6, 0.6), emissive: level.canyon.river.color, emissiveIntensity: 0.18, envMapIntensity: 1.35 });
   const river = new THREE.Mesh(rg, riverMat); river.receiveShadow = true; group.add(river);
   // boulders, riverside scrub and hoodoo spires (well outside the |x| <= SKY_X flight corridor)
   const r = rng(seed * 31 + 7), o = new THREE.Object3D(), vcFlat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
@@ -108,9 +110,9 @@ function floorAndRiver(level, S, group, seed) {
   for (let i = 0; i < 100; i++) { const x = (r() * 2 - 1) * 1200, side = r() < 0.5 ? -1 : 1, z = mid + meander(x) + side * (rw * 0.5 + 6 + r() * 70);
     o.position.set(x, -D - 0.3, -z); o.rotation.set(0, r() * TAU, 0); o.scale.setScalar(0.6 + r() * 3); o.updateMatrix(); bould.setMatrixAt(i, o.matrix); }
   bould.receiveShadow = true; bould.userData.tag = 'canyonProps'; group.add(bould);
-  const scrubMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true, color: '#9fd27a' });
-  const bush = new THREE.InstancedMesh(P.scrub(13), scrubMat, 130);
-  for (let i = 0; i < 130; i++) { const x = (r() * 2 - 1) * 1300, side = r() < 0.5 ? -1 : 1, z = mid + meander(x) + side * (rw * 0.5 + 1 + r() * 9);
+  const scrubMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true, color: '#c4d0ac' });
+  const bush = new THREE.InstancedMesh(P.scrub(13), scrubMat, 180);
+  for (let i = 0; i < 180; i++) { const x = (r() * 2 - 1) * 1300, side = r() < 0.5 ? -1 : 1, z = mid + meander(x) + side * (rw * 0.5 + 1 + r() * 9);
     o.position.set(x, -D - 0.2, -z); o.rotation.set(0, r() * TAU, 0); o.scale.setScalar(1 + r() * 1.8); o.updateMatrix(); bush.setMatrixAt(i, o.matrix); }
   bush.userData.tag = 'canyonProps'; group.add(bush);
   const spireParts = [];
@@ -211,11 +213,45 @@ function landingZone(level, S) {
   return { group: grp, lightMat };
 }
 
+
+/* Tall basalt column props along the cliff faces (outside the flight corridor). Cheap instanced cylinders. */
+function basaltColumns(level, S, group, seed) {
+  const n = level.canyon.columns | 0; if (!n) return;
+  const C = S.C, D = C.CANYON_DEPTH, r = rng(seed * 53 + 11), o = new THREE.Object3D();
+  const strata = level.canyon.strata;
+  const geo = new THREE.CylinderGeometry(1, 1.05, 1, 6, 1);
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, flatShading: true });
+  const baseCol = new THREE.Color(strata[Math.min(2, strata.length - 1)]);
+  const g = geo.clone();
+  const cols = new Float32Array(g.attributes.position.count * 3);
+  for (let i = 0; i < g.attributes.position.count; i++) {
+    const k = 0.85 + (i % 5) * 0.03; cols[i * 3] = baseCol.r * k; cols[i * 3 + 1] = baseCol.g * k; cols[i * 3 + 2] = baseCol.b * k;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  const mesh = new THREE.InstancedMesh(g, mat, n);
+  for (let i = 0; i < n; i++) {
+    const side = i % 2 === 0 ? 1 : -1;
+    const rimZ = side > 0 ? C.ROAD_LEN : C.ROAD_LEN + C.CANYON_W;
+    const x = (r() < 0.5 ? -1 : 1) * (55 + r() * 900);
+    const h = 30 + r() * 60;
+    const rad = 2.2 + r() * 3.2;
+    const inset = S.wallInset(h * 0.55) + 1.5 + r() * 3;
+    const z = rimZ + side * inset;
+    const yTop = -10 - r() * 40; // tops stay below the rim lip (no posts poking above the plateau)
+    o.position.set(x, yTop - h / 2, -z);
+    o.rotation.set((r() - 0.5) * 0.08, r() * TAU, (r() - 0.5) * 0.06);
+    o.scale.set(rad, h, rad * (0.9 + r() * 0.2));
+    o.updateMatrix(); mesh.setMatrixAt(i, o.matrix);
+  }
+  mesh.receiveShadow = true; mesh.userData.tag = 'canyonProps'; group.add(mesh);
+}
+
 export function buildCanyon(level, S, terrainHeight) {
   const C = S.C, group = new THREE.Group(), seed = level.canyon.seed ?? 3;
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93, flatShading: true });
   const near = new THREE.Mesh(wall(level, S, terrainHeight, C.ROAD_LEN, 1, seed), mat), far = new THREE.Mesh(wall(level, S, terrainHeight, C.ROAD_LEN + C.CANYON_W, -1, seed + 17), mat);
   near.receiveShadow = far.receiveShadow = true; group.add(near, far);
+  basaltColumns(level, S, group, seed);
   const fr = floorAndRiver(level, S, group, seed);
   const ramp = buildRamp(C, S); group.add(ramp.group);
   const land = landingZone(level, S); group.add(land.group);

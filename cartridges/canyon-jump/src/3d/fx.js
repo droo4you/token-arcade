@@ -65,7 +65,7 @@ export function createParticles(max = 900) {
 
 /* Clouds: camera-facing soft puffs, one instanced draw call, billboarded in the vertex shader (no per-frame CPU).
    Each cluster is a handful of puffs; the sunset tint is lighter on top, cooler underneath. */
-export function createClouds({ count = 70, seed = 9, z0, z1, yMin = 45, yMax = 230, xSpan = 700, top = '#ffd9cf', bottom = '#9a6a9e', rand }) {
+export function createClouds({ count = 70, seed = 9, z0, z1, yMin = 45, yMax = 230, xSpan = 700, top = '#ffd9cf', bottom = '#9a6a9e', rand, size = 1 }) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
   for (let i = 0; i < 14; i++) { const x = 30 + rand() * 68, y = 40 + rand() * 48, r = 18 + rand() * 26, gr = g.createRadialGradient(x, y, 0, x, y, r);
     gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); }
@@ -74,7 +74,7 @@ export function createClouds({ count = 70, seed = 9, z0, z1, yMin = 45, yMax = 2
   geo.index = base.index; geo.setAttribute('position', base.attributes.position); geo.setAttribute('uv', base.attributes.uv);
   const offs = [], scl = [], shade = [];
   for (let c = 0; c < count; c++) {
-    const cx = (rand() * 2 - 1) * xSpan * (rand() < 0.4 ? 0.1 : 1), cy = yMin + Math.pow(rand(), 1.3) * (yMax - yMin), cz = z0 + rand() * (z1 - z0), n = 5 + Math.floor(rand() * 6), w = 40 + rand() * 70;
+    const cx = (rand() * 2 - 1) * xSpan * (rand() < 0.4 ? 0.1 : 1), cy = yMin + Math.pow(rand(), 1.3) * (yMax - yMin), cz = z0 + rand() * (z1 - z0), n = 5 + Math.floor(rand() * 6), w = (40 + rand() * 70) * size;
     for (let k = 0; k < n; k++) { offs.push(cx + (rand() - 0.5) * w * 1.6, cy + (rand() - 0.3) * w * 0.3, -(cz + (rand() - 0.5) * w)); const s = w * (0.5 + rand() * 0.6); scl.push(s, s * 0.62); shade.push(rand()); }
   }
   geo.setAttribute('ioff', new THREE.InstancedBufferAttribute(new Float32Array(offs), 3));

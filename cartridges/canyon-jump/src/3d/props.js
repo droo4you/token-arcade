@@ -183,5 +183,18 @@ export function ring(R = 3.2) {
   for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; parts.push(tint(xf(new THREE.BoxGeometry(0.5, 0.18, 0.18), { x: Math.cos(a) * (R + 0.15), y: Math.sin(a) * (R + 0.15), rz: a }), '#ffffff')); }
   return merge(parts.map(p => p.index ? p.toNonIndexed() : p));
 }
-export const SKINS = { saguaro, sandstone, tumbleweed, cone, crow, jet, sat, ring, balloon };
+
+/* Big sagebrush (Artemisia) shrub: a gnarled trunk under a lumpy silver-sage crown. Same ~0.85 m half-width as the
+   saguaro skin so the obstacle hitbox still matches what you see. */
+export function sagebrush(color = '#7d8f6a', seed = 3, k = 1) {
+  const r = rng(seed * 13 + 5), parts = [], base = new THREE.Color(color), alt = base.clone().lerp(new THREE.Color('#b4bea0'), 0.45);
+  parts.push(tint(xf(new THREE.CylinderGeometry(0.07, 0.12, 0.5, 5), { y: 0.25, rz: 0.15 }), '#5a4a36', 0.2, seed));
+  for (let i = 0; i < 9; i++) {
+    const a = r() * TAU, d = 0.15 + r() * 0.5, h = 0.55 + r() * 0.95;
+    parts.push(tint(xf(new THREE.IcosahedronGeometry(0.32 + r() * 0.26, 0), { x: Math.cos(a) * d, y: h, z: Math.sin(a) * d, sy: 0.75 }), '#' + (r() < 0.5 ? base : alt).getHexString(), 0.22, seed + i));
+  }
+  const g = merge(parts); g.scale(k, k * 1.05, k); return g;
+}
+
+export const SKINS = { saguaro, sagebrush, sandstone, tumbleweed, cone, crow, jet, sat, ring, balloon };
 export { col };

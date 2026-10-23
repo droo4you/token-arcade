@@ -8,8 +8,8 @@
   const PAL = {
     skyTop: '#1a3a6e', skyMid: '#5a8ab8', skyLow: '#a8c0d8', skyHorizon: '#c8d8e8', sun1: '#fff6d8', sun2: '#ffd59a',
     mesaFar: '#4a5058', mesaMid: '#3a3e46', mesaNear: '#2e3238',
-    sandA: '#9a9a78', sandB: '#8a8a6a', road: '#2a2c30', roadB: '#24262a', lane: '#e8e4d4', rumbleA: '#ff3b5c', rumbleB: '#fff4e0',
-    canyon: ['#6a7078', '#4a5058', '#3a3e46', '#5a6068', '#2e3238', '#1e2228'], river: '#1a6a78',
+    sandA: '#8e9270', sandB: '#6e7260', road: '#26282c', roadB: '#202226', lane: '#e4e0d0', rumbleA: '#ff3b5c', rumbleB: '#fff4e0',
+    canyon: ['#7a8088', '#5a6068', '#3a3e46', '#4a5058', '#2e3238', '#161a20'], river: '#146878',
   };
   const hash = (n) => { n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
   const lerp = (a, b, t) => a + (b - a) * t;

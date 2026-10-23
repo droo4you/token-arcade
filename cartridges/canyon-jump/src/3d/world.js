@@ -206,9 +206,10 @@ export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
   const vc = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
   const vcFlat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
   const zEnd = C.ROAD_LEN + C.CANYON_W + 2500;
-  inst(P.saguaro(pal.cactus, 21, 1, 0), vc, place(sc2.cactus, sc2.minX + 2, sc2.spread, -300, zEnd), () => 0.8 + r() * 0.7, true, 'scatter');
+  inst((P.SKINS[level.obstacles?.cactus] === P.sagebrush ? P.sagebrush(pal.cactus, 21, 1.5) : P.saguaro(pal.cactus, 21, 1, 0)), vc, place(sc2.cactus, sc2.minX + 2, sc2.spread, -300, zEnd), () => 0.8 + r() * 0.7, true, 'scatter');
   inst(P.sandstone(pal.rock, 31, 1.6, 0.72, 1), vcFlat, place(sc2.rock, sc2.minX + 3, sc2.spread, -300, zEnd), () => 0.6 + r() * 2.2, false, 'scatter');
-  inst(P.scrub(7, 4), vcFlat, place(sc2.scrub, sc2.minX - 1, sc2.spread * 0.6, -300, zEnd), () => 0.7 + r() * 0.9, false, 'scatter');
+  const scrubMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true, color: '#c4d0ac' }); // sage tint over the olive/brown scrub vertex colors
+  inst(P.scrub(7, 4), scrubMat, place(sc2.scrub, sc2.minX - 1, sc2.spread * 0.6, -300, zEnd), () => 0.7 + r() * 0.9, false, 'scatter');
   // telephone poles + sagging wires
   const PL = level.terrain.poles, polePts = []; for (let z = -200; z < C.ROAD_LEN - 30; z += PL.spacing) polePts.push([PL.side * PL.offset, z]);
   for (let z = C.ROAD_LEN + C.CANYON_W + 40; z < C.ROAD_LEN + C.CANYON_W + 2400; z += PL.spacing) polePts.push([PL.side * PL.offset, z]);

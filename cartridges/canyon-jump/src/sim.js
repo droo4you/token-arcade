@@ -6,7 +6,7 @@
     DT: 1 / 120,
     ROAD_LEN: 2300,      // canyon rim (ramp lip) at this z
     CANYON_W: 520,       // far rim at ROAD_LEN + CANYON_W
-    CANYON_DEPTH: 110,   // river level below the rim
+    CANYON_DEPTH: 160,   // river ~525 ft below the rim (Twin Falls / Snake River)
     RAMP_LEN: 44, RAMP_H: 6, // kicker at the lip
     LANE_W: 3.4,
     V0: 36, ACCEL: 1.25, V_NATURAL: 72, V_MAX: 110,
@@ -48,7 +48,7 @@
     MAGNET_R: 10, MAGNET_Z: 60, MAGNET_V: 9,
     // Gorge wall profile shared by the sim and the 3D walls: [depth below the rim, inset into the gap] (m). Cliff bands,
     // benches and an inner gorge: the canyon narrows as it deepens, from 520 m at the rim to ~432 m at the river.
-    WALL: [[0, 0], [4, 0.5], [30, 3], [34, 14], [68, 18], [74, 30], [104, 34], [110, 44]],
+    WALL: [[0, 0], [4, 0.4], [22, 2], [28, 10], [70, 14], [78, 22], [120, 28], [140, 36], [160, 48]],
     // Landing forgiveness: nose-down up to 32° still sticks, and a trick at least 85% done at touchdown auto-finishes.
     LAND_MAX_DIVE: 0.56, TRICK_AUTO: 0.85, ROAD_BONUS: 150, ROAD_HW: 7,
     // STABILIZE (cold-gas thrusters): unwinds any trick to the nearest full turn, levels the nose to STAB_GAM and trims
