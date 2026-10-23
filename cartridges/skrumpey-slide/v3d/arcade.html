@@ -847,16 +847,23 @@ function frame(t){if(arcadeDestroyed)return;frameId=requestAnimationFrame(frame)
  const k=camMix*camMix*(3-2*camMix);
  const phone=MOBILE&&camera.aspect<1;
  const fcam=pathFrame(x);
- const sideDist=(phone?16:24)+glideA*3.2+gorgeA*11+launchB*4-diveA*(phone?2:3.2);
- const sideUp=(phone?4.6:6.4)+glideA*1.8+gorgeA*4.5+launchB*1.2-diveA*1.3;
+ // Stay outside shoulder props (they sit near ±17). On a tall phone a pure narrow side
+ // view pushes the character off the short axis, so the portrait side view is wider and
+ // looks at the body, with the next slope still ahead of them.
+ const sideDist=Math.max(phone?18:24,(phone?20:26)+glideA*2.2+gorgeA*(phone?5:10)+launchB*1.6-diveA*(phone?1:2.2));
+ const sideUp=(phone?3.4:6.4)+glideA*1.3+gorgeA*3.2+launchB*0.6-diveA*0.5;
+ const lookAhead=(phone?3.2:9)+gorgeA*(phone?5:12)-diveA*1.2;
  _sideP.set(fcam.cx-fcam.rx*sideDist, y+sideUp, fcam.cz-fcam.rz*sideDist);
- worldXYZ(x+(8+gorgeA*14-diveA*2), y*0.25+gh*0.75+2.6, 0, _sideL);
- const chaseBack=phone?9.4:12.4, chaseUp=phone?4.4:5.8, chaseAhead=phone?13:17;
+ worldXYZ(x+lookAhead, y+1.6, 0, _sideL);
+ const chaseBack=phone?10.2:12.6, chaseUp=phone?4.8:5.8, chaseAhead=phone?14:17;
  _chaseP.set(fcam.cx-fcam.tx*chaseBack+fcam.rx*lat*0.42, y+chaseUp, fcam.cz-fcam.tz*chaseBack+fcam.rz*lat*0.42);
- worldXYZ(x+chaseAhead, y+1.15, lat*0.7, _chaseL);
+ worldXYZ(x+chaseAhead, y+1.2, lat*0.7, _chaseL);
  _cp.lerpVectors(_sideP,_chaseP,k);
  _cl.lerpVectors(_sideL,_chaseL,k);
- let fovTarget=(46+diveA*16-glideA*4+gorgeA*12+launchB*2)*(1-k)+(phone?50:52)*k;
+ const fovSide=phone
+  ? THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(30))/Math.max(0.42,camera.aspect)))*(1+diveA*0.08+gorgeA*0.06)
+  : 44+diveA*14-glideA*3+gorgeA*8+launchB*2;
+ let fovTarget=fovSide*(1-k)+(phone?56:50)*k;
  shake*=Math.pow(0.002,dtR);_cp.x+=(Math.random()-.5)*shake;_cp.y+=(Math.random()-.5)*shake;
  // The hill/lane blend is already eased by camMix. Extra position lag slid the side camera backward and spoiled the profile.
  camReady=true;camera.position.copy(_cp);camL.copy(_cl);camera.lookAt(camL);
