@@ -1,6 +1,6 @@
 # Token Arcade release queue
 
-Updated 2026-10-22. This is the current handoff for both Codex and Grok. It supersedes branch/deployment instructions in the older RESUME and RELEASE_TASKS notes; those remain historical evidence.
+Updated 2026-10-23. This is the current handoff for both Codex and Grok. It supersedes branch/deployment instructions in the older RESUME and RELEASE_TASKS notes; those remain historical evidence.
 
 ## Where work belongs
 
@@ -20,7 +20,7 @@ Updated 2026-10-22. This is the current handoff for both Codex and Grok. It supe
 | Automatic testnet payouts | Codex, PR #17 | Enabled in Render on Oct 22 after explicit approval; live health confirms `automaticPayouts: true` on chain 10143. A real player raid with automatic delivery is still the next acceptance test. See AUTOMATIC_PAYOUTS.md. |
 | Skip Free Play glide/support and rock prices | Codex, PR #6 | Included in this release. User approved 11.5% growth per rock on Oct 22, replacing the branch's 6.7%. Competitive standard-v1 physics remain unchanged. |
 | Coindle history cache | Grok, PR #10 | Included in this release; persistence, background refresh and request deduplication tests pass. |
-| Coindle Rapid Fire + community totals | Grok, PR #11 | Not live. Conflicts with current main; next integration pass must preserve payout/analytics changes and verify server judging, session limits, leaderboard ordering and mobile completion. |
+| Coindle Rapid Fire + community totals | Grok, PR #11; Codex integration | Included in this release. Conflicts resolved against main with cache, analytics and payouts preserved. Server enforces 180 seconds / 6 guesses, rejects expired starts and forged scores, ends on pool exhaustion without repeats, and exposes the guessed coin's price tier. Raid lobby shows every verified run's community contribution. Daily Free Play stays available. |
 | Dark mode v2 | Grok, PR #20, `grok/dark-mode-v2` | Opened during this reconciliation. Not live; review system preference, saved toggle and game/overlay contrast against this release before merging. |
 | Two Places QC / level selection | Grok, PR #4 | Not live. Changes levels and collision behavior; needs a versioned game/verifier release before competitive rollout. Its Skrumpey sentry art is inside Two Places, not Skrumpey Slide. Preserve the new start-context tracking when integrating main.js. |
 | Legacy raid readiness CLI | Codex, PR #3 | Not live. Inspects the original fee-funded vault, not the new automatic payout vault. Low priority; retain as a legacy diagnostic or explicitly replace it. Never use it to claim automatic payout readiness. |
@@ -33,7 +33,7 @@ Updated 2026-10-22. This is the current handoff for both Codex and Grok. It supe
 
 1. Automatic payout activation is verified. Deploy and verify the tested Skip/cache integration.
 2. Run the next real funded testnet raid; verify the fixed winner receives the reward without a claim signature or gas balance. Verify the new vault's Envio coverage separately.
-3. Reconcile Coindle Rapid Fire, then publish Two Places through a versioned release.
+3. Coindle Rapid Fire is integrated; next publish Two Places through a versioned release and review dark mode PR #20.
 4. Review Grok's preview games separately. Keep mainnet planning separate from testnet evidence.
 
 ## Checks for this integration
@@ -45,3 +45,10 @@ Updated 2026-10-22. This is the current handoff for both Codex and Grok. It supe
 - Testnet secret is stored only through Render's environment UI; no key belongs in Git, chat, PRs or these documents.
 
 Update this file in each release PR with what moved, what remains and the verification evidence. Do not label planned changes as live based only on a PR merge.
+
+## Coindle integration checks (Oct 23)
+
+- 115 application tests pass, including server timing, rule limits, expired starts, no-repeat exhaustion, forged-score rejection, board tie ordering and cumulative community totals.
+- Production build passes.
+- Isolated browser check: local player started a timed round, guessed BTC, skipped with answer reveal, finished early and received a verified score and rank. No synthetic results were submitted to production.
+- The original PR #11 is updated directly so the conflict badge and release state remain attached to the same work item.
