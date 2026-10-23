@@ -34,7 +34,10 @@
     FLIP_T: 0.7, ROLL_T: 1.05, FLIP_PTS: 30, ROLL_PTS: 50, TRICK_CD: 0.2, TRICK_COST: 3,
     // Mid-spin lift dip stays soft (never a nosedive). Front/back flips also nudge flight-path angle a little so they
     // feel different and useful for aiming; left/right rolls kick a lateral impulse so you can dodge while spinning.
-    TRICK_DIP: 0.12, FLIP_GAM: 0.18, ROLL_VX: 10, TRICK_MIN_AGL: 8, VARIETY: 1.5,
+    TRICK_DIP: 0.12, FLIP_GAM: 0.18, ROLL_VX: 22, ROLL_COAST: 0.55, TRICK_MIN_AGL: 8, VARIETY: 1.5,
+    // Dive recovery: when the nose is clearly down and the stick is pulling up at mid/high speed, pitch snaps
+    // faster and lift can briefly exceed G_LIMIT so pull-ups catch a nosedive without changing low-speed stall.
+    DIVE_RECOVER_GAM: -0.22, DIVE_RECOVER_V: 70, DIVE_RECOVER_PITCH_K: 1.8, DIVE_RECOVER_G_K: 1.45, DIVE_RECOVER_RATE: 1.15,
     // Near misses: sky band = hitbox + NEAR_BAND m; road band = edge gap < NEAR_ROAD_BAND (kept under the 1.35 m that would
     // flag every rock/tumbleweed in the next lane, so it still means a real shave). MULT_MAX 2.5 keeps distance king.
     MULT_STEP: 0.5, MULT_MAX: 2.5, NEAR_POT: 40, NEAR_BAND: 6, NEAR_ROAD_BAND: 1.3, NEAR_ROAD_PTS: 50, NEAR_MULT: 0.25, RING_POT: 25, RING_MULT: 0.25, RING_V: 8, RING_R: 4.4, RING_PICK: 6, RING_FADE: 0.8, // each ring's speed kick is 80% of the last, so ring chains can't keep a flight alive forever
@@ -137,7 +140,7 @@
       z: 0, x: 0, y: 0, lane: 0, v: C.V0, vBase: C.V0, padBoost: 0, coinBoost: 0, launchV: 0,
       // sky: m = airspeed, gam = flight-path angle (rad, + = climbing), pIn = smoothed pitch input (-1 dive .. +1 climb)
       m: 0, vy: 0, vx: 0, gam: 0, pIn: 0, gLoad: 1, air: C.AIR_START, rot: 0, trick: 0, trickKind: null, trickDir: 1, trickDur: 0, lastTrickEnd: -9, stabT: 0, stabDur: 0, stabCd: 0, stabRot0: 0, stabRot1: 0,
-      cmb: { pot: 0, mult: 1, n: 0, last: null }, bank: 0, boostCd: 0, chain: 0, lastBoostT: -9, boostT: 0, launchT: 0,
+      cmb: { pot: 0, mult: 1, n: 0, last: null }, bank: 0, boostCd: 0, chain: 0, lastBoostT: -9, boostT: 0, rollCoast: 0, launchT: 0,
       obstacles: road.obstacles, pickups: road.pickups,
       sky: [], skyPickups: [], rings: [], skyChunk: 0,
       pts: { pickups: 0, tricks: 0, landing: 0, mach: 0 },
@@ -312,10 +315,11 @@
   const lerpRate = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
 
   /* Lift from pitch input and airspeed (m/s²). Exposed so the HUD and tests share the exact model. */
-  function liftAccel(V, pIn) {
+  function liftAccel(V, pIn, gLim) {
+    const lim = gLim == null ? C.G_LIMIT : gLim;
     const CL = pIn >= 0 ? C.CL_N + (C.CL_UP - C.CL_N) * pIn : C.CL_N + (C.CL_DN - C.CL_N) * -pIn;
     const stallK = clamp((V - C.V_MIN_LIFT) / (C.V_STALL - C.V_MIN_LIFT), 0, 1);
-    return clamp(C.G_SKY * CL * (V / C.LIFT_REF) * (V / C.LIFT_REF) * stallK, -C.G_LIMIT * C.G_SKY, C.G_LIMIT * C.G_SKY);
+    return clamp(C.G_SKY * CL * (V / C.LIFT_REF) * (V / C.LIFT_REF) * stallK, -lim * C.G_SKY, lim * C.G_SKY);
   }
   function addCombo(s, pot, mult) { s.cmb.pot += pot; s.cmb.mult = Math.min(C.MULT_MAX, s.cmb.mult + mult); if (s.cmb.mult > s.counts.bestMult) s.counts.bestMult = s.cmb.mult; }
   /* kind 'flip'|'roll'; dir: flip +1 = front (nose down), -1 = back (nose up); roll +1 = right, -1 = left. */
@@ -324,7 +328,7 @@
     const d = dir || 1;
     s.trickKind = kind; s.trickDir = d; s.trickDur = kind === 'roll' ? C.ROLL_T : C.FLIP_T; s.trick = s.trickDur;
     s.m = Math.max(0, s.m - C.TRICK_COST);
-    if (kind === 'roll') s.vx = clamp(s.vx + d * C.ROLL_VX, -C.STEER_V * 1.6, C.STEER_V * 1.6);
+    if (kind === 'roll') { s.vx = clamp(s.vx + d * C.ROLL_VX, -C.STEER_V * 2.2, C.STEER_V * 2.2); s.rollCoast = C.ROLL_COAST; }
     else s.gam = clamp(s.gam - d * C.FLIP_GAM, C.GAM_MIN, C.GAM_MAX); // front (+1) noses down; back (-1) noses up
     s.events.push({ e: 'trick', kind, dir: d }); return true;
   }
@@ -367,17 +371,27 @@
   function skyStep(s, input, dt) {
     const sx = input.steer != null ? clamp(input.steer, -1, 1) : (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const sy = input.pitch != null ? clamp(input.pitch, -1, 1) : (input.up ? 1 : 0) - (input.down ? 1 : 0);
-    // Steering: velocity snaps toward the stick target and damps fast when released (no floaty drift).
-    s.vx = lerpRate(s.vx, sx * C.STEER_V, sx ? C.STEER_RESP : C.STEER_RESP * 1.3, dt);
+    // Steering: snaps to the stick, except during a short post-roll coast so the sideways kick actually travels.
+    s.rollCoast = Math.max(0, (s.rollCoast || 0) - dt);
+    if (s.rollCoast > 0) {
+      const stickVx = sx * C.STEER_V;
+      if (sx && Math.sign(stickVx) === Math.sign(s.vx || 1) && Math.abs(stickVx) > Math.abs(s.vx)) s.vx = lerpRate(s.vx, stickVx, C.STEER_RESP, dt);
+      else s.vx *= Math.exp(-0.55 * dt); // slow bleed, not an instant kill
+    } else {
+      s.vx = lerpRate(s.vx, sx * C.STEER_V, sx ? C.STEER_RESP : C.STEER_RESP * 1.3, dt);
+    }
     s.x = clamp(s.x + s.vx * dt, -C.SKY_X, C.SKY_X);
     if (Math.abs(s.x) >= C.SKY_X) s.vx = 0;
     s.bank = clamp(s.vx / 14, -1, 1);
-    // Pitch -> lift. A trick in progress costs a sliver of lift (max TRICK_DIP mid-spin), so it barely dips the nose.
-    s.pIn = lerpRate(s.pIn, sy, C.PITCH_RESP, dt);
+    // Pitch -> lift. Dive recovery: nose-down + stick up at mid/high speed gets faster pitch and a higher g cap.
     let V = s.m, g = s.gam;
-    const L = liftAccel(V, s.pIn), Lv = L * (1 - C.TRICK_DIP * (1 - Math.cos(s.rot || 0)) / 2);
+    const recovering = g <= C.DIVE_RECOVER_GAM && sy > 0.15 && V >= C.DIVE_RECOVER_V;
+    s.pIn = lerpRate(s.pIn, sy, recovering ? C.PITCH_RESP * C.DIVE_RECOVER_PITCH_K : C.PITCH_RESP, dt);
+    const L = liftAccel(V, s.pIn, recovering ? C.G_LIMIT * C.DIVE_RECOVER_G_K : C.G_LIMIT), Lv = L * (1 - C.TRICK_DIP * (1 - Math.cos(s.rot || 0)) / 2);
     s.gLoad = L / C.G_SKY;
     g += (Lv - C.G_SKY * Math.cos(g)) / Math.max(V, 12) * dt;
+    // Extra flight-path authority while recovering: high-speed nosedives otherwise turn too slowly (÷V).
+    if (recovering) g += sy * C.DIVE_RECOVER_RATE * dt;
     // Committed dive (stick forward, nose below the horizon): the car tucks and parasitic drag drops, so a dive banks real speed.
     const tuck = s.pIn < 0 && g < 0 ? -s.pIn * C.DIVE_TUCK : 0;
     V += (-C.G_SKY * Math.sin(g) - (C.DRAG0 + C.DRAG2 * V * V) * (1 - tuck) - C.DRAG_I * s.gLoad * s.gLoad) * dt;

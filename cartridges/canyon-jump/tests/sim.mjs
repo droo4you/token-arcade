@@ -159,6 +159,24 @@ test('rolls stay soft on pitch; front/back flips nudge the nose; left/right roll
   assert.ok(back.gam > C.FLIP_GAM * 0.9, `back flip gam ${back.gam}`);
 });
 
+test('roll coast: sideways kick travels for a beat instead of dying to steer damping', () => {
+  const s = launchAt(105); s.y = 100; s.gam = 0; s.m = 100; s.vx = 0; s.x = 0;
+  S.step(s, { rollRightEdge: true });
+  const x0 = s.x, vx0 = s.vx;
+  for (let i = 0; i < Math.round(C.ROLL_COAST * 0.7 * 120); i++) S.step(s, {}); // hands off
+  assert.ok(s.x - x0 > 4, `coasted ${ (s.x - x0).toFixed(2) } m`); assert.ok(Math.abs(s.vx) > Math.abs(vx0) * 0.35, 'vx still alive mid-coast');
+});
+
+test('dive recovery: pull-up from a steep mid/high-speed dive catches in under 0.7 s', () => {
+  const s = launchAt(105); s.y = 140; s.gam = -0.7; s.m = 140; s.pIn = 0; let t = 0;
+  while (s.gam < -0.05 && t < 3) { S.step(s, { pitch: 1 }); t += C.DT; }
+  assert.ok(t < 0.7, `dive recover ${t.toFixed(2)} s`);
+  // 0.3 s of full pull from -0.7 should already be past the recover threshold.
+  const u = launchAt(105); u.y = 140; u.gam = -0.7; u.m = 140; u.pIn = 0;
+  for (let i = 0; i < 36; i++) S.step(u, { pitch: 1 });
+  assert.ok(u.gam > -0.35, `0.3 s pull reached ${u.gam.toFixed(3)}`);
+});
+
 test('rings give speed and combo; risky rewards hug hazards but never overlap a hitbox anywhere they sway', () => {
   const s = launchAt(105); s.rings = [{ x: 0, y: s.y + 1, z: s.z + 5, taken: false }]; s.gam = 0.05;
   const v0 = s.m; for (let i = 0; i < 12; i++) S.step(s, {});

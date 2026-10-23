@@ -76,21 +76,34 @@
   // (STABILIZE, 2×2 rolls/flips, BOOST). Right-side swipes still map to tricks as a fallback.
   const touches = new Map(); let stick = null; const lanes = window.CJInput.create();
   const TRICK_KEYS = ['rollLeft', 'rollRight', 'flipFront', 'flipBack'];
+  /* Portrait-first control cluster: stick bottom-left; Stabilize spans a clean 2×2; Boost sits clear to the right. */
   const BTN = () => {
-    const r = 12 + (G.safe?.r || 0), b = 12 + (G.safe?.b || 0), l = 12 + (G.safe?.l || 0);
-    const tr = 34, gap = 8, cx = W - r - 168, cy = H - b - 118;
+    const padR = 10 + (G.safe?.r || 0), padB = 10 + (G.safe?.b || 0), padL = 10 + (G.safe?.l || 0);
+    const narrow = W < 520 || G.portrait;
+    const tr = narrow ? 30 : 34, gap = narrow ? 10 : 12, boostR = narrow ? 46 : 50, stickR = narrow ? 44 : 50;
+    const boostX = W - padR - boostR, boostY = H - padB - boostR;
+    // 2×2 sits left of Boost with a fixed clear gutter (no overlap).
+    const gutter = gap + 6;
+    const gridHalf = 2 * tr + gap / 2;
+    const cx = boostX - boostR - gutter - gridHalf;
+    const cy = boostY; // vertically center the 2×2 on Boost
+    const stabH = narrow ? 48 : 54;
+    const stabW = 4 * tr + gap + 8; // spans the 2×2
+    const stabY = cy - gridHalf - gap - 12 - stabH / 2; // extra air so Stabilize never kisses the ROLL row
+    const stickX = padL + stickR + 8, stickY = H - padB - stickR - 6;
     return {
-      boost: { x: W - r - 58, y: H - b - 108, r: 52 },
-      stab: { x: W - r - 118, y: H - b - 248, w: 200, h: 58, pill: true },
+      boost: { x: boostX, y: boostY, r: boostR },
+      stab: { x: cx, y: stabY, w: stabW, h: stabH, pill: true },
       rollLeft: { x: cx - tr - gap / 2, y: cy - tr - gap / 2, r: tr },
       rollRight: { x: cx + tr + gap / 2, y: cy - tr - gap / 2, r: tr },
       flipFront: { x: cx - tr - gap / 2, y: cy + tr + gap / 2, r: tr },
       flipBack: { x: cx + tr + gap / 2, y: cy + tr + gap / 2, r: tr },
-      stick: { x: l + 72, y: H - b - 88, r: 56 },
+      stick: { x: stickX, y: stickY, r: stickR + 8 },
+      _stickR: stickR,
     };
   };
-  const inBtn = (p, B) => B.pill ? Math.abs(p.x - B.x) < B.w / 2 + 10 && Math.abs(p.y - B.y) < B.h / 2 + 10 : Math.hypot(p.x - B.x, p.y - B.y) < B.r * 1.25;
-  const STICK_R = 48;
+  const inBtn = (p, B) => B.pill ? Math.abs(p.x - B.x) < B.w / 2 + 8 && Math.abs(p.y - B.y) < B.h / 2 + 8 : Math.hypot(p.x - B.x, p.y - B.y) < B.r * 1.15;
+  const STICK_R = () => (BTN()._stickR || 44);
   function toLogical(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
   function onDown(e) {
     A.init(); canvas.focus?.();
@@ -153,13 +166,13 @@
     const pad = BTN().stick;
     if (stick !== null && touches.has(stick)) {
       const t = touches.get(stick), ox = t.stick ? pad.x : t.x0, oy = t.stick ? pad.y : t.y0;
-      const dx = t.x - ox, dy = t.y - oy, len = Math.hypot(dx, dy), lim = Math.min(len, STICK_R), ang = Math.atan2(dy, dx);
+      const R = STICK_R(), dx = t.x - ox, dy = t.y - oy, len = Math.hypot(dx, dy), lim = Math.min(len, R), ang = Math.atan2(dy, dx);
       const kx = Math.cos(ang) * lim, ky = Math.sin(ang) * lim;
-      const dz = v => Math.abs(v) < 4 ? 0 : (v - Math.sign(v) * 4) / (STICK_R - 4);
+      const dz = v => Math.abs(v) < 4 ? 0 : (v - Math.sign(v) * 4) / (R - 4);
       i.steer = Math.max(-1, Math.min(1, dz(kx))); i.pitch = Math.max(-1, Math.min(1, -dz(ky)));
-      G.stickVis = { x0: ox, y0: oy, dx: i.steer, dy: -i.pitch, active: true };
+      G.stickVis = { x0: ox, y0: oy, dx: i.steer, dy: -i.pitch, active: true, R };
     } else if (G.touch && G.run?.phase === 'sky') {
-      G.stickVis = { x0: pad.x, y0: pad.y, dx: 0, dy: 0, active: false };
+      G.stickVis = { x0: pad.x, y0: pad.y, dx: 0, dy: 0, active: false, R: STICK_R() };
     } else G.stickVis = null;
     if (AUTOPILOT && G.run) Object.assign(i, autopilot(G.run));
     edges.left = edges.right = edges.boost = edges.stab = edges.rollLeft = edges.rollRight = edges.flipFront = edges.flipBack = false;
@@ -599,12 +612,12 @@
   /* Fixed bottom-left virtual joystick: always visible in the sky so the pitch/steer pad is obvious. */
   function drawStick() {
     const v = G.stickVis; if (!v) return;
-    const R = STICK_R, active = !!v.active;
+    const R = v.R || STICK_R(), active = !!v.active;
     ctx.globalAlpha = active ? 0.55 : 0.38;
-    ctx.fillStyle = 'rgba(22,10,36,0.55)'; ctx.beginPath(); ctx.arc(v.x0, v.y0, R + 10, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(22,10,36,0.55)'; ctx.beginPath(); ctx.arc(v.x0, v.y0, R + 8, 0, 7); ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath(); ctx.arc(v.x0, v.y0, R, 0, 7); ctx.stroke();
-    ctx.globalAlpha = active ? 0.9 : 0.55; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(v.x0 + v.dx * R, v.y0 + v.dy * R, active ? 20 : 16, 0, 7); ctx.fill();
-    ctx.globalAlpha = 0.55; text('▲▼ pitch', v.x0, v.y0 - R - 16, 11, '#fff', 'center', false, 700);
+    ctx.globalAlpha = active ? 0.9 : 0.55; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(v.x0 + v.dx * R, v.y0 + v.dy * R, active ? 18 : 15, 0, 7); ctx.fill();
+    ctx.globalAlpha = 0.5; text('▲▼', v.x0, v.y0 - R - 14, 11, '#fff', 'center', false, 700);
     ctx.globalAlpha = 1;
   }
   function logo(y, size) {
