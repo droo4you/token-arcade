@@ -202,7 +202,7 @@ function updateAim(dt) {
   const key = Math.round(a.angle * 2) + ':' + Math.round(a.power * 40);
   if (key !== a.previewKey) {
     a.previewKey = key;
-    const t = SIM.newRun(G8.tut ? TUT_UP : save.up, 1);
+    const t = SIM.newRun(G8.tut ? TUT_UP : save.up, 1, !!G8.run?.balanceV2 || G8.tut);
     t.ents = []; t.chunks = 1e9;
     SIM.throwRock(t, a.angle, throwPower(Math.max(a.power, 0.1)), HAND_X); t.alt = HAND_ALT;
     const pts = [];
@@ -224,7 +224,7 @@ const TUT_SEED = 55;
 function startTut() {
   toAim();
   G8.tut = { t: 0, caps: [], cap: null, seen: new Set(), end: 0 };
-  G8.run = SIM.newRun(TUT_UP, TUT_SEED);
+  G8.run = SIM.newRun(TUT_UP, TUT_SEED, true);
   tutCaption('PULL BACK ANYWHERE TO AIM. FURTHER BACK = MORE POWER');
   tutCaption('AIM LOW. THE GREEN SKIP ZONE SKIPS BEST');
 }
@@ -264,7 +264,7 @@ function updateTut(dt) {
     const a = G8.aim, k = Math.min(1, Math.max(0, (T.t - 0.8) / 1.6));
     a.drag = { x0: 300, y0: 120, x: 300 - 52 * k, y: 120 + 15 * k };
     aimFromDrag(a);
-    if (T.t > 3.6) { a.drag = null; a.angle = 16; a.power = 1; doThrow(); tutCaption('TAP SPACE OR THE SCREEN AS THE ROCK HITS THE WATER'); tutCaption('UP AND DOWN TILT THE ROCK. DIVE FOR SPEED'); }
+    if (T.t > 3.6) { a.drag = null; a.angle = 16; a.power = 1; doThrow(); tutCaption('TAP SPACE OR THE SCREEN AS THE ROCK HITS THE WATER'); tutCaption('TILT USES GAS. RELEASE TO SAVE IT'); }
     return;
   }
   // the demo makes its point in about a minute; cut it there
@@ -300,11 +300,13 @@ function drawTut() {
 
 // ---------- screen changes ----------
 function toAim() {
-  if (window.TokenArcade?.active && !window.TokenArcade.beginRun()) return;
+  const freeContext = window.TokenArcade?.config?.mode === 'free'
+    ? { rocksOwned: save.rocks.length, walletGwei: save.gwei, ...Object.fromEntries(Object.entries(save.up).map(([key, value]) => ['upgrade_' + key, value])) } : undefined;
+  if (window.TokenArcade?.active && !window.TokenArcade.beginRun(freeContext)) return;
   G8.screen = 'aim';
   // Passport Play (ranked/raid): issued seed + locked standard loadout; record the throw and every sim tick for server replay.
   const graded = window.TokenArcade?.embedded && window.TokenArcade.config && window.TokenArcade.config.mode !== 'free';
-  G8.run = graded ? SIM.newRun(SIM.STANDARD_LOADOUT, SIM.issuedSeed(window.TokenArcade.config.seed)) : SIM.newRun(save.up, (Math.random() * 2 ** 31) >>> 0);
+  G8.run = graded ? SIM.newRun(SIM.STANDARD_LOADOUT, SIM.issuedSeed(window.TokenArcade.config.seed)) : SIM.newRun(save.up, (Math.random() * 2 ** 31) >>> 0, true);
   G8.rec = graded ? { angle: null, power: null, input: '' } : null;
   G8.aim = newAim();
   G8.camX = HAND_X - 150; G8.camAlt = 0; G8.texts = []; G8.parts = []; G8.banner = null; G8.paused = false;
@@ -683,6 +685,12 @@ function drawHUD() {
   blit(ctx, GEM(), W / 2 + 40, 6);
   drawText(ctx, String(run.gems), W / 2 + 50, 7, '#d6c2ff');
   drawMiniChart(run.candles, W - 110, 3, 84, 14);
+  if (run.balanceV2) {
+    drawText(ctx, 'GAS ' + Math.ceil(run.gas) + '/' + run.s.gas, 6, 24, run.gas > 0 ? '#7be08a' : '#ff6b6b');
+    px(ctx, '#322443', 6, 34, 64, 4);
+    px(ctx, '#7be08a', 6, 34, 64 * run.gas / run.s.gas, 4);
+    drawText(ctx, 'SUPPORT: TIME YOUR TAPS', 6, 41, '#ffcf70');
+  }
   if (G8.screen === 'fly') {
     drawText(ctx, 'II', W - 16, 7, '#fff');
     const by = H - 12;

@@ -1,0 +1,11 @@
+{
+  "fixtureOnly": true,
+  "chainId": 10143,
+  "vault": "0xa2c8b6819575705b340d7fb6796076bd1fed8a12",
+  "chainRaidId": "0x61d86d976cfa9722d7de517c0f63c98e8cad6d7cc5fc2beff09f8eb5cb71b17e",
+  "recipient": "0x330890c9Bc9c9086e7C4ED11E167E1dA47F134cE",
+  "recipientNativeBalance": "0",
+  "prizeWei": "100000000000000",
+  "status": "paid",
+  "transactionHash": "0xe271c9425bd83920a573cd856e8450971c3d09090fb7eff1b2de9a82bbe7b9b7"
+}

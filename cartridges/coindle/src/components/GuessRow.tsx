@@ -35,7 +35,7 @@ function formatPrice(price: number): string {
 export default function GuessRow({ guess, prices, livePrices, rowIndex, hintedIndices }: GuessRowProps) {
   const priceData = prices[guess.coin.ticker];
   const livePrice = livePrices?.[guess.coin.ticker];
-  const priceTier = priceData?.tier;
+  const priceTier = guess.priceTier ?? priceData?.tier;
   const cells = [
     {
       label: "Type",

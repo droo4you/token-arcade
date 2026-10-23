@@ -1,4 +1,6 @@
 import type { IncomingMessage } from "node:http";
+import { mkdirSync, readFileSync, renameSync, writeFileSync, accessSync, constants } from "node:fs";
+import { dirname, join } from "node:path";
 import { COINS } from "../../../cartridges/coindle/src/lib/coins.ts";
 import { getPriceTier } from "../../../cartridges/coindle/src/lib/constants.ts";
 
@@ -10,6 +12,8 @@ type Options = {
   sleep?: (ms: number) => Promise<void>;
   log?: (message: string) => void;
   random?: () => number;
+  /** Directory for the persisted history cache. null = memory only. Default: COINDLE_CACHE_DIR, /var/data, then the DB dir. */
+  cacheDir?: string | null;
 };
 type Point = { timestamp: number; price: number };
 class UpstreamError extends Error {
@@ -20,7 +24,7 @@ class UpstreamError extends Error {
 }
 /** History tuning. Full series cache for a day; partial series only briefly; empty never. */
 export const HISTORY = {
-  points: 31, concurrency: 2, batchDelayMs: 100, maxRetries: 2, baseBackoffMs: 250, maxBackoffMs: 2_000,
+  points: 31, concurrency: 6, maxRetries: 2, baseBackoffMs: 250, maxBackoffMs: 2_000,
   fullTtlMs: 86_400_000, partialTtlMs: 600_000,
   /** If a timestamp has no update (404/400), try slightly later instants (seconds). */
   nearbyOffsets: [60, 3_600],
@@ -28,6 +32,16 @@ export const HISTORY = {
 const HERMES = "https://hermes.pyth.network";
 const liveCoins = COINS.filter((coin) => !coin.retired);
 const knownIds = new Set(liveCoins.map((coin) => coin.pythFeedId));
+type HistoryEntry = { day: string; builtAt: number; body: { ticker: string; points: Point[] } };
+
+function defaultCacheDir(): string | null {
+  const candidates = [process.env.COINDLE_CACHE_DIR, "/var/data", process.env.ARCADE_DB_PATH ? dirname(process.env.ARCADE_DB_PATH) : undefined];
+  for (const dir of candidates) {
+    if (!dir) continue;
+    try { mkdirSync(dir, { recursive: true }); accessSync(dir, constants.W_OK); return dir; } catch { /* try next */ }
+  }
+  return null;
+}
 const priceValue = (item: ParsedPrice) => Number(item.price.price) * 10 ** Number(item.price.expo);
 
 /** Read-only, allowlisted Pyth data. This is not a competitive answer judge. */
@@ -55,6 +69,29 @@ export function createCoindleHandler(options: Options = {}) {
     pending.set(key, request);
     return request;
   }
+  const cacheDir = options.cacheDir === undefined ? defaultCacheDir() : options.cacheDir;
+  const cacheFile = cacheDir ? join(cacheDir, "coindle-history.json") : null;
+  const history = new Map<string, HistoryEntry>();
+  const building = new Map<string, Promise<HistoryEntry>>();
+  if (cacheFile) {
+    try {
+      const saved = JSON.parse(readFileSync(cacheFile, "utf8")) as Record<string, HistoryEntry>;
+      for (const [ticker, entry] of Object.entries(saved)) {
+        if (liveCoins.some((coin) => coin.ticker === ticker) && Array.isArray(entry?.body?.points) && entry.body.points.length) history.set(ticker, entry);
+      }
+    } catch { /* no cache yet or unreadable: start empty */ }
+  }
+  function persist() {
+    if (!cacheFile) return;
+    try {
+      const tmp = `${cacheFile}.${process.pid}.tmp`;
+      writeFileSync(tmp, JSON.stringify(Object.fromEntries(history)));
+      renameSync(tmp, cacheFile);
+    } catch (error) { log(`[coindle] history cache not persisted: ${(error as Error).message}`); }
+  }
+  /** Shared 429 gate: when Pyth rate-limits one worker, every worker waits. */
+  let pausedUntil = 0;
+  async function paced() { const wait = pausedUntil - Date.now(); if (wait > 0) await sleep(wait); }
   async function read(ids: string[], at?: number): Promise<ParsedPrice[]> {
     const params = new URLSearchParams({ parsed: "true" });
     ids.forEach((id) => params.append("ids[]", id));
@@ -78,6 +115,7 @@ export function createCoindleHandler(options: Options = {}) {
     for (const offset of [0, ...HISTORY.nearbyOffsets]) {
       for (let attempt = 0; ; attempt++) {
         try {
+          await paced();
           const data = await read([feedId], timestamp + offset);
           if (data.length) return { timestamp, price: priceValue(data[0]) };
           break; // empty parse: try a nearby instant
@@ -90,6 +128,7 @@ export function createCoindleHandler(options: Options = {}) {
             const backoff = Math.min(HISTORY.maxBackoffMs, HISTORY.baseBackoffMs * 2 ** attempt);
             const wait = error instanceof UpstreamError && error.retryAfterMs !== undefined
               ? Math.min(HISTORY.maxBackoffMs, error.retryAfterMs) : backoff + random() * backoff * 0.5;
+            if (status === 429) pausedUntil = Math.max(pausedUntil, Date.now() + wait);
             await sleep(wait);
             continue;
           }
@@ -100,7 +139,47 @@ export function createCoindleHandler(options: Options = {}) {
     }
     return null;
   }
-  return async function coindle(request: Pick<IncomingMessage, "method">, url: URL): Promise<Reply | null> {
+  const isFresh = (entry: HistoryEntry, day: string) => entry.day === day
+    && (entry.body.points.length >= HISTORY.points ? now() - entry.builtAt < HISTORY.fullTtlMs : now() - entry.builtAt < HISTORY.partialTtlMs);
+  async function buildHistory(ticker: string, day: string): Promise<HistoryEntry> {
+    const coin = liveCoins.find((coin) => coin.ticker === ticker)!;
+    const midnight = Date.parse(`${day}T00:00:00Z`) / 1000;
+    const dates = Array.from({ length: HISTORY.points }, (_, index) => midnight - (90 - index * 3) * 86400);
+    const results: (Point | null)[] = new Array(dates.length).fill(null);
+    let next = 0;
+    const worker = async () => { while (next < dates.length) { const i = next++; results[i] = await historyPoint(coin.pythFeedId, dates[i], ticker); } };
+    await Promise.all(Array.from({ length: Math.min(HISTORY.concurrency, dates.length) }, worker));
+    const points = results.filter((point): point is Point => point !== null);
+    if (!points.length) throw new Error("No historical points available");
+    if (points.length < dates.length) log(`[coindle] history ${ticker} partial series ${points.length}/${dates.length}`);
+    return { day, builtAt: now(), body: { ticker, points } };
+  }
+  /** Deduped build; on success replaces the cache entry and persists. */
+  function refresh(ticker: string, day: string): Promise<HistoryEntry> {
+    const inFlight = building.get(ticker);
+    if (inFlight) return inFlight;
+    const job = buildHistory(ticker, day).then((entry) => {
+      const previous = history.get(ticker);
+      // Never replace a full series for today with a worse partial one.
+      if (!(previous && previous.day === day && previous.body.points.length > entry.body.points.length)) { history.set(ticker, entry); persist(); }
+      else history.set(ticker, { ...previous, builtAt: now() });
+      return history.get(ticker)!;
+    }).finally(() => building.delete(ticker));
+    building.set(ticker, job);
+    return job;
+  }
+  /** Fresh: serve. Stale: serve and refresh in the background. Missing: build and wait. */
+  async function historyFor(ticker: string) {
+    const day = new Date(now()).toISOString().slice(0, 10);
+    const entry = history.get(ticker);
+    if (entry && isFresh(entry, day)) return entry.body;
+    if (entry) {
+      refresh(ticker, day).catch(() => log(`[coindle] background history refresh failed for ${ticker}`));
+      return entry.body;
+    }
+    return (await refresh(ticker, day)).body;
+  }
+  const handler = async function coindle(request: Pick<IncomingMessage, "method">, url: URL): Promise<Reply | null> {
     const endpoint = url.pathname.match(/^\/api\/coindle\/(prices|live|history)$/)?.[1];
     if (!endpoint) return null;
     if (request.method !== "GET") return { status: 405, body: { error: "Only GET is supported" } };
@@ -134,24 +213,21 @@ export function createCoindleHandler(options: Options = {}) {
       const ticker = url.searchParams.get("ticker")?.toUpperCase();
       const coin = liveCoins.find((coin) => coin.ticker === ticker);
       if (!coin) return { status: 400, body: { error: "Unknown or retired ticker" } };
-      const body = await cached(`history:${ticker}:${day}`,
-        (result) => (result as { points: Point[] }).points.length >= HISTORY.points ? HISTORY.fullTtlMs : HISTORY.partialTtlMs,
-        async () => {
-          const midnight = Date.parse(`${day}T00:00:00Z`) / 1000;
-          const points: Point[] = [];
-          const dates = Array.from({ length: HISTORY.points }, (_, index) => midnight - (90 - index * 3) * 86400);
-          for (let index = 0; index < dates.length; index += HISTORY.concurrency) {
-            if (index) await sleep(HISTORY.batchDelayMs);
-            const batch = await Promise.all(dates.slice(index, index + HISTORY.concurrency).map((timestamp) => historyPoint(coin.pythFeedId, timestamp, ticker!)));
-            points.push(...batch.filter((point): point is Point => point !== null));
-          }
-          if (!points.length) throw new Error("No historical points available");
-          if (points.length < dates.length) log(`[coindle] history ${ticker} partial series ${points.length}/${dates.length}`);
-          return { ticker, points };
-        });
+      const body = await historyFor(ticker!);
       return { status: 200, body };
     } catch {
       return { status: 502, body: { error: "Pyth data is temporarily unavailable" } };
     }
   };
+  /** Build any missing/stale histories one ticker at a time (boot prewarm). Never throws. */
+  async function prewarm(tickers: string[] = liveCoins.map((coin) => coin.ticker)) {
+    if (!apiKey) return;
+    for (const ticker of tickers) {
+      const day = new Date(now()).toISOString().slice(0, 10);
+      const entry = history.get(ticker);
+      if (entry && isFresh(entry, day)) continue;
+      try { await refresh(ticker, day); } catch { log(`[coindle] prewarm failed for ${ticker}`); }
+    }
+  }
+  return Object.assign(handler, { prewarm });
 }

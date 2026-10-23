@@ -31,7 +31,13 @@ The existing global settlement health flag still describes general paid-entry
 settlement. This explicit testnet pilot is free entry and uses its own custody checks.
 
 Before opening: each player opens their Passport, has a Privy arcade wallet,
-and confirms they can access that same wallet for transaction signing. The winner
+and clicks **Check wallet signing** under **Wallets & communities**. They approve
+the plain-message prompt in Privy and must see **Signing verified for this arcade
+wallet**. The browser recovers the signer from the signature and checks it against
+the exact Passport address. Each check has a fresh nonce; signatures are neither
+stored nor sent to the API. This local diagnostic costs no gas and grants no permissions.
+It is not an admission credential or proof that an on-chain transaction will succeed.
+The winner
 needs test MON for gas. Browser access to a server-created Privy wallet has not yet
 been verified end-to-end; the unit tests cannot prove this. Do not start the timed
 player event until this wallet check succeeds.

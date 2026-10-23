@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { GameRunConfig } from "../../../packages/sdk/src/index.ts";
 import { createArcadeServer } from "../src/server.ts";
 import { ArcadeStore } from "../src/store.ts";
-import { createCoindleRapid, RAPID_RULES } from "../src/coindleRapid.ts";
+import { createCoindleRapid, judge, RAPID_RULES } from "../src/coindleRapid.ts";
 import { COINS } from "../../../cartridges/coindle/src/lib/coins.ts";
 
 const live = COINS.filter((coin) => !coin.retired);
@@ -22,6 +22,9 @@ function unit(rules = RAPID_RULES) {
 }
 
 test("Rapid Fire: server picks, judges and times; answers never leak before a solve or miss", async () => {
+  const clue = judge(live[0], live[1], { [live[0].ticker]: { tier: 2 }, [live[1].ticker]: { tier: 4 } });
+  assert.equal(clue.priceTier, 2, "display the guessed coin's judged price tier, never the answer's");
+  assert.equal(clue.priceRangeDirection, "up");
   const { rapid, answer, tick } = unit();
   await assert.rejects(rapid.guess(runId, "BTC"), /Start the Rapid Fire clock/);
   const started = rapid.start(runId);
@@ -70,6 +73,23 @@ test("Rapid Fire verifier only accepts the server ledger after the window closes
 });
 
 // ── HTTP: Passport Play board and Community Raid total ──
+test("Rapid Fire requires reviewed limits, rejects expired starts, and never repeats an exhausted pool", async () => {
+  for (const rules of [{ ...RAPID_RULES, windowSeconds: -1 }, { ...RAPID_RULES, maxGuessesPerCoin: 100 }]) {
+    assert.throws(() => unit(rules).rapid.start(runId), /reviewed Rapid Fire rules/);
+  }
+  const expired = unit(); expired.tick(600_000);
+  assert.throws(() => expired.rapid.start(runId), /Not enough session time/);
+  const { rapid, answer } = unit(); rapid.start(runId);
+  const seen = new Set<string>();
+  for (let i = 0; i < live.length; i++) {
+    const coin = answer(); assert.equal(seen.has(coin), false); seen.add(coin);
+    await rapid.guess(runId, coin);
+  }
+  assert.equal(rapid.state(runId)?.ended, true);
+  assert.equal(rapid.state(runId)?.solved, live.length);
+  assert.throws(() => rapid.skip(runId), /window has ended/);
+});
+
 const store = new ArcadeStore(":memory:", true);
 const server = createArcadeServer({ store, authSettings: { localDemoMode: true }, staticRoot: "nonexistent-build" });
 let base = "";

@@ -41,10 +41,41 @@ test("Free Play summaries support guests and accounts without awarding competiti
   assert.equal(report.body.summaries.find((r: any) => r.runId === "summary-guest").playerId, null);
   assert.equal(report.body.summaries[0].proof, undefined);
   assert.equal(report.body.summaries[0].verified, false);
+  assert.equal((await api("/api/admin/free-play/report")).status, 401);
+  assert.equal((await api("/api/admin/free-play/report", { auth: "summary-player" })).status, 403);
+  assert.equal((await api("/api/admin/free-play/report?days=999", { auth: "admin" })).status, 400);
+  const analytics = await api("/api/admin/free-play/report?days=7", { auth: "admin" });
+  assert.equal(analytics.status, 200);
+  const group = analytics.body.groups.find((g: any) => g.gameId === "skip-to-10k");
+  assert.equal(group.runs, 2); assert.equal(group.guests, 1); assert.equal(group.accounts, 1);
+  assert.equal(group.primary.median, 123);
+  assert.equal(group.recent[0].guestId, undefined);
   for (const patch of [{ mode: "ranked" }, { primaryMetric: "oops" }, { secondaryMetrics: { bad: "value" } }, { gameId: "unknown" }]) {
     const response = await api("/api/free-play/summaries", { method: "POST", body: { ...body, result: { ...result, ...patch } } });
     assert.ok(response.status >= 400);
   }
+});
+
+test("Free Play lifecycle is idempotent, bounded, and reconciles out-of-order exits", async () => {
+  const now = new Date().toISOString();
+  const run = { runId: "lifecycle-run", gameId: "skip-to-10k", gameVersion: "1.0.0", mode: "free", objective: "distance", startedAt: now };
+  const body = { guestId: "abcdef12-1234-1234-1234-123456789012", run };
+  const send = (patch: object, auth?: string) => api("/api/free-play/events", { method: "POST", auth, body: { ...body, ...patch } });
+  assert.equal((await send({ type: "exited", reason: "navigation" })).status, 200);
+  assert.equal((await send({ type: "started", context: { upgrade_arm: 3 } }, "lifecycle-player")).status, 200);
+  assert.equal((await send({ type: "started", context: { upgrade_arm: 99 } }, "lifecycle-player")).status, 200);
+  const stored = store.db.prepare("SELECT json FROM free_play_events WHERE run_id=? AND type='started'").get(run.runId) as { json: string };
+  assert.equal(JSON.parse(stored.json).context.upgrade_arm, 3, "retry cannot overwrite the initial loadout");
+  let report = (await api("/api/admin/free-play/report", { auth: "admin" })).body;
+  let group = report.lifecycle.groups.find((g: any) => g.gameId === run.gameId);
+  assert.equal(group.started, 1); assert.equal(group.exited, 1); assert.equal(group.finished, 0);
+  assert.equal((await api("/api/free-play/summaries", { method: "POST", auth: "lifecycle-player", body: { guestId: body.guestId, result: { ...run, primaryMetric: 99, result: "completed", finishedAt: now } } })).status, 200);
+  report = (await api("/api/admin/free-play/report", { auth: "admin" })).body;
+  group = report.lifecycle.groups.find((g: any) => g.gameId === run.gameId);
+  assert.equal(group.finished, 1); assert.equal(group.exited, 0, "late result takes precedence over exit");
+  const recent = report.groups.flatMap((g: any) => g.recent).find((r: any) => r.runId === run.runId);
+  assert.deepEqual(recent.startContext, { upgrade_arm: 3 });
+  for (const patch of [{ type: "other" }, { type: "started", run: { ...run, mode: "raid" } }, { type: "started", context: { privateText: "not numeric" } }, { type: "exited", reason: "tab_hidden" }]) assert.equal((await send(patch)).status, 400);
 });
 
 before(async () => {
@@ -529,7 +560,7 @@ test("artifact admission rejects unapproved origins, mutable paths, modules and 
   } finally { if (previous === undefined) delete process.env.ALLOWED_CARTRIDGE_ORIGINS; else process.env.ALLOWED_CARTRIDGE_ORIGINS = previous; }
 });
 
-test("shared Skeleton verifier keeps independent Cabinet scores and rejects paused results", async () => {
+test("shared Skeleton verifier keeps independent Cabinet scores and lets issued runs finish while paused", async () => {
   const isolatedStore = new ArcadeStore(":memory:", false);
   const adapters = new AdapterRegistry();
   adapters.register({ adapterId: "shared-skeleton", gameId: "shared-skeleton", freePlaySmokeTest: true, verifier: { gameId: "shared-skeleton", async verify(config, result) { return { valid: result.primaryMetric === (config.gameId === "cabinet-a" ? 11 : 22) }; } } });
@@ -550,8 +581,9 @@ test("shared Skeleton verifier keeps independent Cabinet scores and rejects paus
     const run = (await call("/api/runs", { gameId: "cabinet-a", mode: "ranked" })).body.run;
     const game = isolatedStore.getGame("cabinet-a")!;
     isolatedStore.saveGame({ ...game, status: "paused" });
-    assert.equal((await call(`/api/runs/${run.runId}/complete`, resultFor(run, 11))).body.error.code, "GAME_UNAVAILABLE");
-    assert.equal(isolatedStore.listAcceptedResults("cabinet-a", "ranked").length, 1);
+    assert.equal((await call(`/api/runs/${run.runId}/complete`, resultFor(run, 11))).status, 200);
+    assert.equal((await call("/api/runs", { gameId: "cabinet-a", mode: "ranked" })).status, 404);
+    assert.equal(isolatedStore.listAcceptedResults("cabinet-a", "ranked").length, 2);
     assert.equal(isolatedStore.listAcceptedResults("cabinet-b", "ranked").length, 1);
   } finally { await new Promise<void>((resolve) => isolatedServer.close(() => resolve())); isolatedStore.close(); }
 });
@@ -628,6 +660,11 @@ test("eMONAD raids inherit fixed viewport rules and unchanged paused imports can
   const bad = await api("/api/admin/raids", { method: "POST", auth: "admin", body: { ...input, rules: { viewportWidth: 999 } } });
   assert.equal(bad.body.raid.status, "draft");
   assert.ok(bad.body.raid.readiness.blockers.some((item: string) => item.includes("390×844")));
+  assert.equal((await api("/api/admin/games/emonad-cabinet", { method: "PATCH", auth: "admin", body: { status: "paused" } })).body.error.code, "ACTIVE_RAID");
+  for (const raid of store.listRaids().filter(raid => raid.gameId === "emonad-cabinet" && raid.status === "open")) {
+    store.saveRaid({ ...raid, endsAt: new Date(Date.now() - 1).toISOString() });
+    await api(`/api/raids/${raid.id}`);
+  }
   assert.equal((await api("/api/admin/games/emonad-cabinet", { method: "PATCH", auth: "admin", body: { status: "paused" } })).status, 200);
   assert.equal((await api("/api/admin/games/emonad-cabinet/resume", { method: "POST", auth: "player" })).status, 403);
   assert.equal((await api("/api/admin/games/emonad-cabinet/resume", { method: "POST", auth: "admin" })).body.game.status, "published");

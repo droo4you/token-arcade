@@ -1,5 +1,18 @@
 # Release handoff — 2026-10-13
 
+> Current priorities and branch ownership: [RELEASE_QUEUE.md](RELEASE_QUEUE.md). The hackathon tasks and dual-branch deployment instructions below are historical; production now follows `main`.
+
+## Post-hackathon launch gate — sponsored prize claims (2026-10-21)
+
+- Update Oct 22: automatic fixed-winner payouts are enabled in Render after explicit approval and live health verification. See [automatic payout handoff](AUTOMATIC_PAYOUTS.md) for receipts, activation, recovery and remaining fee-routing work. The next real player raid must still demonstrate unattended delivery.
+
+- Required before public launch: winners can claim with zero native MON and zero WMON in their wallet. The app pays claim gas; rewards go only to the recorded winning wallet.
+- Implement and rehearse a sponsored claim path with bounded spend, winner authorization, duplicate-claim protection, and clear pending/success/failure feedback. This is a requirement, not a shipped feature.
+- Funded Skrumpey pilot `c96bcb61-bf72-4f7c-ac4e-c71a02defb60` settled to Guy's recorded wallet. Manual testnet workaround: topped up that wallet to 0.1 test MON; estimated claim gas was 0.011614842 MON. The winner still submits the claim through Privy.
+- Gas top-up receipts: `0x1f4272b5ac54709cfb02645e579929456768cafb534cf5041aef25ec39726f98` (0.01 test MON), `0xa713e36c8965eb9cc79f7119fa037d9eac7039dac608a364da3ab7c9ab0aaa9b` (0.09 test MON). Manual top-ups do not satisfy the launch gate.
+- Pilot payout completed: claim `0xebbfe7c8551f9da0e8d8dbf41572bad15100d4e30a839f41d6e6d86e763170e6`, block 73088879. Vault status is Claimed; the WMON Transfer event and Guy's balance confirm 0.0000609375 WMON received. This supersedes the pending-claim note above.
+- RPC incident: `testnet-rpc.monad.xyz` rejected the signed claim with "Signer had insufficient balance" despite 0.1 MON balance and 0.0207700704 MON maximum transaction cost. Identical signed bytes succeeded through the officially listed `https://rpc-testnet.monadinfra.com`. This isolates the observed failure to the original submission path; its internal cause is unconfirmed. No new signature, fee change, or extra top-up was needed. Add RPC failover to future payout infrastructure alongside automatic payout to the recorded winner.
+
 Deadline supplied by droober: 8:59 PM Pacific. Focus on a demonstrable, accurate submission.
 
 ## Release policy

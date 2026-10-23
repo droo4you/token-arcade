@@ -5,10 +5,12 @@ import type { CommunityAsset, GameManifest, GameRecord, GameRunConfig, GameRunRe
 import { CartridgeHost } from "../../../packages/sdk/src/host";
 import { api, ApiError, messageFor, type CompleteResponse, type GameResponse, type GamesResponse, type Health, type LeaderboardEntry, type LeaderboardResponse, type PassportResponse, type RaidResponse, type RaidsResponse, type RunResponse } from "./api";
 import { useArcadeAuth } from "./auth";
-import { recordFreePlay } from "./freePlay";
+import { recordFreePlay, recordFreePlayLifecycle } from "./freePlay";
 import { createClientCartridge, hasClientCartridge } from "./cartridges";
 import { gameHref, getCatalog, getGame, playHref, type ArcadeGame } from "./catalog";
 import { CreatorPortal } from "./CreatorPortal";
+import { FundedRaidControls } from "./FundedRaidControls";
+import { FreePlayAnalytics } from "./FreePlayAnalytics";
 import { shippedSections } from "./shipped";
 import { getGuideTopic, guideTopics, guideFaq, guideDefinitions, type GuideTopic, type GuideTopicId } from "./guideContent";
 
@@ -280,6 +282,9 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
 }
 
 function CartridgeView({ config, manifest, onComplete }: { config: GameRunConfig; manifest: GameManifest; onComplete: (result: GameRunResult) => void }) {
+  const auth = useArcadeAuth();
+  const token = useRef(auth.getToken);
+  token.current = auth.getToken;
   const container = useRef<HTMLDivElement>(null);
   const host = useRef<CartridgeHost | null>(null);
   const callback = useRef(onComplete);
@@ -290,7 +295,7 @@ function CartridgeView({ config, manifest, onComplete }: { config: GameRunConfig
     const cartridgeHost = new CartridgeHost();
     host.current = cartridgeHost;
     if (container.current) {
-      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => setPaused(state === "paused"), setError);
+      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => setPaused(state === "paused"), setError, event => { void recordFreePlayLifecycle(event, token.current); });
       if (!cartridge) setError("The reviewed browser cartridge is not installed for this game.");
       else cartridgeHost.mount(cartridge, container.current, config, (result) => callback.current(result)).then(() => cartridgeHost.start()).catch((reason) => setError(messageFor(reason)));
     }
@@ -365,7 +370,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
       {result.secondaryMetrics && <dl className="result-details">{Object.entries(result.secondaryMetrics).filter(([key]) => !["ticks", "elapsedMs"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1")}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl>}
     </div><button className="action action-lime" disabled={loading} onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
     {game.record?.manifest.controls?.orientation === "landscape" && <p className="orientation-note">On a phone, turn sideways for the full playfield.</p>}
-    <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. We collect run summaries for game balance, linked to your Passport when signed in or a random browser ID when playing as a guest." : "Competitive results follow the cabinet’s issued rules and verifier before they reach its leaderboard."}</p></div>
+    <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. We collect run starts, exits and summaries for game balance, linked to your Passport when signed in or a random browser ID when playing as a guest." : "Competitive results follow the cabinet’s issued rules and verifier before they reach its leaderboard."}</p></div>
   </main>;
 }
 
@@ -381,6 +386,7 @@ function RaidPrizeClaim({ raid }: { raid: Raid }) {
   const auth = useArcadeAuth();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  if (raid.funding?.payoutMode === "automatic") return <div aria-live="polite"><strong>{raid.payout?.status === "paid" ? "Reward delivered" : raid.payout?.status === "attention" ? "Reward delivery needs attention" : "Sending reward automatically…"}</strong><p>Your reward goes to your arcade wallet. No signing or gas needed.</p>{raid.payout?.transactionHash && <a href={`https://testnet.monadvision.com/tx/${raid.payout.transactionHash}`} target="_blank" rel="noreferrer">View payment transaction ↗</a>}</div>;
   const claim = async () => {
     setBusy(true); setMessage("");
     try {
@@ -432,16 +438,17 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
     <Link href="/raids" className="back-link"><ArrowLeft size={17} /> All raids</Link>
     <GuideLink topic="raids">How raids work</GuideLink>
     {error && <ErrorNote error={`Standings could not refresh. Showing the last received results. ${error}`} />}
-    {raid.finalResult && <section className="result-panel" aria-live="polite"><Trophy size={31} /><div><span>FINAL RESULT</span><h2>{leaderboard[0] ? `${leaderboard[0].displayName} wins!` : "No qualifying runs"}</h2><p>{leaderboard[0] ? `Winning result: ${metricText(leaderboard[0].primaryMetric, raid.objective)}. Final standings are saved below.` : "This raid ended without an accepted result."} {raid.funding ? "The testnet prize becomes claimable after on-chain settlement." : "This community challenge has no prize."}</p>{raid.funding && data.playerId === leaderboard[0]?.playerId && <RaidPrizeClaim raid={raid} />}</div></section>}
+    {raid.finalResult && <section className="result-panel" aria-live="polite"><Trophy size={31} /><div><span>FINAL RESULT</span><h2>{leaderboard[0] ? `${leaderboard[0].displayName} wins!` : "No qualifying runs"}</h2><p>{leaderboard[0] ? `Winning result: ${metricText(leaderboard[0].primaryMetric, raid.objective)}. Final standings are saved below.` : "This raid ended without an accepted result."} {raid.funding ? "The testnet reward is settled after final standings are verified." : "This community challenge has no prize."}</p>{raid.funding && data.playerId === leaderboard[0]?.playerId && <RaidPrizeClaim raid={raid} />}</div></section>}
     <div className="raid-hero">
-      <div><StatusBadge tone={isRaidOpen(raid, now) ? "good" : "wait"}>Raid {raidDisplayStatus(raid, now)}</StatusBadge><h1>{raid.name}</h1><p>Same course. Same rules. Put your best run on the board.</p>
+      <div><StatusBadge tone={isRaidOpen(raid, now) ? "good" : "wait"}>Raid {raidDisplayStatus(raid, now)}</StatusBadge><h1>{raid.name}</h1><p>{data.communityTotal ? "Three minutes per attempt. Every verified solve adds to the community total." : "Same course. Same rules. Put your best run on the board."}</p>
         <div className="raid-quickfacts"><div><Clock3 size={19} /><span>{countdown}</span></div><div><Ticket size={19} /><span>{entryLabel}</span></div><div><Trophy size={19} /><span>{prizeLabel}</span></div></div>
         <div className="raid-hero-actions">{playable ? <ActionLink href={playHref(raid.gameId, "raid", raid.id)}>Start raid attempt</ActionLink> : <span className="raid-unavailable">{unavailable}</span>}</div>
       </div><div className="raid-hero-glyph">✳</div>
     </div>
     <div className="raid-content">
       <section className="rules-panel"><h2>The rules</h2>
-        <p>Each issued attempt counts, including abandoned runs. Finish and submit before the closing time. Your best verified attempt counts; equal results are ordered by acceptance time, then run ID.</p>
+        <p>Each issued attempt counts, including abandoned runs. Finish and submit before the closing time. {data.communityTotal ? "Your best attempt ranks by coins solved, then fewer guesses, then acceptance time and run ID. Every verified attempt contributes to the community total." : "Your best verified attempt counts; equal results are ordered by acceptance time, then run ID."}</p>
+        {data.communityTotal && <div className="rule-row"><span>Community total</span><strong>{data.communityTotal.coinsSolved.toLocaleString()} coins solved · {data.communityTotal.runs} runs · {data.communityTotal.participants} players</strong></div>}
         <div className="rule-row"><span>Game</span><strong>{game?.name ?? raid.gameId}</strong></div>
         <div className="rule-row"><span>Objective</span><strong>{raid.objective.replaceAll("_", " ")}</strong></div>
         <div className="rule-row"><span>Attempts</span><strong>{attemptsLeft !== undefined ? `${attemptsLeft} remaining of ${raid.maxAttempts}` : `${raid.maxAttempts} per player`}</strong></div>
@@ -463,6 +470,26 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
 function AccountPrompt({ health }: { health: Health | null }) {
   const auth = useArcadeAuth();
   return <div className="account-prompt"><div className="prompt-art"><span>✦</span></div><div><h2>Your arcade identity starts here.</h2><p>A Player Passport keeps verified scores and raid history together. New and returning players use the same sign-in. You can browse the arcade without an account.</p><div className="prompt-actions">{auth.configured ? <button className="action action-lime" onClick={auth.login}>Sign in / Create account <ArrowUpRight size={18} /></button> : <div className="setup-note"><Settings2 size={19} /><span>Privy sign-in is not configured. Add <code>VITE_PRIVY_APP_ID</code> and server credentials to enable player accounts.</span></div>}<ActionLink href="/" tone="light">Browse as Guest</ActionLink></div>{health?.auth.localDemo && <div className="demo-controls"><strong>Local developer demo</strong><span>These identities only work with LOCAL_DEMO_MODE on loopback.</span><div><button onClick={() => auth.setDemoRole("player")}>Enter as test player</button>{health.auth.localDemoAdmin && <button onClick={() => auth.setDemoRole("admin")}>Enter as test admin</button>}</div>{health.auth.localDemoAdmin === false && <span>Curator actions require an allowlisted Privy account in this rehearsal.</span>}</div>}</div></div>;
+}
+
+function WalletSigningCheck({ wallet }: { wallet: string }) {
+  const auth = useArcadeAuth();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const check = async () => {
+    setBusy(true); setResult(null);
+    try {
+      await auth.checkArcadeWalletSigning(wallet);
+      setResult({ ok: true, message: "Signing verified for this arcade wallet. The funded raid prize claim still needs a separate transaction and test MON for gas." });
+    } catch (reason) {
+      setResult({ ok: false, message: `Signing was not verified. ${messageFor(reason)} You can retry when ready.` });
+    } finally { setBusy(false); }
+  };
+  return <div>
+    <button className="text-button" type="button" disabled={busy} onClick={() => void check()}>{busy ? "Waiting for Privy signature…" : "Check wallet signing"}</button>
+    <p>Sign a message with your arcade wallet. No gas or funds needed.</p>
+    {result && <p role={result.ok ? "status" : "alert"}>{result.message}</p>}
+  </div>;
 }
 
 function PassportPage({ health, records }: { health: Health | null; records: GameRecord[] }) {
@@ -553,7 +580,7 @@ function PassportPage({ health, records }: { health: Health | null; records: Gam
            const gameName = records.find((record) => record.manifest.id === gameId)?.manifest.name ?? getGame(gameId, [])?.name ?? gameId;
            return <div className="history-row" key={key}><span>{gameName} · {objective.replaceAll("_", " ")}</span><strong>{score.toLocaleString()}</strong></div>;
          })}</div> : <div className="empty-list"><Gamepad2 size={27} /><strong>No verified scores yet</strong><span>{rankedGame ? "Finish a Passport Play run to add your first one." : "Your verified scores will appear when Passport Play opens."}</span></div>}{rankedGame && <ActionLink href={playHref(rankedGame.id, "ranked")}>Try Passport Play</ActionLink>}</section>
-        <section className="passport-wallet"><h2>Wallets & communities</h2><div className="rule-row"><span>Arcade wallet</span><strong>{auth.demoRole ? "Demo identity · no wallet" : passport.arcadeWallet ? shortAddress(passport.arcadeWallet) : walletSync?.ready === false ? "Wallet sync unavailable" : "Waiting for Privy wallet"}</strong></div>{!auth.demoRole && !passport.arcadeWallet && <>{walletSync?.ready === false && <p role="status">{walletSync.reason}</p>}{!auth.hasEmbeddedWallet && <button className="text-button" disabled={creatingArcadeWallet} onClick={() => void createArcadeWallet()}>{creatingArcadeWallet ? "Creating arcade wallet…" : "Create arcade wallet"}</button>}<button className="text-button" onClick={() => setPassportLoad((value) => value + 1)}>Refresh wallet</button></>}<div className="rule-row"><span>Ownership wallets</span><strong>{passport.ownershipWallets.length}</strong></div>{passport.ownershipWallets.map((address) => <div className="linked-wallet" key={address}><code>{shortAddress(address)}</code><button disabled={walletBusy} onClick={() => void unlinkWallet(address)}>Unlink</button></div>)}<button className="wallet-link-button" disabled={walletBusy} onClick={() => void linkWallet()}>{walletBusy ? "Waiting for wallet…" : "Link ownership wallet"}<ArrowUpRight size={16} /></button><p>Sign a message to associate an external wallet. No asset transfer is requested. Holder eligibility needs a configured Community Asset and Monad RPC.</p><div className="rule-row"><span>Communities</span><strong>{passport.communities.length ? passport.communities.join(", ") : "None yet"}</strong></div><button className="text-button" onClick={() => void auth.logout()}>Sign out</button></section>
+        <section className="passport-wallet"><h2>Wallets & communities</h2><div className="rule-row"><span>Arcade wallet</span><strong>{auth.demoRole ? "Demo identity · no wallet" : passport.arcadeWallet ? shortAddress(passport.arcadeWallet) : walletSync?.ready === false ? "Wallet sync unavailable" : "Waiting for Privy wallet"}</strong></div>{!auth.demoRole && passport.arcadeWallet && <WalletSigningCheck key={`${auth.identityKey}:${passport.arcadeWallet}`} wallet={passport.arcadeWallet} />}{!auth.demoRole && !passport.arcadeWallet && <>{walletSync?.ready === false && <p role="status">{walletSync.reason}</p>}{!auth.hasEmbeddedWallet && <button className="text-button" disabled={creatingArcadeWallet} onClick={() => void createArcadeWallet()}>{creatingArcadeWallet ? "Creating arcade wallet…" : "Create arcade wallet"}</button>}<button className="text-button" onClick={() => setPassportLoad((value) => value + 1)}>Refresh wallet</button></>}<div className="rule-row"><span>Ownership wallets</span><strong>{passport.ownershipWallets.length}</strong></div>{passport.ownershipWallets.map((address) => <div className="linked-wallet" key={address}><code>{shortAddress(address)}</code><button disabled={walletBusy} onClick={() => void unlinkWallet(address)}>Unlink</button></div>)}<button className="wallet-link-button" disabled={walletBusy} onClick={() => void linkWallet()}>{walletBusy ? "Waiting for wallet…" : "Link ownership wallet"}<ArrowUpRight size={16} /></button><p>Sign a message to associate an external wallet. No asset transfer is requested. Holder eligibility needs a configured Community Asset and Monad RPC.</p><div className="rule-row"><span>Communities</span><strong>{passport.communities.length ? passport.communities.join(", ") : "None yet"}</strong></div><button className="text-button" onClick={() => void auth.logout()}>Sign out</button></section>
       </div>}
     </>}
   </main>;
@@ -747,6 +774,7 @@ function GameConfigEditor({ game, health, onSaved, onClose }: { game: AdminGame;
     {error && <ErrorNote error={error} details={details} />}{notice && <div className="success-note" role="status"><BadgeCheck size={18} />{notice}</div>}
     {game.status === "published" ? <p className="console-hint">Pause this game before editing its configuration.</p> : <form className="console-form" onSubmit={save}>
       <div className="form-row"><label>Version<input value={manifest.version} onChange={(event) => setManifest({ ...manifest, version: event.target.value })} required /></label><label>Adapter ID<input value={manifest.adapterId} onChange={(event) => setManifest({ ...manifest, adapterId: event.target.value })} required /></label></div>
+      {manifest.entry?.kind === "iframe" && <label>Versioned cartridge URL<input type="url" required value={manifest.entry.url} onChange={(event) => setManifest({ ...manifest, entry: { ...manifest.entry!, kind: "iframe", url: event.target.value } })} /><span>Use the matching /v/version/ build. Existing runs must finish before saving.</span></label>}
       <label>Description<textarea value={manifest.description} onChange={(event) => setManifest({ ...manifest, description: event.target.value })} required /></label>
       <div className="form-row"><label>Developer<input value={manifest.developer} onChange={(event) => setManifest({ ...manifest, developer: event.target.value })} required /></label><label>Artwork URL<input value={manifest.artwork ?? ""} onChange={(event) => setManifest({ ...manifest, artwork: event.target.value || undefined })} placeholder="/art/game.png" /></label></div>
       <fieldset className="check-field"><legend>Supported modes</legend>{(["free", "ranked", "raid"] as const).map((mode) => <label key={mode}><input type="checkbox" checked={manifest.supportedModes.includes(mode)} onChange={() => toggleMode(mode)} />{mode === "free" ? "Free Play" : mode === "ranked" ? "Passport Play" : "Community Raid"}</label>)}</fieldset>
@@ -860,6 +888,8 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
              <button className="action action-lime" disabled={loading || !selectedRaidGame} type="submit">Create raid <ArrowUpRight size={17} /></button>
           </form>
         </section>
+        <FundedRaidControls key={auth.identityKey} />
+        <FreePlayAnalytics key={`analytics-${auth.identityKey}`} />
         <section className="console-panel console-setup-panel">
           <div className="console-panel-heading"><div><span className="section-kicker">SETUP</span><h2>Onchain readiness</h2></div><ShieldCheck size={24} /></div>
           <div className="setup-state"><span className={`setup-indicator ${health?.settlement.ready ? "is-ready" : ""}`} /><strong>{health?.settlement.ready ? "Settlement configured" : "Settlement needs configuration"}</strong></div>

@@ -13,6 +13,8 @@ export const RAPID_FORMAT = "rapid-fire-v1";
 export const RAPID_RULES: GameRules = { format: RAPID_FORMAT, windowSeconds: 180, maxGuessesPerCoin: MAX_GUESSES };
 /** Time from session issue to pressing start, plus the window and submit slack. */
 export const RAPID_RUN_TIMEOUT_MS = 600_000;
+export const isRapidRules = (rules?: GameRules) => rules?.format === RAPID_FORMAT
+  && rules.windowSeconds === 180 && rules.maxGuessesPerCoin === MAX_GUESSES;
 
 type Coin = (typeof COINS)[number];
 type Match = "green" | "yellow" | "red" | "unavailable";
@@ -46,6 +48,7 @@ export function judge(guess: Coin, secret: Coin, prices: PriceTiers) {
   const fdv = tier(FDV_BUCKET_ORDER.indexOf(guess.fdvBucket), FDV_BUCKET_ORDER.indexOf(secret.fdvBucket));
   return {
     ticker: guess.ticker,
+    ...(gp === undefined ? {} : { priceTier: gp }),
     type: guess.type === secret.type ? "green" : getCoinTypeFamily(guess.type) === getCoinTypeFamily(secret.type) ? "yellow" : "red",
     color: guess.primaryColor === secret.primaryColor ? "green" : areColorsAdjacent(guess.primaryColor, secret.primaryColor) ? "yellow" : "red",
     launchYear: year.match, launchYearDirection: year.direction,
@@ -77,7 +80,8 @@ export function createCoindleRapid(options: Options) {
   const ended = (ledger: Ledger) => ledger.finishedAt !== undefined || (ledger.endsAt !== undefined && now() >= ledger.endsAt);
   function nextAnswer(ledger: Ledger) {
     const pool = liveCoins.filter((coin) => !ledger.used.includes(coin.ticker));
-    const answer = (pool.length ? pool : liveCoins)[pick(pool.length || liveCoins.length)].ticker;
+    if (!pool.length) { ledger.current = undefined; ledger.finishedAt = now(); return; }
+    const answer = pool[pick(pool.length)].ticker;
     ledger.used.push(answer);
     ledger.current = { answer, guesses: [] };
   }
@@ -91,7 +95,7 @@ export function createCoindleRapid(options: Options) {
   function session(runId: string) {
     const found = options.getSession(runId);
     if (!found || found.config.gameId !== "coindle" || (found.config.mode !== "ranked" && found.config.mode !== "raid")) throw new RapidError(404, "NOT_FOUND", "Rapid Fire run not found");
-    if (found.config.rules?.format !== RAPID_FORMAT) throw new RapidError(409, "RULES_MISMATCH", "Run was not issued with Rapid Fire rules");
+    if (!isRapidRules(found.config.rules)) throw new RapidError(409, "RULES_MISMATCH", "Run was not issued with reviewed Rapid Fire rules");
     if (found.consumedAt) throw new RapidError(409, "RUN_CONSUMED", "Run result was already accepted");
     return found;
   }
@@ -131,6 +135,7 @@ export function createCoindleRapid(options: Options) {
       const ticker = typeof rawTicker === "string" ? rawTicker.toUpperCase() : "";
       const coin = byTicker.get(ticker);
       if (!coin) throw new RapidError(400, "UNKNOWN_COIN", "Guess a known, active coin");
+      active(runId); // Reject unknown or closed runs before any upstream price request.
       const prices = await options.prices().catch(() => ({} as PriceTiers));
       const ledger = active(runId); // re-read after the await so the window check is current
       const current = ledger.current!;

@@ -14,9 +14,11 @@ import { DirectWalletOwnershipResolver } from "./ownership.ts";
 import { AdapterRegistry, normalizeRunRules } from "./verifiers.ts";
 import { MinicoinDeployer, MinicoinError, type MinicoinSettings } from "./minicoin.ts";
 import { createCoindleHandler } from "./coindle.ts";
-import { createCoindleRapid, RapidError, RAPID_FORMAT, RAPID_RULES, RAPID_RUN_TIMEOUT_MS, type PriceTiers } from "./coindleRapid.ts";
+import { createCoindleRapid, RapidError, isRapidRules, RAPID_RULES, RAPID_RUN_TIMEOUT_MS, type PriceTiers } from "./coindleRapid.ts";
 import { TestnetMinicoinService } from "./testnet-minicoin.ts";
 import { FundedRaids, FundedRaidError } from "./fundedRaids.ts";
+import { AutomaticPayouts } from "./automaticPayouts.ts";
+import { freePlayReport } from "./freePlayAnalytics.ts";
 
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses", "coins_solved"]);
 const MODES = new Set(["free", "ranked", "raid"]);
@@ -214,7 +216,7 @@ function raidBlockers(raid: Raid, store: ArcadeStore, adapters: AdapterRegistry)
     const conceptId = game.communityConcept?.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     if (!game.community && conceptId && raid.communityId !== conceptId) blockers.push("Raid community does not match the Cabinet association");
     if (!game.community && !conceptId && raid.gameId !== WARMUP_GAME_ID) blockers.push("Game has no associated community");
-    if (game.manifest.adapterId === "coindle" && raid.rules?.format !== RAPID_FORMAT) blockers.push("Coindle raids must use Rapid Fire rules (format rapid-fire-v1)");
+    if (game.manifest.adapterId === "coindle" && (!isRapidRules(raid.rules) || raid.objective !== "coins_solved")) blockers.push("Coindle raids must use reviewed Rapid Fire rules: coins_solved, 180 seconds and 6 guesses per coin");
     if (game.manifest.adapterId === "two-places") {
       const levels = typeof raid.rules?.levelSet === "string" && /^\d{1,2}(,\d{1,2}){2}$/.test(raid.rules.levelSet) ? raid.rules.levelSet.split(",").map(Number) : [];
       if (levels.length !== 3 || new Set(levels).size !== 3 || levels.some((level) => level < 0 || level >= 20)) blockers.push("Two Places raids require three distinct authored levels in rules.levelSet");
@@ -384,12 +386,13 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   const store = options.store ?? new ArcadeStore(process.env.ARCADE_DB_PATH || undefined, auth.localDemoMode);
   const adapters = options.adapters ?? new AdapterRegistry();
   const fundedRaids = new FundedRaids(store);
+  const payouts = new AutomaticPayouts(store, fundedRaids);
   const verifyingRaids = new Map<string, number>();
   const publicRaid = (raid: Raid): Raid => {
     if (!verifyingRaids.get(raid.id)) {
       raid = store.finalizeFreeRaid(raid.id, () => leaderboard(store, raid.gameId, "raid", raid.id, raid.objective, undefined, raid.rules)) ?? raid;
     }
-    return currentRaid(raid);
+    return payouts.decorate(currentRaid(raid));
   };
   const ownership = new DirectWalletOwnershipResolver(process.env.MONAD_RPC_URL);
   const minicoinSettings = options.minicoinSettings ?? {
@@ -425,6 +428,12 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
     const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id);
     return { communityTotal: { coinsSolved: runs.reduce((sum, item) => sum + item.result.primaryMetric, 0), runs: runs.length, participants: new Set(runs.map((item) => item.playerId)).size } };
   };
+  // Warm the sparkline cache off the request path (no-op without PYTH_API_KEY); re-check every 6h.
+  const prewarmList = (process.env.COINDLE_PREWARM_TICKERS ?? "BTC,ETH,SOL").split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+  if (prewarmList.length) {
+    setTimeout(() => void coindle.prewarm(prewarmList), 2_000).unref();
+    setInterval(() => void coindle.prewarm(prewarmList), 6 * 3_600_000).unref();
+  }
   const testnet = new TestnetMinicoinService(store, options.testnetMinicoinSettings ?? {
     enabled: process.env.TESTNET_ENABLE_WRITES === "true", chainId: "10143",
     rpcUrl: process.env.TESTNET_RPC_URL, privateKey: process.env.TESTNET_DEPLOYER_PRIVATE_KEY,
@@ -432,7 +441,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
     supplyRecipient: process.env.TESTNET_SUPPLY_RECIPIENT,
   }, auth.localDemoMode);
 
-  return createServer(async (request, response) => {
+  const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
       const path = url.pathname;
@@ -451,6 +460,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const body = await readJson(request);
           const chainRaidId = requiredString(body.chainRaidId, "chainRaidId", 66);
           if (!/^0x[a-fA-F0-9]{64}$/.test(chainRaidId)) fail(400, "INVALID_INPUT", "Invalid chain raid ID");
+          await payouts.assertReady();
           return respond(response, 200, { raid: await fundedRaids.bind(saved, chainRaidId as `0x${string}`) });
         }
         fail(405, "METHOD_NOT_ALLOWED", "Unsupported funded raid action");
@@ -460,6 +470,32 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const saved = store.getRaid(decodeURIComponent(path.split("/")[3]));
         if (!saved) fail(404, "NOT_FOUND", "Raid not found");
         return respond(response, 200, await fundedRaids.claim(publicRaid(saved), store.getOrCreatePassport(identity.id)));
+      }
+      if (method === "POST" && path === "/api/free-play/events") {
+        const body = await readJson(request);
+        const guestId = requiredString(body.guestId, "guestId", 36);
+        if (!/^[a-f0-9-]{36}$/i.test(guestId)) fail(400, "INVALID_INPUT", "Invalid guest ID");
+        if (body.type !== "started" && body.type !== "exited") fail(400, "INVALID_INPUT", "Unknown lifecycle event");
+        const run = body.run;
+        if (!isRecord(run) || run.mode !== "free") fail(400, "INVALID_INPUT", "Free Play only");
+        const runId = requiredString(run.runId, "runId", 100);
+        const gameId = requiredString(run.gameId, "gameId", 64);
+        const gameVersion = requiredString(run.gameVersion, "gameVersion", 80);
+        const game = store.getGame(gameId);
+        if (!game || game.status !== "published") fail(404, "NOT_FOUND", "Game not found");
+        if (!game.manifest.supportedObjectives.includes(run.objective as GameObjective)) fail(400, "INVALID_INPUT", "Unknown objective");
+        const startedAt = isoDate(run.startedAt, "startedAt");
+        const context = body.context ?? {};
+        if (!isRecord(context) || Object.keys(context).length > 32 || Object.entries(context).some(([key, value]) => !/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key) || typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > 1e12)) fail(400, "INVALID_INPUT", "Invalid start context");
+        if (body.type === "exited" && !["navigation", "restart", "pagehide", "error"].includes(String(body.reason))) fail(400, "INVALID_INPUT", "Unknown exit reason");
+        const identity = request.headers.authorization ? await auth.authenticate(request) : null;
+        const playerId = identity ? store.getOrCreatePassport(identity.id).playerId : null;
+        const cutoff = new Date(Date.now() - 60_000).toISOString();
+        const recent = store.db.prepare("SELECT COUNT(*) AS n FROM free_play_events WHERE received_at > ? AND (guest_id = ? OR player_id = ?)").get(cutoff, guestId, playerId) as { n: number };
+        if (recent.n >= 120) fail(429, "RATE_LIMITED", "Too many lifecycle events");
+        const observation = { runId, gameId, gameVersion, objective: run.objective, startedAt, context: body.type === "started" ? context : {}, ...(body.type === "exited" ? { reason: body.reason } : {}) };
+        store.db.prepare("INSERT OR IGNORE INTO free_play_events VALUES (?,?,?,?,?,?,?)").run(runId, body.type, gameId, playerId, guestId, new Date().toISOString(), JSON.stringify(observation));
+        return respond(response, 200, { recorded: true, verified: false });
       }
       if (method === "POST" && path === "/api/free-play/summaries") {
         const body = await readJson(request);
@@ -489,6 +525,12 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           startedAt: isoDate(candidate.startedAt, "startedAt"), finishedAt: isoDate(candidate.finishedAt, "finishedAt") };
         store.db.prepare("INSERT OR IGNORE INTO free_play_summaries VALUES (?,?,?,?,?,?)").run(runId, gameId, playerId, guestId, now, JSON.stringify(summary));
         return respond(response, 200, { recorded: true, verified: false });
+      }
+      if (method === "GET" && path === "/api/admin/free-play/report") {
+        requireAdmin(await auth.authenticate(request));
+        const days = Number(url.searchParams.get("days") ?? 7);
+        if (![1, 7, 30].includes(days)) fail(400, "INVALID_INPUT", "Choose 1, 7 or 30 days");
+        return respond(response, 200, freePlayReport(store, days));
       }
       if (method === "GET" && path === "/api/admin/free-play/summaries") {
         requireAdmin(await auth.authenticate(request));
@@ -538,7 +580,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       if (method === "GET" && path === "/api/health") {
         return respond(response, 200, {
           ok: true, auth: { privy: auth.privyReady, localDemo: auth.localDemoMode, localDemoAdmin },
-          settlement: { ready: false, reason: "General paid entry and prize settlement are not configured", testnetRaid: { configured: Boolean(fundedRaids.vault), chainId: 10143 }, minicoin: { ready: minicoin.ready, ...(!minicoin.ready ? { reason: minicoin.reason } : {}), reconcileReady: minicoin.reconcileReady, rehearsalReady, rehearsalReconcileReady } },
+          settlement: { ready: false, reason: "General paid entry and prize settlement are not configured", testnetRaid: { configured: Boolean(fundedRaids.vault), chainId: 10143, automaticPayouts: payouts.enabled }, minicoin: { ready: minicoin.ready, ...(!minicoin.ready ? { reason: minicoin.reason } : {}), reconcileReady: minicoin.reconcileReady, rehearsalReady, rehearsalReconcileReady } },
           release: process.env.RENDER_GIT_COMMIT ?? null,
           cartridge: { installed: store.listGames(true).filter((game) => game.manifest.id !== WARMUP_GAME_ID).map((game) => game.manifest.id), verifierAdapters: adapters.keys() },
         });
@@ -723,7 +765,8 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
             if (body.manifest !== undefined) {
               const manifest = validateManifest(body.manifest);
               if (manifest.id !== game.manifest.id) fail(400, "INVALID_MANIFEST", "Game ID cannot change");
-              if (store.listRaids().some((raid) => raid.gameId === manifest.id && raid.status === "open" && Date.parse(raid.endsAt) > Date.now())) fail(409, "ACTIVE_RAID", "Close active raids before changing the cartridge");
+              if (store.listRaids().some((raid) => raid.gameId === manifest.id && raid.status === "open")) fail(409, "ACTIVE_RAID", "Close and finalize open raids before changing the cartridge");
+              if (store.db.prepare("SELECT 1 FROM run_sessions WHERE game_id = ? AND consumed_at IS NULL AND julianday(json_extract(json, '$.expiresAt')) > julianday('now') LIMIT 1").get(manifest.id)) fail(409, "ACTIVE_RUNS", "Wait for issued runs to finish or expire before updating this game");
               game.manifest = manifest;
             }
             if (body.community !== undefined) game.community = validateCommunity(body.community);
@@ -802,7 +845,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (result.result !== "completed") fail(400, "INVALID_RESULT", "Only completed runs can enter standings");
         if (Date.parse(result.finishedAt) > Date.now() + 5_000) fail(400, "INVALID_RESULT", "Run finish is in the future");
         const game = store.getGame(result.gameId);
-        if (game?.status !== "published") fail(409, "GAME_UNAVAILABLE", "Game is no longer published");
+        if (game?.status !== "published" && game?.status !== "paused") fail(409, "GAME_UNAVAILABLE", "Game is no longer available for completing issued runs");
         if (game?.manifest.version !== session.config.gameVersion) fail(409, "GAME_VERSION_CHANGED", "Game version changed during this run");
         const verifier = game && adapters.get(game.manifest.adapterId)?.verifier;
         if (result.mode === "ranked" && JSON.stringify(session.config.rules ?? {}) !== JSON.stringify(adapters.get(game!.manifest.adapterId)?.rankedRules ?? {})) {
@@ -982,10 +1025,13 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           if (game.minicoin && (body.community !== undefined || body.communityStrategy !== undefined)) fail(409, "IMMUTABLE_ASSOCIATION", "Community Asset and Strategy are locked after Minicoin association");
           if (body.status !== undefined) {
             if (body.status !== "paused" || game.status !== "published") fail(400, "INVALID_STATUS", "Only a published game can be paused here");
+            if (store.listRaids().some((raid) => raid.gameId === game.manifest.id && raid.status === "open")) fail(409, "ACTIVE_RAID", "Close and finalize open raids before pausing the game");
             game.status = "paused";
           }
           if (body.manifest !== undefined || body.community !== undefined || body.communityStrategy !== undefined || body.communityConcept !== undefined || body.economy !== undefined) {
             if (game.status === "published") fail(409, "GAME_PUBLISHED", "Pause the game before changing its configuration");
+            if (store.db.prepare("SELECT 1 FROM run_sessions WHERE game_id = ? AND consumed_at IS NULL AND julianday(json_extract(json, '$.expiresAt')) > julianday('now') LIMIT 1").get(game.manifest.id)) fail(409, "ACTIVE_RUNS", "Wait for issued runs to finish or expire before updating this game");
+            if (store.listRaids().some((raid) => raid.gameId === game.manifest.id && raid.status === "open")) fail(409, "ACTIVE_RAID", "Close and finalize open raids before updating this game");
             if (body.manifest !== undefined) {
               const manifest = validateManifest(body.manifest);
               if (manifest.id !== game.manifest.id) fail(400, "INVALID_MANIFEST", "Game ID cannot change");
@@ -1028,6 +1074,15 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       respond(response, 500, { error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
     }
   });
+  let payoutTimer: ReturnType<typeof setInterval> | undefined;
+  server.on("listening", () => {
+    if (!payouts.enabled) return;
+    payoutTimer = setInterval(() => void payouts.tick(publicRaid), 15_000);
+    payoutTimer.unref();
+    void payouts.tick(publicRaid);
+  });
+  server.on("close", () => clearInterval(payoutTimer));
+  return server;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {

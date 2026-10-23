@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { IframeCartridge } from "../src/iframe.ts";
-import type { GameManifest, GameRunConfig, GameRunResult } from "../src/index.ts";
+import type { FreePlayLifecycleEvent, GameManifest, GameRunConfig, GameRunResult } from "../src/index.ts";
 
 const hostOrigin = "https://arcade.example";
 const cartridgeOrigin = "https://cartridges.example";
@@ -21,7 +21,7 @@ const result: GameRunResult = {
 };
 
 type TransportMessage = { ta: number; channel: string; type: string; payload: unknown };
-type Listener = (event: { origin?: string; source?: unknown; data?: unknown }) => void;
+type Listener = (event: { origin?: string; source?: unknown; data?: unknown; persisted?: boolean }) => void;
 
 class MockTokenList extends Set<string> {
   add(...tokens: string[]) { for (const token of tokens) super.add(token); return this; }
@@ -228,4 +228,61 @@ test("the iframe host rejects same-origin or mismatched-origin entries before cr
     await assert.rejects(cartridge.mount(env.element, config), /reviewed, separate origin/);
   }
   assert.equal(env.frames.length, 0);
+});
+
+test("Free Play observations distinguish starts, restarts, completed runs and navigation", async t => {
+  const env = environment(t);
+  const events: FreePlayLifecycleEvent[] = [];
+  const cartridge = new IframeCartridge(manifest, undefined, undefined, e => events.push(e));
+  env.cleanup(() => cartridge.destroy());
+  const mounting = cartridge.mount(env.element, config);
+  const frame = env.frames[0];
+  env.send(frame, "ta:ready"); await mounting;
+  assert.equal(events.length, 0, "loading a menu is not a start");
+  const start = { runId: config.runId, startedAt: config.startedAt, context: { levelIndex: 2, upgrade_arm: 5, privateText: "ignored" } };
+  env.send(frame, "ta:run_started", start, { origin: "https://other.example" });
+  assert.equal(events.length, 0);
+  env.send(frame, "ta:run_started", start);
+  env.send(frame, "ta:run_started", start);
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0].context, { levelIndex: 2, upgrade_arm: 5 });
+  env.send(frame, "ta:paused");
+  assert.equal(events.length, 1, "pause is not abandonment");
+  env.send(frame, "ta:run_started", { ...start, runId: "second" });
+  assert.deepEqual(events.map(e => [e.type, e.reason]), [["started", undefined], ["exited", "restart"], ["started", undefined]]);
+  env.send(frame, "ta:run_complete", { ...result, runId: "second" });
+  cartridge.destroy();
+  assert.equal(events.length, 3, "finished runs do not gain an exit on navigation");
+});
+
+test("navigation emits one exit for an active run and ranked play emits none", async t => {
+  const env = environment(t);
+  const events: FreePlayLifecycleEvent[] = [];
+  const cartridge = new IframeCartridge(manifest, undefined, undefined, e => events.push(e));
+  env.cleanup(() => cartridge.destroy());
+  let mounting = cartridge.mount(env.element, config);
+  env.send(env.frames[0], "ta:ready"); await mounting;
+  env.send(env.frames[0], "ta:run_started", config);
+  cartridge.destroy(); cartridge.destroy();
+  assert.deepEqual(events.map(e => e.type), ["started", "exited"]);
+  mounting = cartridge.mount(env.element, { ...config, mode: "ranked" });
+  env.send(env.frames[1], "ta:ready"); await mounting;
+  env.send(env.frames[1], "ta:run_started", config); cartridge.destroy();
+  assert.equal(events.length, 2);
+});
+
+test("pagehide records departure once but preserves a run cached for back navigation", async t => {
+  const env = environment(t);
+  const events: FreePlayLifecycleEvent[] = [];
+  const cartridge = new IframeCartridge(manifest, undefined, undefined, e => events.push(e));
+  env.cleanup(() => cartridge.destroy());
+  const mounting = cartridge.mount(env.element, config);
+  env.send(env.frames[0], "ta:ready"); await mounting;
+  env.send(env.frames[0], "ta:run_started", config);
+  for (const callback of env.windowListeners.get("pagehide") ?? []) callback({ persisted: true });
+  assert.equal(events.length, 1);
+  for (const callback of env.windowListeners.get("pagehide") ?? []) callback({ persisted: false });
+  cartridge.destroy();
+  assert.deepEqual(events.map(e => [e.type, e.reason]), [["started", undefined], ["exited", "pagehide"]]);
+  assert.equal(env.windowListeners.get("pagehide")?.size, 0);
 });

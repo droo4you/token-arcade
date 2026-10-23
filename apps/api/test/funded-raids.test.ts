@@ -49,6 +49,8 @@ test("funded pilot binds custody, freezes entry wallet, and claims only the veri
     await assert.rejects(service.claim(closed, player), /does not match/);
     state.result = plan.resultHash; state.status = 3;
     assert.deepEqual(await service.claim(closed, player), { claimed: true });
+    Object.defineProperty(service, "vault", { value: token });
+    assert.deepEqual(await service.claim(closed, player), { claimed: true }, "historical custody survives future-vault rotation");
   } finally { store.close(); }
 });
 

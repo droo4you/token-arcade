@@ -38,10 +38,14 @@ export function createCartridgeServer() {
       let file;
       if (url.pathname === '/sdk/bridge.js') file = resolve('packages/sdk/browser/bridge.js');
       else {
-        const match = /^\/([a-z0-9-]+)\/v\/1\.0\.0\/(.*)$/.exec(decodeURIComponent(url.pathname));
+        const match = /^\/([a-z0-9-]+)\/v\/(1\.0\.0|1\.1\.0|1\.2\.0)\/(.*)$/.exec(decodeURIComponent(url.pathname));
         if (!match || !/^[a-z0-9-]+$/.test(match[1])) { res.writeHead(404); res.end('Cartridge not found'); return; }
-        const gameRoot = resolve(root, match[1], match[1] === 'coindle' ? 'arcade-dist' : '.');
-        const requested = match[2] || (match[1] === 'coindle' ? 'index.html' : 'arcade.html');
+        if (match[2] !== '1.0.0' && match[1] !== 'skrumpey-slide') { res.writeHead(404); res.end('Cartridge version not found'); return; }
+        const requested = match[3] || (match[1] === 'coindle' ? 'index.html' : 'arcade.html');
+        // Legacy entry points and executable files stay frozen. Art assets are shared
+        // unchanged between these two releases; never fall back for executable files.
+        const frozen = match[1] === 'skrumpey-slide' && !requested.startsWith('assets/');
+        const gameRoot = resolve(root, match[1], frozen ? `releases/${match[2]}` : match[1] === 'coindle' ? 'arcade-dist' : '.');
         if (requested.includes('\\') || requested.split('/').some(p => p.startsWith('.') || ['tools', 'tests', 'test', 'api', 'node_modules'].includes(p.toLowerCase()))) { res.writeHead(404); res.end(); return; }
         file = resolve(gameRoot, requested);
         if (!file.startsWith(gameRoot + sep) || !types[extname(file)]) { res.writeHead(404); res.end(); return; }
