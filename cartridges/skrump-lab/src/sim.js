@@ -8,7 +8,7 @@
 (function (root) {
   'use strict';
   const WP = (typeof module !== 'undefined' && module.exports) ? require('./weapons.js') : root.SkrumpWeapons;
-  const SIM_VERSION = 5, HZ = 120, DT = 1 / HZ, G = 18, ITER = 4, MAX_SHOT_TICKS = HZ * 9;
+  const SIM_VERSION = 6, HZ = 120, DT = 1 / HZ, G = 18, ITER = 4, MAX_SHOT_TICKS = HZ * 9;
   const SUBJ_R = 0.5, DISPLACE_D = 1.0, OUT = { x0: -12, x1: 90, y0: -10 };
   const PTS = { perSubject: 100, clear: 500, unusedShell: 250, overkill: 300, wasted: 100 };
   // A FIG = one weapon from the registry, flattened for the sim. Legacy fields (id, shots, vk) kept for the scorer and tests.

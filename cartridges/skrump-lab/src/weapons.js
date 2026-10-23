@@ -118,7 +118,7 @@
         first: 'Everything was fired at once. {gained} subjects displaced. {displaced} of {N}.',
       },
     },
-    // FIG.5 (v5): the clip's "A BIGGER TANK" (test 05 · approach speed). Huge, slow, heavy shells; the tank rolls forward every shot (no brakes).
+    // FIG.5 (v5, frozen): single heavy shell, no trail. Kept so v5 records replay.
     biggerTank: {
       id: 'biggerTank', fig: 5, name: 'A BIGGER TANK', sub: 'test 05 · approach speed', owner: { token: '690', name: 'Skrumpey #690' },
       shells: 4, N: 55, layout: 'dais', launcher: { x: 4.5, y: 3.4 },
@@ -133,6 +133,21 @@
         last: 'Brakes: not installed.',
       },
     },
+    // FIG.5 (v6): Bigger Tank + FIG.3-style drop-off trail. One heavy lead Skrumpey, then little ones with growing gaps and falling power.
+    biggerTrail: {
+      id: 'biggerTrail', fig: 5, name: 'A BIGGER TANK', sub: 'test 05 · approach speed', owner: { token: '690', name: 'Skrumpey #690' },
+      shells: 4, N: 55, layout: 'dais', launcher: { x: 4.5, y: 3.4 },
+      fire: { arc: 'ballistic', gScale: 1, vk: 0.27, burst: 9, gap: 0, spread: [0], advance: 3, lead: { r: 0.95, m: 14 }, pattern: biggerTrailPattern() },
+      proj: { r: 0.34, m: 0.55, label: '1 LARGE + 8 TRAILING', sprites: ['690', '2912', '2067', '3'] },
+      rules: { ceasefire: false, brakes: false }, hud: 'bigtank', frame: 'bigtank', sfx: 'cannon', shake: 0.9, aimDefault: 0.5,
+      auto: [[90, 45], [100, 35], [85, 55], [100, 25], [95, 50], [75, 60], [100, 45], [70, 70]],
+      lines: {
+        intro: 'Test five. A bigger tank. The little ones follow. Eventually.',
+        first: '{gained} subjects displaced. Approach speed: increasing.',
+        more: '{gained} more. {displaced} of {N}. Approach speed: increasing.',
+        last: 'Brakes: not installed.',
+      },
+    },
   };
   function wideBlast(n) { const out = [], s = 0.4; let i = 0;
     for (let ring = 0; i < n; ring++) for (let row = -ring; row <= ring && i < n; row++) for (let col = -ring; col <= ring && i < n; col++) {
@@ -142,12 +157,14 @@
   // pattern rounds: { t: spawn tick, dx, dy: offset from the muzzle, k: perpendicular spread, p: power scale }. Plain arithmetic only.
   function trailPattern() { const out = [{ t: 0, dx: 0, dy: 0, k: 0, p: 1 }]; let t = 0, gap = 4;
     for (let i = 1; i < 10; i++) { gap += 1 + Math.floor(i / 2); t += gap; out.push({ t, dx: 0, dy: 0, k: 0, p: 1 - 0.035 * i }); } return out; }
+  function biggerTrailPattern() { const out = [{ t: 0, dx: 0, dy: 0, k: 0, p: 1 }]; let t = 0, gap = 5;
+    for (let i = 1; i < 9; i++) { gap += 1 + Math.floor(i / 2); t += gap; out.push({ t, dx: 0, dy: 0, k: 0, p: 1 - 0.04 * i }); } return out; }
   function blastPattern(n) { const out = [], s = 0.36; let i = 0; // packed hex-ish cluster, front rounds a touch faster, outer ones fanned
     for (let ring = 0; i < n; ring++) for (let row = -ring; row <= ring && i < n; row++) for (let col = -ring; col <= ring && i < n; col++) {
       if (Math.max(Math.abs(row), Math.abs(col)) !== ring) continue;
       out.push({ t: 0, dx: col * s + (row % 2 ? s / 2 : 0), dy: row * s, k: row * 0.045 + ((i * 7) % 5 - 2) * 0.012, p: 1 + col * 0.03 + ((i * 3) % 7 - 3) * 0.012 }); i++; }
     return out; }
-  const LINEUPS = { 1: ['catapult', 'tank'], 2: ['catapult', 'tank', 'rapid'], 3: ['catapult', 'tank', 'trail', 'consensus'], 4: ['catapult', 'tank', 'trailDrop', 'blast'], 5: ['catapult', 'tank', 'trailDrop', 'blastOne', 'biggerTank'] };
+  const LINEUPS = { 1: ['catapult', 'tank'], 2: ['catapult', 'tank', 'rapid'], 3: ['catapult', 'tank', 'trail', 'consensus'], 4: ['catapult', 'tank', 'trailDrop', 'blast'], 5: ['catapult', 'tank', 'trailDrop', 'blastOne', 'biggerTank'], 6: ['catapult', 'tank', 'trailDrop', 'blastOne', 'biggerTrail'] };
   function fill(tpl, v) { return String(tpl || '').replace(/\{(\w+)\}/g, (_, k) => (k in v ? String(v[k]) : '')); }
   const api = { WEAPONS, LINEUPS, fill };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
