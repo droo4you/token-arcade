@@ -1,5 +1,7 @@
 # Resume Token Arcade work
 
+> Current handoff: [RELEASE_QUEUE.md](RELEASE_QUEUE.md). The checkpoint and branch instructions below are historical, not current release instructions.
+
 Checkpoint: 2026-10-13. Private GitHub backup: `droo4you/token-arcade`.
 
 ## Latest release work (supersedes the original checkpoint below)

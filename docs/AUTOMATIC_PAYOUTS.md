@@ -13,7 +13,7 @@ See `contracts/deployments/automatic-payout-rehearsal.json`. This was a syntheti
 
 ## Activation
 
-The implementation is opt-in. Live automatic payouts are **not enabled until the Render secret is explicitly approved and configured**. Automatic approval review rejected uploading the newly generated payout key without that specific approval. The unsaved Render changes were cancelled.
+The implementation is opt-in. On Oct 22, 2026, droober explicitly approved storing the dedicated testnet payout key in Render. The API environment was configured through Render and deployed; production health now reports `automaticPayouts: true`, chain 10143, with normal Privy authentication and demo login disabled. The earlier approval rejection is resolved. A real website player raid with automatic delivery remains the acceptance test; activation alone is not evidence of that payout.
 
 Use one always-on API instance and its existing persistent SQLite disk. Preserve all existing Privy/origin/disk settings. Add only:
 

@@ -66,7 +66,7 @@ const SIM = (() => {
     { id: 'arm', name: 'ARM', desc: 'DROOBER THROWS HARDER', base: 25 },
     { id: 'rock', name: 'SMOOTH ROCK', desc: 'LOSE LESS SPEED PER SKIP', base: 30 },
     { id: 'hands', name: 'DIAMOND HANDS', desc: 'WIDER PERFECT SKIP WINDOW', base: 25 },
-    { id: 'aero', name: 'AERO', desc: 'TILT HARDER, GLIDE LONGER', base: 30 },
+    { id: 'aero', name: 'GAS TANK', desc: 'MORE GAS FOR AIR CONTROL', base: 30 },
     { id: 'bounce', name: 'BOUNCES', desc: '+1 BOUNCE PER RUN', base: 20 },
     { id: 'rc', name: 'RC LIFT', desc: 'MORE RC LIFTS + GEM MAGNET', base: 35 },
     { id: 'volume', name: 'VOLUME', desc: 'NEEDED TO BREAK RESISTANCE', base: 50 },
@@ -82,8 +82,10 @@ const SIM = (() => {
       goodKeep: 0.89 + 0.015 * L('rock'),
       perfectKeep: 0.968 + 0.005 * L('rock'),
       window: 0.11 + 0.018 * L('hands'),
+      supportWindow: 0.055 + 0.005 * L('hands'),
       turn: 1.8 + 0.3 * L('aero'),
       liftK: 0.0003 + 0.00022 * L('aero'),
+      gas: 8 + 3 * L('aero'),
       bounces: 3 + L('bounce'),
       rc: 2 + Math.floor((L('rc') + 1) / 2),
       magnet: 20 + 9 * L('rc'),
@@ -163,10 +165,13 @@ const SIM = (() => {
   function issuedSeed(value) { let h = 2166136261; for (const c of String(value)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
   // Passport Play uses this fixed loadout (all upgrades level 0) so every player has the same stats.
   const STANDARD_LOADOUT = Object.freeze({});
-  function newRun(up, seed) {
+  // balance-v2 is opt-in until a separately versioned competitive release is admitted.
+  // Existing standard-v1 replays must keep their original physics.
+  function newRun(up, seed, balanceV2 = false) {
     const s = stats(up);
     const run = {
-      seed: seed >>> 0, s, t: 0,
+      seed: seed >>> 0, s, t: 0, balanceV2, gas: s.gas,
+      lastTap: -9,
       x: DOCK_X, alt: DOCK_ALT, vx: 0, vy: 0, spin: 0,
       phase: 'aim', // aim -> fly -> sink -> done
       bounces: s.bounces, rc: s.rc, rcT: 0,
@@ -199,7 +204,8 @@ const SIM = (() => {
   function skipOff(run, kind) {
     const s = run.s;
     const impact = Math.atan2(-run.vy, Math.max(1, run.vx)) * 180 / Math.PI;
-    const early = run.t - run.pressT <= s.window;
+    const timingWindow = run.balanceV2 && kind === 'support' ? s.supportWindow : s.window;
+    const early = run.t - run.pressT <= timingWindow;
     let perfect = early || kind === 'frog' || kind === 'farm';
     if (run.vx < SINK && kind !== 'yacht') {
       if (kind === 'support') { run.alt -= 1; emit(run, 'text', 'SUPPORT LOST', '#ff6b6b'); return false; }
@@ -225,7 +231,7 @@ const SIM = (() => {
       run.vx *= s.goodKeep * entropy(run);
       run.vy = Math.max(60, -run.vy * 0.55);
       run.streak = 0;
-      run.pendingPerfect = s.window; // a late tap still counts
+      run.pendingPerfect = timingWindow; // support uses the same tight window before and after contact
       emit(run, 'skip', null);
     }
     if (kind === 'crab') { run.vy = Math.min(run.vy, 95); emit(run, 'text', 'CHOP', '#ff9f6b'); }
@@ -314,7 +320,13 @@ const SIM = (() => {
     if (run.phase !== 'fly') return;
     const s = run.s;
 
-    if (input.skip) {
+    // Rapid repeats invalidate the timing window instead of continuously refreshing it.
+    const cleanTap = !run.balanceV2 || run.t - run.lastTap >= 0.25;
+    if (input.skip && run.balanceV2) {
+      run.lastTap = run.t;
+      if (!cleanTap) { run.pressT = -9; run.pendingPerfect = 0; }
+    }
+    if (input.skip && cleanTap) {
       run.pressT = run.t;
       if (run.pendingPerfect > 0) {
         // late tap: upgrade the last good skip to perfect
@@ -344,13 +356,16 @@ const SIM = (() => {
 
     // flight: gravity, drag, tilt (turns the velocity), a little lift from AERO
     const sp = Math.max(1, speed(run));
-    const tilt = Math.max(-1, Math.min(1, input.tilt || 0));
+    const requestedTilt = Math.max(-1, Math.min(1, input.tilt || 0));
+    const assist = run.balanceV2 ? Math.min(1, run.gas / (Math.abs(requestedTilt) * DT || 1)) : 1;
+    const tilt = requestedTilt * assist;
+    if (run.balanceV2) run.gas = Math.max(0, run.gas - Math.abs(tilt) * DT);
     let ax = 0, ay = -G;
     const k = 0.00012 * sp + 0.1 * Math.abs(tilt);
     ax -= run.vx * k; ay -= run.vy * k;
     const turn = tilt * s.turn * sp;
     ax += -run.vy / sp * turn; ay += run.vx / sp * turn;
-    ay += Math.min(G * 0.7, s.liftK * run.vx * run.vx);
+    ay += Math.min(G * 0.7, s.liftK * run.vx * run.vx) * (run.balanceV2 ? Math.abs(tilt) : 1);
     if (run.iceSlide && (run.alt > 0.5 || run.vy > 0)) run.iceSlide = false;
     if (run.iceSlide) { ay = Math.max(0, ay); ax -= 26; }
     run.vx = Math.max(0, run.vx + ax * DT);

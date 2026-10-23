@@ -1,8 +1,10 @@
 # Release handoff — 2026-10-13
 
+> Current priorities and branch ownership: [RELEASE_QUEUE.md](RELEASE_QUEUE.md). The hackathon tasks and dual-branch deployment instructions below are historical; production now follows `main`.
+
 ## Post-hackathon launch gate — sponsored prize claims (2026-10-21)
 
-- Update: automatic fixed-winner payouts are implemented and passed an isolated zero-gas testnet rehearsal. See [automatic payout handoff](AUTOMATIC_PAYOUTS.md) for receipts, activation, recovery and remaining fee-routing work. Render activation is pending explicit approval to upload the new dedicated testnet payout key; do not call unattended website payouts live yet.
+- Update Oct 22: automatic fixed-winner payouts are enabled in Render after explicit approval and live health verification. See [automatic payout handoff](AUTOMATIC_PAYOUTS.md) for receipts, activation, recovery and remaining fee-routing work. The next real player raid must still demonstrate unattended delivery.
 
 - Required before public launch: winners can claim with zero native MON and zero WMON in their wallet. The app pays claim gas; rewards go only to the recorded winning wallet.
 - Implement and rehearse a sponsored claim path with bounded spend, winner authorization, duplicate-claim protection, and clear pending/success/failure feedback. This is a requirement, not a shipped feature.
