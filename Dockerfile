@@ -13,4 +13,4 @@ ARG VITE_PRIVY_APP_ID=""
 ENV VITE_PRIVY_APP_ID=$VITE_PRIVY_APP_ID
 RUN npm run build
 ENV NODE_ENV=production LOCAL_DEMO_MODE=false HOST=0.0.0.0 CARTRIDGE_HOST=0.0.0.0
-CMD ["sh", "-c", "if [ \"$ROLE\" = cartridges ]; then CARTRIDGE_PORT=${PORT:-8788} exec node scripts/cartridges.mjs; else exec node --experimental-sqlite --experimental-strip-types apps/api/src/server.ts; fi"]
+CMD ["sh", "-c", "if [ \"$ROLE\" = cartridges ]; then CARTRIDGE_PORT=${PORT:-8788} exec node --experimental-strip-types scripts/cartridges.mjs; else exec node --experimental-sqlite --experimental-strip-types apps/api/src/server.ts; fi"]
