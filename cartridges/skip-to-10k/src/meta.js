@@ -97,7 +97,7 @@ const META = (() => {
   }
 
   // Rock garden: 100 rocks. Every rock you buy makes the next one cost more. That is how rocks work.
-  const rockPrice = owned => Math.round(25 * Math.pow(1.22, Math.max(0, owned - 1)));
+  const rockPrice = owned => Math.round(25 * Math.pow(1.067, Math.max(0, owned - 1)));
   function buyRock(save, rnd = Math.random) {
     const owned = save.rocks;
     if (owned.length >= 100) return null;
