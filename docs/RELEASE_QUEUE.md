@@ -15,6 +15,7 @@ Updated 2026-10-23. This is the current handoff for both Codex and Grok. It supe
 
 | Work | Source / author | Status and next action |
 | --- | --- | --- |
+| Coindle price hints and consistent cabinet labels | Codex follow-up to PR #11 | Prepared for release: server-selected normalized 90-day chart, stale-puzzle protection, legacy no-hint rules preserved and separate ranked standings. Cabinet mode labels restored to Free Play / Passport Play / Community Raid. Generalized creator challenge metadata remains a follow-up in PASSPORT_PLAY_RULES.md. |
 | Skrumpey Slide 1.2 momentum and controls | Codex, PR #16 | Live. Preserve this reviewed release when reviewing other branches. |
 | Free Play summaries and lifecycle analytics | Codex, PRs #18–19 | Live at `c170ce8`. Guests/accounts, start/exit/result coverage, Skip starting upgrades, Two Places level context. |
 | Automatic testnet payouts | Codex, PR #17 | Enabled in Render on Oct 22 after explicit approval; live health confirms `automaticPayouts: true` on chain 10143. A real player raid with automatic delivery is still the next acceptance test. See AUTOMATIC_PAYOUTS.md. |

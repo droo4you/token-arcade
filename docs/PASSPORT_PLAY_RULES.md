@@ -1,5 +1,15 @@
 # Passport Play rules
 
+## Current mode contract (2026-10-23)
+
+The cabinet uses the same platform labels for every creator: **Free Play**, **Passport Play**, and **Community Raid**. A game's challenge name belongs inside that mode. Coindle's Rapid Fire is its current Passport Play challenge; it is not another platform mode.
+
+Creator-facing follow-up: make supported modes, challenge description, objectives, tie-breaks, reviewed rules and verification requirements explicit in submission/review. Render challenge descriptions from reviewed submission metadata instead of game-ID conditionals. This generalized submission UI is not implemented yet; the label cleanup removes Coindle's cabinet exceptions now.
+
+Coindle price hints use the issued `priceHint: "shape-90d-v1"` rules marker. Only normalized chart points leave the server. Legacy runs/raids without that marker retain no-hint behavior. Ranked boards already filter exact issued rules, so earlier no-hint results remain stored separately from chart-assisted results. Chart loading is optional and does not pause the server clock.
+
+The historical status tables below describe earlier milestones; consult `RELEASE_QUEUE.md` for current deployment status.
+
 Approved by droober, 2026-10-13. Status markers: **LIVE** = enabled on `grok/final-stretch`,
 **PLANNED** = agreed rule, not built yet.
 

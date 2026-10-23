@@ -13,13 +13,53 @@ const runId = "11111111-2222-3333-4444-555555555555";
 const config = (rules = RAPID_RULES): GameRunConfig => ({ runId, gameId: "coindle", gameVersion: "1.0.0", mode: "ranked", objective: "coins_solved", rules,
   startedAt: new Date(0).toISOString(), expiresAt: new Date(600_000).toISOString() });
 
-function unit(rules = RAPID_RULES) {
+function unit(rules = RAPID_RULES, history?: (ticker: string) => Promise<{ price: number }[]>) {
   let clock = 0;
   const db = new DatabaseSync(":memory:");
-  const rapid = createCoindleRapid({ db, getSession: () => ({ playerId: "p", config: config(rules) }), prices: async () => ({}), now: () => clock, pick: () => 0 });
+  const rapid = createCoindleRapid({ db, getSession: () => ({ playerId: "p", config: config(rules) }), prices: async () => ({}), history, now: () => clock, pick: () => 0 });
   const answer = () => (JSON.parse((db.prepare("SELECT json FROM coindle_rapid").get() as { json: string }).json) as { current: { answer: string } }).current.answer;
   return { rapid, answer, tick: (ms: number) => { clock += ms; } };
 }
+
+test("Rapid Fire hints expose only a normalized silhouette for the current active puzzle", async () => {
+  let requested = "";
+  const { rapid, answer, tick } = unit(RAPID_RULES, async ticker => {
+    requested = ticker;
+    return [{ price: 1000 }, { price: 3000 }, { price: 2000 }];
+  });
+  await assert.rejects(rapid.hint(runId, 1), /Start the Rapid Fire clock/);
+  rapid.start(runId);
+  assert.deepEqual(await rapid.hint(runId, 1), { puzzle: 1, points: [0, 1, 0.5] });
+  assert.equal(requested, answer());
+  await assert.rejects(rapid.hint(runId, NaN), /valid puzzle/);
+  await assert.rejects(rapid.hint(runId, 2), /puzzle has changed/);
+  assert.equal(rapid.state(runId)?.totalGuesses, 0);
+  tick(180_000);
+  await assert.rejects(rapid.hint(runId, 1), /window has ended/);
+});
+
+test("Rapid Fire discards a delayed hint after a skip; missing history does not block play", async () => {
+  let resolve!: (points: { price: number }[]) => void;
+  const { rapid } = unit(RAPID_RULES, () => new Promise(done => { resolve = done; }));
+  rapid.start(runId);
+  const pending = rapid.hint(runId, 1);
+  rapid.skip(runId);
+  resolve([{ price: 2 }, { price: 3 }]);
+  await assert.rejects(pending, /puzzle has changed/);
+  const fallback = unit(RAPID_RULES, async () => { throw new Error("History offline"); });
+  fallback.rapid.start(runId);
+  assert.deepEqual(await fallback.rapid.hint(runId, 1), { puzzle: 1, points: [] });
+  assert.equal(fallback.rapid.skip(runId).puzzle, 2);
+});
+
+test("Rapid Fire keeps legacy runs without hints and rejects unknown hint rules", async () => {
+  const { priceHint, ...legacyRules } = RAPID_RULES;
+  const { rapid } = unit(legacyRules);
+  assert.equal(rapid.start(runId).priceHint, false);
+  await assert.rejects(rapid.hint(runId, 1), /without price hints/);
+  assert.equal(rapid.skip(runId).puzzle, 2);
+  assert.throws(() => unit({ ...RAPID_RULES, priceHint: "unreviewed" }).rapid.start(runId), /reviewed Rapid Fire rules/);
+});
 
 test("Rapid Fire: server picks, judges and times; answers never leak before a solve or miss", async () => {
   const clue = judge(live[0], live[1], { [live[0].ticker]: { tier: 2 }, [live[1].ticker]: { tier: 4 } });

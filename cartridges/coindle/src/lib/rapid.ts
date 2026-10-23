@@ -6,6 +6,7 @@ import { COINS } from "./coins";
 export type RapidState = {
   runId: string; startedAt?: number; endsAt?: number; ended: boolean; remainingMs: number;
   puzzle: number; guessesThisCoin: number; maxGuessesPerCoin: number; solved: number; totalGuesses: number;
+  priceHint?: boolean;
 };
 type Feedback = Omit<GuessResult, "coin"> & { ticker: string };
 export type GuessReply = RapidState & { feedback: Feedback; correct: boolean; revealed?: string; nextPuzzle?: boolean };

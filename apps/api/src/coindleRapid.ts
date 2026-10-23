@@ -10,11 +10,12 @@ import { areColorsAdjacent, FDV_BUCKET_ORDER, getCoinTypeFamily, MAX_GUESSES } f
  * the ledger. An answer is only revealed after it is solved, skipped, or out of guesses.
  */
 export const RAPID_FORMAT = "rapid-fire-v1";
-export const RAPID_RULES: GameRules = { format: RAPID_FORMAT, windowSeconds: 180, maxGuessesPerCoin: MAX_GUESSES };
+export const RAPID_RULES: GameRules = { format: RAPID_FORMAT, windowSeconds: 180, maxGuessesPerCoin: MAX_GUESSES, priceHint: "shape-90d-v1" };
 /** Time from session issue to pressing start, plus the window and submit slack. */
 export const RAPID_RUN_TIMEOUT_MS = 600_000;
 export const isRapidRules = (rules?: GameRules) => rules?.format === RAPID_FORMAT
-  && rules.windowSeconds === 180 && rules.maxGuessesPerCoin === MAX_GUESSES;
+  && rules.windowSeconds === 180 && rules.maxGuessesPerCoin === MAX_GUESSES
+  && (rules.priceHint === undefined || rules.priceHint === "shape-90d-v1");
 
 type Coin = (typeof COINS)[number];
 type Match = "green" | "yellow" | "red" | "unavailable";
@@ -63,6 +64,7 @@ type Options = {
   db: DatabaseSync;
   getSession: (runId: string) => Session | undefined;
   prices: () => Promise<PriceTiers>;
+  history?: (ticker: string) => Promise<{ price: number }[]>;
   now?: () => number;
   pick?: (count: number) => number;
 };
@@ -104,6 +106,7 @@ export function createCoindleRapid(options: Options) {
     remainingMs: ledger.endsAt === undefined ? ledger.windowMs : ended(ledger) ? 0 : ledger.endsAt - now(),
     puzzle: ledger.log.length + 1, guessesThisCoin: ledger.current?.guesses.length ?? 0, maxGuessesPerCoin: ledger.maxGuesses,
     solved: ledger.solved, totalGuesses: ledger.totalGuesses,
+    priceHint: options.getSession(ledger.runId)?.config.rules?.priceHint === "shape-90d-v1",
   });
   function active(runId: string) {
     session(runId);
@@ -130,6 +133,22 @@ export function createCoindleRapid(options: Options) {
       session(runId);
       const ledger = load(runId);
       return ledger ? view(ledger) : null;
+    },
+    async hint(runId: string, puzzle: number) {
+      if (!Number.isSafeInteger(puzzle) || puzzle < 1) throw new RapidError(400, "INVALID_PUZZLE", "A valid puzzle number is required");
+      const ledger = active(runId);
+      if (session(runId).config.rules?.priceHint !== "shape-90d-v1") throw new RapidError(409, "HINT_DISABLED", "This run was issued without price hints");
+      const check = (current: Ledger) => {
+        if (current.log.length + 1 !== puzzle) throw new RapidError(409, "PUZZLE_CHANGED", "The puzzle has changed");
+      };
+      check(ledger);
+      const history = await options.history?.(ledger.current!.answer).catch(() => []) ?? [];
+      check(active(runId)); // A skip, solve or expiry while loading must invalidate this hint.
+      const prices = history.map(point => point.price).filter(price => Number.isFinite(price) && price > 0);
+      if (prices.length < 2) return { puzzle, points: [] };
+      const min = Math.min(...prices), range = Math.max(...prices) - min;
+      // Only the silhouette leaves the server: no ticker, timestamps or absolute prices.
+      return { puzzle, points: prices.map(price => range === 0 ? 0.5 : Math.round((price - min) / range * 10000) / 10000) };
     },
     async guess(runId: string, rawTicker: unknown) {
       const ticker = typeof rawTicker === "string" ? rawTicker.toUpperCase() : "";
