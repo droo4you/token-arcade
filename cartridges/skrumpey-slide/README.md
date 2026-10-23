@@ -31,3 +31,7 @@ v3 (in its own folder; the v2.2 submission build in /workspace/skrumpey-slide is
 - Trait synergy: a star-trait member makes Star last 1.5x and the train shimmers. A beam-trait member adds a rear shot during Beam.
 - Display: up to 12 are visible; beyond that the HUD shows (+N). Game over shows a squad card with a copy-able share text.
 - Slingshot launch: hold to pull (the meter oscillates over a 1.5 s period), release to fire. A meter of 0.9 or more is a PERFECT LAUNCH. It auto-fires after 10 s. Pull ticks are logged as inputs, so launches replay deterministically.
+
+## 3D upscale design (not live)
+
+Design-only branch work lives under [`design/DESIGN-3D.md`](design/DESIGN-3D.md) (Tiny Wings A-plot + lane sprints B-plot, swap rhythm, phased upscale). Spike stub: [`design/v3d/`](design/v3d/). Does **not** change live rules or raid artifacts.

@@ -49,3 +49,7 @@ Playtest feedback: the lane runner was the favourite part. Each lane sprint is n
 Both 1.0.0 and 1.1.0 entry points, simulation, touch controls and vendor renderer files are frozen in releases/<version>. The HTTP router selects these explicitly; unsupported versions return 404. The API replays 1.1.0 using that same frozen simulation. Art assets are shared unchanged: keep existing asset paths immutable and use new paths for future replacements.
 
 Deploy the API and cartridge service first, leaving the manifest at 1.0.0. Confirm both URLs serve their intended builds. Close/finalize any open raid before pausing the cabinet. Pausing stops new sessions; previously issued runs can still finish with the same version and rules. Configuration changes are refused while unconsumed sessions remain unexpired. Then update the version and entry URL together, complete review and creator deployment, and smoke-test Passport Play before funding a new raid. Existing result records are retained and ranked boards filter by the active gameVersion. Historical Passport best-score summaries are still aggregated across versions; they are not a version-specific leaderboard.
+
+## 3D upscale (design only)
+
+See [`design/DESIGN-3D.md`](design/DESIGN-3D.md). Phase 0 design branch; live 1.x rules and raid validity unchanged.
