@@ -35,8 +35,8 @@ Hooks: `?seed=1&bot=1&auto=1&mute=1&speed=4`. Hold to dive, release to fly. On a
 
 The run swaps, it does not pick a winner:
 
-1. Meadow hills — classic dive / fly on a ribbon with width. Camera sits behind and above. Hold widens the FOV and tucks in; release floats back.
-2. Three-stage, three-lane sprint (the 1.1.0 length: hurdles, corridors, slaloms, splits). Camera drops tighter so the lanes stay readable.
+1. Meadow hills — classic dive / fly on a ribbon with width. Side-view camera, the hill in profile. Hold widens the FOV and tucks in; release floats back.
+2. Three-stage, three-lane sprint (the 1.1.0 length: hurdles, corridors, slaloms, splits). The camera eases around to a third-person view behind and above so lane changes and hops read. It eases back to the side view when the hills return.
 3. Dunes — a steep hill. A bad landing keeps 55% speed instead of 80%.
 4. Lane sprint.
 5. Crystal Night — lower gravity, longer air, slower daylight drain.

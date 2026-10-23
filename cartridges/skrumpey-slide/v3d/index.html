@@ -771,7 +771,7 @@ function perfSample(dt){if(FIXED_Q)return;pfSum+=dt;pfN++;pfT+=dt;if(pfT<1)retur
 if(params.has('quality')){curPR=+params.get('quality');renderer.setPixelRatio(curPR);}
 // ---------- frame ----------
 const tmpC=new THREE.Color(),tmpC2=new THREE.Color(),nightTop=C(CONFIG.night.skyTop),nightBot=C(CONFIG.night.skyBottom),nightFog=C(CONFIG.night.fog);
-const trailC=new THREE.Color();let prevX=0,prevY=0;const _cp=new THREE.Vector3(),_cl=new THREE.Vector3(),camL=new THREE.Vector3();let launchB=1,laneB=0,eLane=0;let camDist=18,camY=0,camX=0,tilt=0,squash=1,lastShotT=-1;
+const trailC=new THREE.Color();let prevX=0,prevY=0;const _cp=new THREE.Vector3(),_cl=new THREE.Vector3(),camL=new THREE.Vector3(),_sideP=new THREE.Vector3(),_sideL=new THREE.Vector3(),_chaseP=new THREE.Vector3(),_chaseL=new THREE.Vector3();let launchB=1,laneB=0,eLane=0,camMix=0,camBehind=0,camSide=0,camK=0;let camDist=18,camY=0,camX=0,tilt=0,squash=1,lastShotT=-1;
 let speedFlash=0,fovNow=54,camReady=false,gorgeA=0,diveA=0,glideA=0;
 const speedGrp=new THREE.Group();const speedMats=[];
 for(let i=0;i<28;i++){const mat=new THREE.MeshBasicMaterial({color:i%3?0xfff3c4:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});const mesh=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.12,2.8+((i*13)%9)*0.35),mat);mesh.position.set(((i%7)-3)*0.72,((i%5)-2)*0.55,-3.2-(i%8)*1.15);speedGrp.add(mesh);speedMats.push(mat);}
@@ -829,7 +829,7 @@ function frame(t){requestAnimationFrame(frame);const dtR=Math.min(0.05,(t-last)/
  updateTrain(t,alpha,dtR,x,y,eLane);updateLaunch(x,y);updateFX(t,dtR,x,y);
  updateEnts(t,x,tk);updateCollectibles(t,x);updateParts(dtR);
  for(let i=beams.length-1;i>=0;i--){const b=beams[i];b.life-=window.PAUSED?0:dtR;b.m.material.opacity=Math.max(0,b.life/b.max);const w=1+(b.max-b.life)*3;b.m.scale.y=w;b.m.scale.z=w;if(b.life<=0){scene.remove(b.m);b.m.geometry.dispose();beams.splice(i,1);}}
- // Chase camera: behind and above on hills, tighter and flatter in lanes. Hold punches FOV; release floats back.
+ // Hills: side profile across the ribbon (Tiny Wings). Lanes: third person behind and above. camMix eases between them.
  const spd=Math.hypot(S.vx,S.vy);
  const pressingCam=pressing;
  diveA+=( ((pressingCam&&!S.inLane)?1:0) - diveA)*Math.min(1,dtR*6);
@@ -837,23 +837,28 @@ function frame(t){requestAnimationFrame(frame);const dtR=Math.min(0.05,(t-last)/
  const gapAhead=!S.ground&&(W.inGap(x)||W.inGap(x+Math.min(36,Math.max(12,S.vx*0.45))));
  gorgeA+=( (gapAhead?1:0) - gorgeA)*Math.min(1,dtR*2.4);
  launchB+=((S.phase==='launch'&&state==='play'?1:0)-launchB)*Math.min(1,dtR*3);
- let back=15.5-diveA*5.2+glideA*3.6+gorgeA*14+launchB*6;
- let up=6.4-diveA*2.1+glideA*2.2+gorgeA*5.4+launchB*3;
- let ahead=16+gorgeA*12-diveA*3;
- let fovTarget=52+diveA*20-glideA*6+gorgeA*14-eLane*6;
- const camLat=lat*(0.15+eLane*0.15);
- const lookLat=lat*(0.35+eLane*0.55);
- back=back*(1-eLane)+(12.5)*eLane; up=up*(1-eLane)+5.1*eLane; ahead=ahead*(1-eLane)+18*eLane;
- if(MOBILE&&camera.aspect<1){back*=0.72;up*=0.82;}
+ camMix+=((S.inLane?1:0)-camMix)*Math.min(1,dtR*1.35);
+ const k=camMix*camMix*(3-2*camMix);
+ const phone=MOBILE&&camera.aspect<1;
  const fcam=pathFrame(x);
- _cp.set(fcam.cx-fcam.tx*back+fcam.rx*(camLat+launchB*7), y+up, fcam.cz-fcam.tz*back+fcam.rz*(camLat+launchB*7));
- worldXYZ(x+ahead, y+(eLane?1.05:3.1)+alt*0.04, lookLat, _cl);
+ const sideDist=(phone?16:24)+glideA*3.2+gorgeA*11+launchB*4-diveA*(phone?2:3.2);
+ const sideUp=(phone?4.6:6.4)+glideA*1.8+gorgeA*4.5+launchB*1.2-diveA*1.3;
+ _sideP.set(fcam.cx-fcam.rx*sideDist, y+sideUp, fcam.cz-fcam.rz*sideDist);
+ worldXYZ(x+(8+gorgeA*14-diveA*2), y*0.25+gh*0.75+2.6, 0, _sideL);
+ const chaseBack=phone?9.4:12.4, chaseUp=phone?4.4:5.8, chaseAhead=phone?13:17;
+ _chaseP.set(fcam.cx-fcam.tx*chaseBack+fcam.rx*lat*0.42, y+chaseUp, fcam.cz-fcam.tz*chaseBack+fcam.rz*lat*0.42);
+ worldXYZ(x+chaseAhead, y+1.15, lat*0.7, _chaseL);
+ _cp.lerpVectors(_sideP,_chaseP,k);
+ _cl.lerpVectors(_sideL,_chaseL,k);
+ let fovTarget=(46+diveA*16-glideA*4+gorgeA*12+launchB*2)*(1-k)+(phone?50:52)*k;
  shake*=Math.pow(0.002,dtR);_cp.x+=(Math.random()-.5)*shake;_cp.y+=(Math.random()-.5)*shake;
- const damp=camReady?Math.min(1,dtR*(S.phase==='launch'?3.2:7)):1;camReady=true;
- camera.position.lerp(_cp,damp);camL.lerp(_cl,damp);camera.lookAt(camL);
+ // The hill/lane blend is already eased by camMix. Extra position lag slid the side camera backward and spoiled the profile.
+ camReady=true;camera.position.copy(_cp);camL.copy(_cl);camera.lookAt(camL);
  fovNow+=(fovTarget-fovNow)*Math.min(1,dtR*5);
  const aspect=Math.max(0.35,camera.aspect);camera.fov=fovNow*(aspect<1?Math.min(MOBILE?1.05:1.35,(MOBILE?1.05:0.9)/aspect):1);camera.updateProjectionMatrix();
- camX=camera.position.x;camY=camera.position.y;camDist=back;
+ const relX=camera.position.x-player.position.x,relZ=camera.position.z-player.position.z;
+ camBehind=-(relX*fcam.tx+relZ*fcam.tz);camSide=relX*fcam.rx+relZ*fcam.rz;camK=k;
+ camX=camera.position.x;camY=camera.position.y;camDist=sideDist*(1-k)+chaseBack*k;
  speedFlash=Math.max(0,speedFlash-dtR*1.7,diveA*Math.min(1,spd/55)*0.45);
  speedGrp.visible=speedFlash>0.03;speedMats.forEach((mat,i)=>{mat.opacity=speedFlash*0.9;speedGrp.children[i].scale.z=1+speedFlash*2.2;});
  player.scale.setScalar(1);
@@ -887,7 +892,7 @@ requestAnimationFrame(t=>{last=t;frame(t);});
 // test/debug hooks (not used by gameplay)
 window.GAME={CONFIG,start,get state(){return state},get sim(){return S},setBot:v=>bot=v,select:id=>document.querySelector(`#grid button[data-id="${id}"]`).click(),
  resume:()=>{window.PAUSED=null;},give:p=>{S.power=p;S.powerT=p==='star'?SIM.P.starTicks:SIM.P.beamTicks;},mute:v=>muted=v,
- get cam(){return {x:+camera.position.x.toFixed(2),y:+camera.position.y.toFixed(2),z:+camera.position.z.toFixed(2),fov:+camera.fov.toFixed(1),lx:+camL.x.toFixed(2),ly:+camL.y.toFixed(2),lz:+camL.z.toFixed(2)};},
+ get cam(){return {x:+camera.position.x.toFixed(2),y:+camera.position.y.toFixed(2),z:+camera.position.z.toFixed(2),fov:+camera.fov.toFixed(1),lx:+camL.x.toFixed(2),ly:+camL.y.toFixed(2),lz:+camL.z.toFixed(2),mode:camK<0.35?'side':camK>0.65?'chase':'blend',mix:+camK.toFixed(2),behind:+camBehind.toFixed(1),side:+camSide.toFixed(1)};},
  mobile:MOBILE,touch:touchInput};
 if(params.get('auto')==='1')setTimeout(()=>start(params.get('mode')==='ranked'?'ranked':'free'),300);
 </script></body></html>
