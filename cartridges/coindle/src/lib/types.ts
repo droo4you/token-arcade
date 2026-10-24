@@ -54,6 +54,8 @@ export type MatchResult = "green" | "yellow" | "red" | "unavailable";
 
 export interface GuessResult {
   coin: Coin;
+  /** The guessed coin's tier used by the Rapid Fire server judge. */
+  priceTier?: number;
   type: MatchResult;
   color: MatchResult;
   launchYear: MatchResult;

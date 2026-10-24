@@ -14,12 +14,13 @@ import { DirectWalletOwnershipResolver } from "./ownership.ts";
 import { AdapterRegistry, normalizeRunRules } from "./verifiers.ts";
 import { MinicoinDeployer, MinicoinError, type MinicoinSettings } from "./minicoin.ts";
 import { createCoindleHandler } from "./coindle.ts";
+import { createCoindleRapid, RapidError, isRapidRules, RAPID_RULES, RAPID_RUN_TIMEOUT_MS, type PriceTiers } from "./coindleRapid.ts";
 import { TestnetMinicoinService } from "./testnet-minicoin.ts";
 import { FundedRaids, FundedRaidError } from "./fundedRaids.ts";
 import { AutomaticPayouts } from "./automaticPayouts.ts";
 import { freePlayReport } from "./freePlayAnalytics.ts";
 
-const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses"]);
+const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses", "coins_solved"]);
 const MODES = new Set(["free", "ranked", "raid"]);
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 const LOCAL_EMONAD_METADATA_URI = "http://127.0.0.1:5173/minicoin-rehearsal/emonad.json";
@@ -215,6 +216,7 @@ function raidBlockers(raid: Raid, store: ArcadeStore, adapters: AdapterRegistry)
     const conceptId = game.communityConcept?.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     if (!game.community && conceptId && raid.communityId !== conceptId) blockers.push("Raid community does not match the Cabinet association");
     if (!game.community && !conceptId && raid.gameId !== WARMUP_GAME_ID) blockers.push("Game has no associated community");
+    if (game.manifest.adapterId === "coindle" && (!isRapidRules(raid.rules) || raid.objective !== "coins_solved")) blockers.push("Coindle raids must use reviewed Rapid Fire rules: coins_solved, 180 seconds and 6 guesses per coin");
     if (game.manifest.adapterId === "two-places") {
       const levels = typeof raid.rules?.levelSet === "string" && /^\d{1,2}(,\d{1,2}){2}$/.test(raid.rules.levelSet) ? raid.rules.levelSet.split(",").map(Number) : [];
       if (levels.length !== 3 || new Set(levels).size !== 3 || levels.some((level) => level < 0 || level >= 20)) blockers.push("Two Places raids require three distinct authored levels in rules.levelSet");
@@ -295,6 +297,12 @@ function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid"
       const aTime = a.result.objective === "completion_time" ? a.result.primaryMetric : (a.result.secondaryMetrics?.ticks ?? Infinity) * 1000 / 60;
       const bTime = b.result.objective === "completion_time" ? b.result.primaryMetric : (b.result.secondaryMetrics?.ticks ?? Infinity) * 1000 / 60;
       return aTime - bTime || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
+    }
+    if (a.result.objective === "coins_solved") {
+      // Rapid Fire: most coins solved, then fewest total guesses.
+      return b.result.primaryMetric - a.result.primaryMetric
+        || (a.result.secondaryMetrics?.guesses ?? Infinity) - (b.result.secondaryMetrics?.guesses ?? Infinity)
+        || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
     }
     const lowerIsBetter = a.result.objective === "completion_time" || a.result.objective === "guesses";
     return (lowerIsBetter ? a.result.primaryMetric - b.result.primaryMetric : b.result.primaryMetric - a.result.primaryMetric) || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
@@ -404,6 +412,32 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   const localDemoAdmin = auth.localDemoAdmin && !localMinicoinRehearsalRequested;
   const staticRoot = options.staticRoot ?? resolve(process.cwd(), "dist/web");
   const coindle = createCoindleHandler();
+  const rapid = createCoindleRapid({
+    db: store.db, getSession: (runId) => store.getSession(runId),
+    history: async (ticker) => {
+      const reply = await coindle({ method: "GET" }, new URL(`http://local/api/coindle/history?ticker=${encodeURIComponent(ticker)}`));
+      return reply?.status === 200 ? (reply.body as { points: { price: number }[] }).points : [];
+    },
+    prices: async () => {
+      const reply = await coindle({ method: "GET" }, new URL("http://local/api/coindle/prices"));
+      return reply?.status === 200 ? reply.body as PriceTiers : {};
+    },
+  });
+  if (!adapters.get("coindle")) {
+    adapters.register({ adapterId: "coindle", gameId: "coindle", freePlaySmokeTest: true, verifier: rapid.verifier, rankedRules: RAPID_RULES, runTimeoutMs: RAPID_RUN_TIMEOUT_MS });
+  }
+  /** Community Raid total: every verified run in the raid counts, not just each player's best. */
+  const raidTotal = (raid: Raid) => {
+    if (raid.objective !== "coins_solved") return {};
+    const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id);
+    return { communityTotal: { coinsSolved: runs.reduce((sum, item) => sum + item.result.primaryMetric, 0), runs: runs.length, participants: new Set(runs.map((item) => item.playerId)).size } };
+  };
+  // Warm the sparkline cache off the request path (no-op without PYTH_API_KEY); re-check every 6h.
+  const prewarmList = (process.env.COINDLE_PREWARM_TICKERS ?? "BTC,ETH,SOL").split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+  if (prewarmList.length) {
+    setTimeout(() => void coindle.prewarm(prewarmList), 2_000).unref();
+    setInterval(() => void coindle.prewarm(prewarmList), 6 * 3_600_000).unref();
+  }
   const testnet = new TestnetMinicoinService(store, options.testnetMinicoinSettings ?? {
     enabled: process.env.TESTNET_ENABLE_WRITES === "true", chainId: "10143",
     rpcUrl: process.env.TESTNET_RPC_URL, privateKey: process.env.TESTNET_DEPLOYER_PRIVATE_KEY,
@@ -508,6 +542,25 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const rows = store.db.prepare("SELECT player_id, guest_id, received_at, json FROM free_play_summaries WHERE (? IS NULL OR game_id = ?) ORDER BY received_at DESC LIMIT 500").all(gameId, gameId) as { player_id: string | null; guest_id: string; received_at: string; json: string }[];
         return respond(response, 200, { summaries: rows.map(row => ({ ...JSON.parse(row.json), playerId: row.player_id, guestId: row.guest_id, receivedAt: row.received_at })) });
       }
+      const rapidRoute = path.match(/^\/api\/coindle\/rapid\/([0-9a-f-]{36})\/(start|state|guess|skip|finish|hint)$/);
+      if (rapidRoute) {
+        // The issued runId (unguessable, only returned to the signed-in player) is the capability here, so the
+        // separate-origin cartridge can play without holding the player's Privy token.
+        const [, runId, action] = rapidRoute;
+        if (action === "state" || action === "hint" ? method !== "GET" : method !== "POST") fail(405, "METHOD_NOT_ALLOWED", "Unsupported method");
+        try {
+          if (action === "hint") return respond(response, 200, await rapid.hint(runId, Number(url.searchParams.get("puzzle"))));
+          if (action === "start") return respond(response, 200, rapid.start(runId));
+          if (action === "state") return respond(response, 200, { state: rapid.state(runId) });
+          if (action === "skip") return respond(response, 200, rapid.skip(runId));
+          if (action === "finish") return respond(response, 200, rapid.finish(runId));
+          const body = await readJson(request);
+          return respond(response, 200, await rapid.guess(runId, body.ticker));
+        } catch (error) {
+          if (error instanceof RapidError) fail(error.status, error.code, error.message);
+          throw error;
+        }
+      }
       const coindleReply = await coindle(request, url);
       if (coindleReply) return respond(response, coindleReply.status, coindleReply.body);
 
@@ -558,7 +611,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const attemptsUsed = store.countRaidAttempts(passport.playerId, raid.id);
           attempts = { playerId: passport.playerId, attemptsUsed, attemptsRemaining: Math.max(0, raid.maxAttempts - attemptsUsed) };
         }
-        return respond(response, 200, { raid, leaderboard: raid.finalResult?.entries ?? leaderboard(store, raid.gameId, "raid", raid.id, raid.objective, undefined, raid.rules), ...attempts });
+        return respond(response, 200, { raid, leaderboard: raid.finalResult?.entries ?? leaderboard(store, raid.gameId, "raid", raid.id, raid.objective, undefined, raid.rules), ...raidTotal(raid), ...attempts });
       }
       if (method === "GET" && /^\/api\/leaderboards\/[^/]+$/.test(path)) {
         const gameId = decodeURIComponent(path.split("/")[3]);
@@ -571,7 +624,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (mode === "raid" && (!raid || raid.gameId !== gameId || raid.status === "draft")) fail(400, "INVALID_RAID", "A matching raidId is required");
         const objective = mode === "raid" ? raid!.objective : game.manifest.supportedObjectives[0];
         const rules = mode === "raid" ? raid?.rules : adapters.get(game.manifest.adapterId)?.rankedRules;
-        return respond(response, 200, { gameId, mode, objective, ...(raidId ? { raidId } : {}), entries: (raid && publicRaid(raid).finalResult?.entries) ?? leaderboard(store, gameId, mode, raidId, objective, mode === "ranked" ? game.manifest.version : undefined, rules) });
+        return respond(response, 200, { gameId, mode, objective, ...(raidId ? { raidId } : {}), ...(raid ? raidTotal(raid) : {}), entries: (raid && publicRaid(raid).finalResult?.entries) ?? leaderboard(store, gameId, mode, raidId, objective, mode === "ranked" ? game.manifest.version : undefined, rules) });
       }
 
       if (path === "/api/me" && (method === "GET" || method === "PATCH")) {

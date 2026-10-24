@@ -1,5 +1,15 @@
 # Passport Play rules
 
+## Current mode contract (2026-10-23)
+
+The cabinet uses the same platform labels for every creator: **Free Play**, **Passport Play**, and **Community Raid**. A game's challenge name belongs inside that mode. Coindle's Rapid Fire is its current Passport Play challenge; it is not another platform mode.
+
+Creator-facing follow-up: make supported modes, challenge description, objectives, tie-breaks, reviewed rules and verification requirements explicit in submission/review. Render challenge descriptions from reviewed submission metadata instead of game-ID conditionals. This generalized submission UI is not implemented yet; the label cleanup removes Coindle's cabinet exceptions now.
+
+Coindle price hints use the issued `priceHint: "shape-90d-v1"` rules marker. Only normalized chart points leave the server. Legacy runs/raids without that marker retain no-hint behavior. Ranked boards already filter exact issued rules, so earlier no-hint results remain stored separately from chart-assisted results. Chart loading is optional and does not pause the server clock.
+
+The historical status tables below describe earlier milestones; consult `RELEASE_QUEUE.md` for current deployment status.
+
 Approved by droober, 2026-10-13. Status markers: **LIVE** = enabled on `grok/final-stretch`,
 **PLANNED** = agreed rule, not built yet.
 
@@ -38,7 +48,7 @@ plausibility.
 | **Uppers** (paired community eMONAD; Buy Bounce skeleton) | Random seed, unlimited retries | Issued seed + 390×844 playfield; server replays the seeded input track | **LIVE** |
 | **Two Places** | The full 20-level campaign, for fun | **Server-picked level time trial**: ranked uses the issued level, and raids use an issued 3-level set; server replays fixed-step inputs (apples rank before time) | **LIVE** (ranked level 0 by default; per-session random level PLANNED) |
 | **Skip to 10K** | Players may max out upgrades | **Fixed standard loadout** (`standard-v1` = all upgrades at level 0) + issued seed → `SIM.issuedSeed`; the cartridge sends `{v:1, seed, loadout, angle, power, input}` (one char per 120 Hz tick: tilt, skip, bounce, rc); the server replays the throw and every tick with `sim.js` and recomputes days, peak, skips, perfects, streak, gems and time. Saved upgrades are ignored | **LIVE** on this branch |
-| **Coindle** | Daily puzzle | **Streak mode** until the first miss; tie-break = fewest total guesses; **the server holds the answers and reveals the next coin only after a guess**. Alternative: a timed mode with 3 lives | **PLANNED**: server-authoritative, not replay-based |
+| **Coindle** | Daily puzzle (main mode: one shared puzzle/day, streaks, share grid) | **Rapid Fire** (`rapid-fire-v1`, approved by droober Oct 21 2026, replaces the Streak-mode plan): solve as many coins as possible in a **server-timed 3-minute window**; score = coins solved, tie-break = fewest total guesses; 6 guesses per coin, skip allowed. The server picks every coin, judges every guess (`/api/coindle/rapid/:runId/{start,guess,skip,finish,state}`) and the verifier accepts only its own ledger after the window closes. **Raid**: total coins solved by all verified Rapid Fire runs in the window (`communityTotal`) | **Built** on `grok/coindle-modes` (API + cartridge Rapid Fire screen) |
 | **Skrumpey Slide** | Random seed | Issued seed → `SIM.dailySeed(seed)`; the cartridge sends `{v:1, seed, input}` (one char per 60 Hz tick); the server replays `sim.js` in a VM and recomputes score, distance, combo, perfects, DN, kills, hits, falls, rescued, train and ticks | **LIVE** on this branch |
 
 ### Notes

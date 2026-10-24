@@ -6,7 +6,9 @@ export type GameObjective =
   | "destruction"
   | "completion_time"
   | "stars"
-  | "guesses";
+  | "guesses"
+  /** Coindle Rapid Fire: coins solved in the window; tie-break fewer secondaryMetrics.guesses. */
+  | "coins_solved";
 
 /** Small server-issued rule set; each game verifier defines the meaning of its keys. */
 export type GameRules = Record<string, string | number | boolean>;

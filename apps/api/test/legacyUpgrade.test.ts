@@ -21,7 +21,10 @@ test("existing Skip to 10K legacy import gains Passport Play on restart, keeping
     assert.equal(upgraded.manifest.verifier?.kind, "replay");
     assert.equal(upgraded.manifest.entry?.origin, "https://cart.example");
     assert.equal(upgraded.legacyImportRevision, 3);
-    assert.deepEqual(store.getGame("coindle")!.manifest.supportedModes, ["free"]);
+    // Coindle gains Rapid Fire Passport Play + Raid through the same reviewed upgrade (revision 3).
+    assert.deepEqual(store.getGame("coindle")!.manifest.supportedModes, ["free", "ranked", "raid"]);
+    assert.deepEqual(store.getGame("coindle")!.manifest.supportedObjectives, ["coins_solved", "guesses"]);
+    assert.equal(store.getGame("coindle")!.manifest.verifier?.kind, "server_authoritative");
     store.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

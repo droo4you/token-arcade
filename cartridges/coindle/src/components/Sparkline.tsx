@@ -9,14 +9,13 @@ import {
 } from "recharts";
 import { gameApiUrl } from "@/lib/arcade";
 
-interface SparklineProps {
+type SparklineProps = ({ ticker: string; runId?: never; puzzle?: never } | { ticker?: never; runId: string; puzzle: number }) & {
   /** Ticker symbol to fetch history for (e.g. "BTC") */
-  ticker: string;
   /** Chart height in pixels */
   height?: number;
   /** Line color — defaults to a neutral glow */
   color?: string;
-}
+};
 
 interface PricePoint {
   timestamp: number;
@@ -24,12 +23,14 @@ interface PricePoint {
 }
 
 /**
- * 90-day daily close sparkline for Easy Mode.
+ * 90-day price shape for Daily and server-issued Rapid Fire hints.
  * Shows ONLY the price shape — no axes, no labels, no numbers.
  * Players use the chart silhouette as a hint to identify the coin.
  */
 export default function Sparkline({
   ticker,
+  runId,
+  puzzle,
   height = 80,
   color = "#8b5cf6",
 }: SparklineProps) {
@@ -44,11 +45,13 @@ export default function Sparkline({
 
     async function load() {
       try {
-        const res = await fetch(gameApiUrl(`/api/history?ticker=${ticker}`), { signal: controller.signal });
+        const path = runId ? `/api/rapid/${encodeURIComponent(runId)}/hint?puzzle=${puzzle}` : `/api/history?ticker=${encodeURIComponent(ticker!)}`;
+        const res = await fetch(gameApiUrl(path), { signal: controller.signal, cache: "no-store" });
         if (!res.ok) throw new Error("Failed to fetch");
         const json = await res.json();
         if (!cancelled && json.points?.length > 0) {
-          setData(json.points);
+          if (runId && json.puzzle !== puzzle) return;
+          setData(runId ? json.points.map((price: number, timestamp: number) => ({ price, timestamp })) : json.points);
         }
       } catch {
         // Silently fail — sparkline is an optional hint
@@ -62,7 +65,7 @@ export default function Sparkline({
       cancelled = true;
       controller.abort();
     };
-  }, [ticker]);
+  }, [ticker, runId, puzzle]);
 
   if (loading) {
     return (

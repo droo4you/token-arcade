@@ -5,11 +5,18 @@ const require = createRequire(import.meta.url);
 const SIM = require('../src/sim.js');
 
 function play(up, seed, angle = 14, power = 1, bot = SIM.botInput) {
-  const run = SIM.newRun(up, seed);
+  const run = SIM.newRun(up, seed, process.argv.includes('--v2'));
   SIM.throwRock(run, angle, power);
   let steps = 0;
+  let skipHeld = false;
   while (run.phase !== 'done' && steps < 200000) {
-    SIM.step(run, bot(run));
+    const input = bot(run);
+    if (run.balanceV2) {
+      const held = input.skip;
+      input.skip = held && !skipHeld;
+      skipHeld = held;
+    }
+    SIM.step(run, input);
     steps++;
     for (const k of ['x', 'alt', 'vx', 'vy']) if (!Number.isFinite(run[k])) throw new Error('NaN ' + k + ' seed ' + seed);
     run.events.length = 0;
