@@ -1,0 +1,46 @@
+Token Arcade — dark-mode edit
+24.0s · 150 BPM · 30 fps · H.264 + AAC
+1920×1080 and 1080×1920 (vertical is reframed: phone captures for the site, game canvases in a card, not a center crop)
+Audio: original synth written for this cut (kick, snare, hat, bass, riser, impacts). Not a commercial track. beat.wav is the same bounce. Silent version was not needed.
+
+The open is a light-to-dark hit on the real homepage. Dark mode is labeled IN THE BUILD. It is not called live. The pivot is NOT / THE NEWS, then WHAT SHIPPED.
+
+TIME     BEAT
+0.0–1.6  Light homepage. TOKEN ARCADE slides in from frame 0. Live site, light theme. Featured cabinet is Coindle.
+1.6–3.2  Same homepage with the dark-mode v2 stylesheet (plum page, cream type, moon toggle). Hard flash. Type: DARK MODE, then a chip IN THE BUILD.
+3.2–4.4  Plum card. NOT / THE NEWS.
+4.4–4.8  Lime card. WHAT SHIPPED.
+4.8–5.6  Community Raids list. Both Skrumpey Slide raids, both closed. Chip: LIVE.
+5.6–6.4  First Community Raid, final board. playhouse 51,538 · droober 19,677 · willllliam 5,595. No prize. Chip: FIRST RAID.
+6.4–7.2  Funded testnet pilot, final board. Guy 58,331 · droober 53,327 · beezwax 45,917 · playhouse 37,669. Prize on the page is 0.0000609375 test WMON. Chip: TESTNET PRIZE. Not labeled as automatic payouts.
+7.2–8.0  Uppers Passport Play board. droober 5,485,939,005. Chip: LIVE.
+8.0–8.8  Uppers free play, mid-run canvas (SIGNAL / PEAK / ORBS, SURGE pickup, purple GO button). Chip: LIVE.
+8.8–9.6  Coindle in its own dark theme. Daily puzzle, Rapid Fire chip. Chip: RAPID FIRE. No ranked score is invented; that board was empty.
+9.6–10.4 Skip to 10K, rock in flight. Aug 2015 ETH headline is the real ticker. The HUD word BOUNCE is Skip's air-bounce boost, not the old cabinet name. Chip: LIVE.
+10.4–11.2 Two Places at Once, in a level. Chip: LIVE.
+11.2–12.0 Skrumpey Slide, on the hill. Chip: LIVE.
+12.0–12.8 Coindle cabinet page. The page itself says MiniCoin Economy — Coming Soon. Chip: COMING.
+12.8–16.0 Eight beats, 0.4s each: Uppers, Skip, Two Places, Skrumpey, Coindle Rapid Fire, Uppers, Skip, Skrumpey. Same real canvases.
+16.0–16.8 Passport sign-in. Logged-out capture: "Your arcade identity starts here." Chip: LIVE.
+16.8–18.4 Game shelf in dark mode. "5 games are ready to play." Type: 5 CABINETS / ON MONAD.
+18.4–24.0 End card. Lime T mark, TOKEN ARCADE, THE INTERNET IS FUN, token-arcade.onrender.com, @droo4you.
+
+SHOWN AS LIVE
+- Five cabinets on the live arcade: Coindle, Uppers, Skip to 10K, Skrumpey Slide, Two Places at Once. Free play, no account.
+- Community Raids as a product, with two finished Skrumpey Slide events and their frozen boards. No raid is open right now.
+- Passport Play and the verified boards that actually have entries (Uppers, Skip, Two Places, Skrumpey).
+- The Passport sign-in gate.
+- The completed testnet prize receipt on the funded raid (test WMON to Guy). Not an airdrop, and not "automatic payouts" as the player experience.
+- Coindle Rapid Fire as the Passport mode on the live free-play screen.
+- Coindle's own in-game dark theme (separate from arcade dark mode v2).
+
+SHOWN AS IN THE BUILD / COMING
+- Arcade dark mode v2. Code is on grok/dark-mode-v2 (PR #20). docs/RELEASE_QUEUE.md says it is not live. The dark pages in this cut are the live shell with that real stylesheet applied for capture only. On-screen copy is DARK MODE + IN THE BUILD, then the pivot.
+- MiniCoin cabinet economy. The Coindle page says Coming Soon. Health reports minicoin.ready false. Uniswap v4 hooks are not shown as a player feature.
+- Not shown as shipped: Power Play, mainnet, friend 1v1s, Canyon Jump, and unattended automatic payouts.
+
+BRANDING
+- Public name is Uppers. The old Buy Bounce title is not used. The live button skin is GO (purple #ae8cff), not the old lime BUY capsule.
+- Skip's HUD still says BOUNCE because that is the current air-bounce control in Skip to 10K.
+- The Uppers shelf line on the live site still says "keep the bounce alive." That is the current catalog sentence, not the retired title.
+- Gameplay frames are canvas bitmaps from the live cartridges (arcade.html / embedded mode), not the standalone index.html that is still titled BUY BOUNCE.
