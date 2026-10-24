@@ -498,7 +498,7 @@ test('rewards: magnet pulls a safe ring onto a modest miss; Mach bonus is big bu
   assert.ok(C.MACH_BONUS >= 1000);
 });
 
-test('level 1 air: settings come from the level file; balloons are the main hazard, satellites rare and only near the ceiling', () => {
+test('level 1 air: settings come from the level file; balloons are the main hazard, satellites only up high (above the balloon band)', () => {
   const L = require('../src/levels.js'), air = L.get('snake-river').air;
   assert.equal(S.newRun(1).cfg, air, 'newRun reads the default level file');
   assert.ok(air.ceil > 200, 'ceiling raised');
@@ -511,7 +511,8 @@ test('level 1 air: settings come from the level file; balloons are the main haza
   }
   assert.ok(n.balloon > n.satellite * 5 && n.balloon > n.bird, JSON.stringify(n));
   assert.equal(n.plane, 0, 'no jets on level 1');
-  assert.ok(n.satellite / chunks < 0.15, `satellites per chunk ${n.satellite / chunks}`);
+  assert.ok(n.satellite / chunks < 0.4, `satellites per chunk ${n.satellite / chunks}`);
+  assert.ok(air.satellite.minY - air.satellite.r > air.bands[air.bands.length - 1].top - 6 + air.balloon.r + air.balloon.driftY, 'satellites clear of balloons');
   // Balloons drift, deterministically, and the hitbox is smaller than the drawn envelope.
   const b = { type: 'balloon', x: 0, y: 100, z: 0, phase: 1, dx: air.balloon.driftX, dy: air.balloon.driftY, rate: air.balloon.rate };
   assert.notDeepEqual(S.skyObjPos(b, 0), S.skyObjPos(b, 10)); assert.deepEqual(S.skyObjPos(b, 3), S.skyObjPos(b, 3));
@@ -521,4 +522,19 @@ test('level 1 air: settings come from the level file; balloons are the main haza
   t.sky.length = 0; t.sky[0] = { type: 'balloon', x: 0, y: 100 + air.balloon.r + 3, z: t.z + 30, phase: 0, dx: 0, dy: 0, rate: 0, r: air.balloon.r, hit: false, near: false };
   for (let i = 0; i < 60 && !t.over; i++) { S.step(t, {}); t.y = 100; t.gam = 0; }
   assert.equal(t.over, false); assert.equal(t.counts.nearMiss, 1);
+});
+
+test('level 1 high band: rings + pickups spawn above the balloons when flying high, deterministically, and high rings add no combo', () => {
+  const run = seed => { const s = launchAt(110, seed); s.sky.push = s.rings.push = s.skyPickups.push = Array.prototype.push; s.y = 230; s.gam = 0; s.m = 160;
+    while (s.skyChunk < 20 && !s.over) { s.y = 230; s.gam = 0; S.step(s, {}); s.events.length = 0; }
+    return s; };
+  const a = run(5), b = run(5);
+  const hr = a.rings.filter(g => g.high), hp = a.skyPickups.filter(p => p.high);
+  assert.ok(hr.length >= 6 && hp.length >= 4, `high rings ${hr.length} pickups ${hp.length}`);
+  for (const g of hr.concat(hp)) assert.ok(g.y >= 185 && g.y <= 255);
+  assert.deepEqual(JSON.stringify(a.rings), JSON.stringify(b.rings), 'deterministic');
+  const c = launchAt(110, 5); c.y = 230; c.gam = 0; c.m = 100; const pot = c.cmb.pot;
+  c.rings.length = 0; Array.prototype.push.call(c.rings, { x: c.x, y: c.y, z: c.z + 1, taken: false, high: true });
+  for (let k = 0; k < 6; k++) { c.y = 230; c.gam = 0; S.step(c, {}); }
+  assert.equal(c.counts.rings, 1, 'ring taken'); assert.equal(c.cmb.pot, pot, 'no combo from high ring');
 });

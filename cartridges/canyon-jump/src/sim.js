@@ -294,6 +294,20 @@
       const p = { type: r() < 0.3 ? 'air' : 'orb', z: z0 + r() * C.SKY_CHUNK, x: (r() * 2 - 1) * 18, y: clamp(s.y + (r() - 0.3) * 30, yMin, s.cfg.ceil - 5), taken: false };
       if (clearOf(p.x, p.y, p.z, 2.6)) s.skyPickups.push(p);
     }
+    // Optional high-band rewards (level air.high). Own RNG stream so the main chunk draws above stay identical.
+    // Only when already flying high, so it rewards the float without luring low Mach dives upward.
+    if (A.high && s.y >= A.high.minY - (A.high.reach || 50)) {
+      const H = A.high, h = rng((s.seed + 0x9e3779 + i * 104729) >>> 0), hy = () => H.minY + h() * Math.max(0, ceil - 8 - H.minY);
+      if (h() < H.ringLine) { // gentle line of 3 rings, drifting a few meters, easy to thread with the magnet
+        const gx = (h() * 2 - 1) * C.SKY_X * 0.5, gz = z0 + h() * C.SKY_CHUNK * 0.5, y0 = hy(), dy = (h() - 0.5) * 8;
+        for (let k = 0; k < 3; k++) {
+          const ring = { x: gx, y: clamp(y0 + k * dy, H.minY, ceil - 6), z: gz + k * 28, taken: false, risky: false, high: true };
+          if (clearOf(ring.x, ring.y, ring.z, C.RING_R)) s.rings.push(ring);
+        }
+      }
+      if (h() < H.can) { const p = { type: 'air', z: z0 + h() * C.SKY_CHUNK, x: (h() * 2 - 1) * 16, y: hy(), taken: false, high: true }; if (clearOf(p.x, p.y, p.z, 2.6)) s.skyPickups.push(p); }
+      if (h() < H.orb) { const p = { type: 'orb', z: z0 + h() * C.SKY_CHUNK, x: (h() * 2 - 1) * 16, y: hy(), taken: false, high: true }; if (clearOf(p.x, p.y, p.z, 2.6)) s.skyPickups.push(p); }
+    }
   }
   // Motion is small and bounded so what you see 5 s out is where it will be.
   function skyObjPos(o, t) {
@@ -464,7 +478,7 @@
     for (const g2 of s.rings) {
       if (g2.taken || g2.z <= z0 || g2.z > s.z) continue;
       if (Math.hypot(g2.x - s.x, g2.y - s.y) < C.RING_PICK) {
-        g2.taken = true; s.counts.rings++; s.m = Math.min(C.M_MAX, s.m + C.RING_V * Math.pow(C.RING_FADE, s.counts.rings - 1)); addCombo(s, C.RING_POT, C.RING_MULT);
+        g2.taken = true; s.counts.rings++; s.m = Math.min(C.M_MAX, s.m + C.RING_V * Math.pow(C.RING_FADE, s.counts.rings - 1)); if (!g2.high) addCombo(s, C.RING_POT, C.RING_MULT); // high-band rings: speed only, no combo, so the float can't farm tricks
         s.events.push({ e: 'ring', risky: g2.risky, pot: s.cmb.pot, mult: s.cmb.mult });
       }
     }

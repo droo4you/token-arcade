@@ -57,14 +57,17 @@
     },
     obstacles: { cactus: 'sagebrush', rock: 'sandstone', tumbleweed: 'tumbleweed', cone: 'cone' },
     skyObjects: { bird: 'crow', plane: 'jet', satellite: 'sat', balloon: 'balloon' },
-    // Soft "find the flow" air for level 1: sparse balloons mid-band, rare high satellites. Later levels harden this.
+    // Soft "find the flow" air for level 1: sparse balloons mid-band, more satellites + rings/pickups up high. Later levels harden this.
     air: {
       ceil: 260,
       density: { base: 1, max: 2, rampChunks: 6, extraP: 0.3 },
       bands: [{ type: 'bird', top: 30 }, { type: 'balloon', top: 200 }],
       balloon: { r: 4.2, drawR: 6, driftX: 3, driftY: 1.2, rate: 0.12 },
       plane: { r: 3.4 }, bird: { r: 1.4 },
-      satellite: { r: 2.8, chance: 0.1, minY: 215 },
+      // Satellites 205-252 m: clear of the balloon band (balloons top out ~199 m with drift + radius).
+      satellite: { r: 2.8, chance: 0.3, minY: 205 },
+      // High-band rewards (185 m to ceiling) so the long post-Mach-0.5 float has something to chase.
+      high: { minY: 185, ringLine: 0.55, can: 0.3, orb: 0.4 },
     },
     pickups: { orb: '#ffcf3f', air: '#4ff0ff', pad: '#ff4fd8' },
     car: { paint: '#f7f8fa', fill: '#33353a' },
