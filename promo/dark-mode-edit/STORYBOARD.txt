@@ -1,48 +1,95 @@
-Token Arcade — dark-mode edit (v3)
-24.0s · 150 BPM · 30 fps · H.264 + AAC stereo
-1920×1080 and 1080×1920. The vertical cut uses phone captures for the site and framed game canvases, not a center crop.
+Token Arcade — dark-mode edit v4
+32.0s · 60 fps · 1920x1080 and 1080x1920 · H.264 + AAC 48 kHz
+Original phonk (numpy drums judged in earshot) plus the earshot MIT sound bank
+for whooshes, risers, impacts, glitch, coins, ticks, and the end sting.
+No samples from commercial tracks. No Buy Bounce.
 
-AUDIO
-Original phonk written in numpy for this cut. No samples, no commercial stems, no third-party loops.
-Synthesized here: distorted cowbell riff (two detuned square partials, bandpassed, original A-minor pentatonic melody), saturated 808 slides, punchy kick, snare, hats, a noise/sine riser, and memphis-style vocal chops (formant vowels hey / uh / ah, bitcrushed, original pitches).
-Arrangement: filtered half-time build, a near-silence at 3.2s, riser through the NOT THE NEWS pivot, choke, then the drop exactly at 4.8s on WHAT SHIPPED. Sidechain on the cowbell and 808, bus saturation, limiter.
-Measured on beat.wav: integrated -8.0 LUFS (target -9 to -7). Drop section -7.7 LUFS. Intro about -13 LUFS. True peak about -1.8 dBFS.
-Type is Space Grotesk (OFL).
+SECTION TIMINGS (150 BPM, hits on the 0.4s grid)
+A  0.0–4.8   Intro tease
+     0.0–1.6  light homepage, gm, INSERT COIN
+     1.6–3.2  dark-mode flip, DARK MODE / LIVE
+     3.2–4.0  hold, near-silence
+     4.0–4.8  NOT / THE NEWS, riser into the drop
+B  4.8–12.0  DROP 1 — COMMUNITY RAIDS, boss-fight energy
+     real raid list, playhouse 51,538, Guy 58,331, RAID CLEARED
+C 12.0–18.0  Half-time switch — TESTNET REWARDS / PAID,
+     then AUTO-DISTRIBUTION / ROLLING OUT
+     coin, ding, and glock hits on the backbeat
+D 18.0–24.0  Lighter groove — POLISHING THE GAMES
+     Uppers, Coindle, Skip to 10K, Two Places, Skrumpey Slide, 5 CABINETS
+E 24.0–28.0  Build — SUBMISSION FLOW / IN PROGRESS
+     live Launch Console: Submit source → Configure & review →
+     Creator deploys → Published, sign-in gate
+F 28.0–32.0  Final drop and end card
+     TOKEN ARCADE / THE INTERNET IS FUN / token-arcade.onrender.com / @droo4you
 
-TIME     PICTURE
-0.0–1.6  Light homepage. gm, INSERT COIN, TOKEN ARCADE. Live site.
-1.6–3.2  Datamosh flip into the dark-mode stylesheet. DARK MODE, then IN THE BUILD.
-3.2–4.0  Drums drop out. Dark page holds, charge bar rises. Still IN THE BUILD.
-4.0–4.8  NOT / THE NEWS. Riser crests and chokes.
-4.8–5.2  DROP. WHAT SHIPPED / we're so back.
-5.2–6.0  Community Raids list. Both Skrumpey raids, both closed. LIVE.
-6.0–7.2  First raid board. Counter rips to the real score 51,538 (playhouse). droober 19,677, willllliam 5,595. boss fight / RAID CLEARED.
-7.2–8.4  Funded pilot board. Guy 58,331, droober 53,327, beezwax 45,917, playhouse 37,669. Prize on the page is 0.0000609375 test WMON. TESTNET PRIZE / GG.
-8.4–9.2  Uppers Passport board. droober 5,485,939,005. LIVE.
-9.2–10.0 Uppers free-play canvas, mid-run. LIVE.
-10.0–10.8 Coindle dark theme, Rapid Fire. No invented ranked score.
-10.8–11.6 Skip to 10K, rock in flight. The HUD word BOUNCE is Skip's air-bounce, not the old cabinet name.
-11.6–12.4 Two Places at Once, in a level.
-12.4–13.2 Skrumpey Slide, on the hill.
-13.2–14.0 Coindle cabinet. MiniCoin Economy — Coming Soon. COMING.
-14.0–17.2 Eight cuts on the beat: Uppers, Skip, Two Places, Skrumpey, Rapid Fire, catch it, 10K, Slide.
-17.2–18.0 Passport sign-in. Logged out. LIVE.
-18.0–19.2 Shelf. 5 games are ready. 5 CABINETS / ON MONAD / wagmi.
-19.2–24.0 End card. TOKEN ARCADE, THE INTERNET IS FUN, token-arcade.onrender.com, @droo4you.
+EVIDENCE (live site + repo, 24 Oct 2026)
+Production release 10ab578 (origin/main). Health: automaticPayouts true,
+minicoin.ready false, settlement.ready false, testnet chain 10143.
 
-LIVE
-Five cabinets: Coindle, Uppers, Skip to 10K, Skrumpey Slide, Two Places at Once.
-Community Raids, with two finished Skrumpey events and those frozen boards. Nothing is open.
-Passport Play boards that have real entries, and the Passport sign-in gate.
-The completed testnet WMON receipt. Not labeled as automatic payouts.
-Coindle Rapid Fire, and Coindle's own in-game dark theme.
+Dark mode is LIVE, not “in the build.” PR #20 is in the live SHA. The
+production bundle ships button.theme-toggle (“Switch to dark/light mode”)
+and the ta-theme no-flash script. v2/v3 said IN THE BUILD because that
+merge had not shipped yet.
 
-IN THE BUILD / COMING
-Arcade dark mode v2. The dark pages are the live shell with the unmerged grok/dark-mode-v2 stylesheet applied for capture. On-screen copy is DARK MODE and IN THE BUILD. The release queue says it is not live.
-MiniCoin cabinet economy. The Coindle page says Coming Soon.
-Not shown as shipped: Power Play, mainnet, friend 1v1s, automatic payouts.
+Community raids are live and both events are closed (not open, not “going live”):
+- Skrumpey Slide — First Community Raid. No prize.
+  playhouse 51,538 · droober 19,677 · willllliam 5,595.
+- Skrumpey Slide · funded testnet pilot.
+  Guy 58,331 · droober 53,327 · beezwax 45,917 · playhouse 37,669.
+  Prize on the page: 0.0000609375 test WMON.
+  Vault 0x2e9497F8f8fc1cb4b51ACd35E5E27A21b389af7D (legacy).
+  funding has no payoutMode. The player payout field is null.
+  Guy’s prize was a manual claim:
+  tx 0xebbfe7c8551f9da0e8d8dbf41572bad15100d4e30a839f41d6e6d86e763170e6.
 
-BRANDING
-Public name is Uppers. No Buy Bounce title. Gameplay frames are canvas bitmaps from the live embedded cabinets.
-Skip's HUD still says BOUNCE because that is the current air-bounce control.
-The live shelf sentence for Uppers still says "keep the bounce alive."
+Automatic distribution is enabled and not yet proven on a player raid.
+- Worker and UI exist (PR #17, apps/api/src/automaticPayouts.ts,
+  “Reward delivered” / “Sending reward automatically…” when
+  funding.payoutMode === "automatic").
+- Render health reports automaticPayouts: true (approved 22 Oct 2026).
+- New vault 0xa2c8b6819575705b340d7fb6796076bd1fed8a12.
+- The only automatic payment on record is a synthetic rehearsal of
+  0.0001 test WMON, tx 0xe271c9425bd83920a573cd856e8450971c3d09090fb7eff1b2de9a82bbe7b9b7.
+  docs/AUTOMATIC_PAYOUTS.md: not player gameplay. Trading-fee routing
+  has not moved off the legacy vault.
+- On screen: “testnet rewards / PAID” and “auto-distribution / ROLLING OUT”
+  plus “player auto-payout: not yet”. Not “distributed automatically.”
+
+Five cabinets on GET /api/games: Coindle, Uppers (emonad-cabinet; public
+name Uppers, button GO), Skip to 10K, Skrumpey Slide, Two Places at Once.
+MiniCoin is still not ready and is not in this cut.
+
+Submission flow is real and unfinished. https://token-arcade.onrender.com/launch
+shows “Give your game a Cabinet,” the four publication steps, and
+“Sign in to submit a game and track its publication.”
+CreatorPortal still says file uploads and automatic packaging are not
+available yet. Labeled IN PROGRESS.
+
+EARSHOT
+doctor --load: healthy, CPU, bf16, CLAP + AudioSet loaded.
+Isolated elements (match, forced choice vs a cheap synth):
+- cowbell bell_hard: “hard distorted metallic phonk cowbell” strong, z +5.7, >99% vs a cheap square beep.
+- kick kick_hard: “punchy distorted trap kick” strong, z +5.9, closest vocab “a punchy kick drum pattern”.
+- 808 note: “sliding saturated 808” strong; the full drop prefers that
+  description over “a cheap thin synth loop” (about 62% vs 9%; chiptune
+  still takes ~29% of the forced choice).
+timeline --video, final landscape cut: 66 picture cuts, 0 offsets over 30 ms,
+median |offset| 10 ms, max 22 ms, 100% of cuts have an onset within 100 ms,
+100% on the beat grid.
+measure / critique loudness: −14.7 LUFS integrated, −1.8 dBTP, LRA 4.8 LU.
+Loudness sits in the launch-film web range (−16 to −9).
+
+critique vs the bundled 7 launch films:
+VERDICT: needs work — 19 of 23 scored metrics in range (weighted 82%),
+1 critical and 1 major issue.
+Critical: realness p_real 0.34, “likely code-synthesized.” The drop windows
+(4–12s) are only “uncertain” (about 0.5–0.6). The model’s “real / pro” bar
+is 0.77, which this original synth does not clear. No commercial phonk
+recording was used.
+Major: salient hits 2.38/s, above the reference band (about 0.1–1.7/s).
+That is the beat-locked cut. Softening off-beat kicks did not pull the
+salient-hit count under the bar.
+Also in range: music presence 100%, sound on every cut, true peak, loudness,
+the silence-into-drop, and the end card.
+Minor: mids a little forward, image a little narrow.
