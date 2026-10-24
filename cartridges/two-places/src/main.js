@@ -34,7 +34,13 @@ function arcadeLevels(config) {
     if (levels.some(i => i < 0 || i >= LEVELS.length) || new Set(levels).size !== 3) throw new Error('Invalid Raid levels.');
     return levels;
   }
-  const level = config.mode === 'free' ? Math.min(save.unlocked, LEVELS.length) - 1 : (config.rules?.level ?? 0);
+  if (config.mode === 'free') {
+    // free play: honor an explicit rules.level if the player has unlocked it, else their furthest unlocked level
+    const maxUnlocked = Math.min(save.unlocked, LEVELS.length) - 1;
+    const want = config.rules?.level;
+    return [Number.isSafeInteger(want) && want >= 0 && want <= maxUnlocked ? want : maxUnlocked];
+  }
+  const level = config.rules?.level ?? 0;
   if (!Number.isSafeInteger(level) || level < 0 || level >= LEVELS.length) throw new Error('Invalid level.');
   return [level];
 }
@@ -136,7 +142,7 @@ function update() {
     }
     case 'play': {
       const w = game.world;
-      if (I.pause && ARCADE) { window.TokenArcade.pause('user'); break; }
+      if (I.pause && ARCADE && window.TokenArcade.config?.mode !== 'free') { window.TokenArcade.pause('user'); break; }   // free play uses the in-game pause menu (LEVELS)
       if (I.pause) { game.screen = 'pause'; game.menuIndex = 0; Audio8.sfx('menu'); break; }
       if (ARCADE) arcadeCapture();
       if (I.restart) { startLevel(game.levelIndex, true); game.deaths++; break; }
@@ -144,8 +150,8 @@ function update() {
       for (const e of w.events) Audio8.sfx(e);
       if (w.state === 'play') game.levelTime++;
       if (w.state === 'dead' && w.stateT > 55) { game.deaths++; startLevel(game.levelIndex, true); }
-      if (ARCADE && w.state === 'clear' && w.stateT === 0) { arcadeClear(); break; }
-      if (w.state === 'clear' && w.stateT === 1) recordClear();
+      if (ARCADE && w.state === 'clear' && w.stateT === 0) { recordClear(); arcadeClear(); break; }   // record first: arcadeClear can end the run
+      if (!ARCADE && w.state === 'clear' && w.stateT === 1) recordClear();
       if (w.state === 'clear' && w.stateT > 40 && (I.confirm || I.act)) {
         Audio8.sfx('select');
         if (game.levelIndex + 1 < LEVELS.length) startLevel(game.levelIndex + 1);
@@ -396,7 +402,11 @@ window.TokenArcade?.register({
   start() {
     const config = window.TokenArcade.config;
     const levels = arcadeLevels(config);
-    if (config.mode === 'free') startLevel(levels[0]);
+    if (config.mode === 'free') {
+      // free play: an explicit unlocked rules.level jumps straight in; otherwise open the title / level select
+      if (Number.isSafeInteger(config.rules?.level) && config.rules.level === levels[0]) startLevel(levels[0]);
+      else { game.screen = 'title'; game.menuIndex = 0; game.world = null; }
+    }
     else if (arcadeBegin(config, levels)) startLevel(levels[0]);
   },
   pause() { Input.keys.clear(); Input.downs.clear(); TouchPad.held.clear(); Audio8.ctx?.suspend(); },

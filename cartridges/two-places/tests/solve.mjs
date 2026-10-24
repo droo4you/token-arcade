@@ -218,7 +218,8 @@ const SOLUTIONS = [
     b.crank(() => lift.t >= 1, 'lift');
     b.walkTo(X(10));
     b.leap(1, { double: true });            // onto the raised lift
-    b.leap(1, { double: true });            // onto the upper ledge
+    b.leap(1, { double: true });            // onto the step at the ledge lip
+    b.leap(1);                              // hop up onto the upper ledge
     b.walkTo(X(21));
     b.crank(() => bridge.t >= 0.5, 'bridge');
     b.flyTo(X(4), Y(6));
