@@ -5,7 +5,7 @@ Updated 2026-10-23. This is the current handoff for both Codex and Grok. It supe
 ## Where work belongs
 
 - `main` is the production source for the API/web app and cartridge service. A local preview or a feature branch is not a production release.
-- Codex is reconciling the release queue in `codex/reconcile-release-queue`. Grok's original branches remain intact; their reviewed commits are merged into this integration branch.
+- Release reconciliation is complete. Work from current main; creator challenge briefs are the next release in `codex/creator-challenge-contract`.
 - Start new work from current `origin/main`. Keep each gameplay change in its own PR. Check this queue before starting overlapping work.
 - Merge only after review and relevant checks. Confirm the API release SHA and served cartridge assets before calling a change live.
 - Score-changing game updates require a versioned cartridge and matching verifier. Preserve old competitive runs and the hackathon snapshot (`metropolis-submission`).
@@ -15,6 +15,7 @@ Updated 2026-10-23. This is the current handoff for both Codex and Grok. It supe
 
 | Work | Source / author | Status and next action |
 | --- | --- | --- |
+| Creator challenge submission contract | Codex | Included in this release: independent mode requests, private creator brief, reviewed public descriptions/scoring, creator preview before publishing, and a version guard for published challenge changes. Canyon Jump handoff: CANYON_JUMP_SUBMISSION.md. Hosting and verifier installation remain reviewed operator work. |
 | Coindle price hints and consistent cabinet labels | Codex follow-up to PR #11 | Prepared for release: server-selected normalized 90-day chart, stale-puzzle protection, legacy no-hint rules preserved and separate ranked standings. Cabinet mode labels restored to Free Play / Passport Play / Community Raid. Generalized creator challenge metadata remains a follow-up in PASSPORT_PLAY_RULES.md. |
 | Skrumpey Slide 1.2 momentum and controls | Codex, PR #16 | Live. Preserve this reviewed release when reviewing other branches. |
 | Free Play summaries and lifecycle analytics | Codex, PRs #18–19 | Live at `c170ce8`. Guests/accounts, start/exit/result coverage, Skip starting upgrades, Two Places level context. |

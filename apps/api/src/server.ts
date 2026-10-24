@@ -73,6 +73,17 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
   }
 }
 
+function validatePlayGuide(value: unknown, modes: string[]): NonNullable<GameManifest["playGuide"]> {
+  if (!isRecord(value)) fail(400, "INVALID_PLAY_GUIDE", "Describe the gameplay for each requested mode");
+  const guide: NonNullable<GameManifest["playGuide"]> = { free: requiredString(value.free, "Free Play description", 1000) };
+  for (const mode of ["ranked", "raid"] as const) if (modes.includes(mode)) guide[mode] = requiredString(value[mode], `${mode === "ranked" ? "Passport Play" : "Community Raid"} challenge`, 1000);
+  if (modes.some(mode => mode !== "free")) {
+    guide.scoring = requiredString(value.scoring, "Scoring rules", 1000);
+    guide.tieBreak = requiredString(value.tieBreak, "Tie-break rules", 1000);
+  }
+  return guide;
+}
+
 function validateManifest(value: unknown): GameManifest {
   if (!isRecord(value)) fail(400, "INVALID_MANIFEST", "Manifest is required");
   const id = requiredString(value.id, "manifest.id", 64);
@@ -124,6 +135,7 @@ function validateManifest(value: unknown): GameManifest {
     developer: requiredString(value.developer, "manifest.developer", 80),
     adapterId: requiredString(value.adapterId, "manifest.adapterId", 80),
     supportedModes: supportedModes as GameManifest["supportedModes"],
+    ...(value.playGuide !== undefined ? { playGuide: validatePlayGuide(value.playGuide, supportedModes as string[]) } : {}),
     supportedObjectives: supportedObjectives as GameManifest["supportedObjectives"],
     communityOptional: value.communityOptional,
     minicoinOptional: value.minicoinOptional,
@@ -190,6 +202,7 @@ function validateEconomy(value: unknown): GameRecord["economy"] {
 function gameBlockers(game: GameRecord, adapters: AdapterRegistry, allowedOrigins = configuredCartridgeOrigins(), host?: string): string[] {
   const blockers: string[] = [];
   if (game.submission && !game.submission.configuredAt) blockers.push("Admin must configure the cartridge before technical review and approval");
+  if (game.submission?.playGuide && !game.manifest.playGuide) blockers.push("Configure the creator's challenge descriptions before approval");
   const adapter = adapters.get(game.manifest.adapterId);
   if (game.manifest.entry) {
     blockers.push(...artifactBlockers(game, allowedOrigins, host));
@@ -728,9 +741,9 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const now = new Date().toISOString();
         const game: GameRecord = { manifest: { id, name, description: requiredString(body.description, "description", 2000), developer: requiredString(body.developer, "developer", 100), version: "1.0.0", adapterId: id, skeletonId: id, supportedModes: ["free"], supportedObjectives: ["score"], communityOptional: true, minicoinOptional: true },
           creatorId: identity.id, status: "submitted", createdAt: now, submittedAt: now,
-          submission: { sourceUrl: source!.href, preparation: body.preparation, requestedModes: [...new Set(["free", ...requestedModes])] as ("free" | "ranked" | "raid")[] },
+          submission: { sourceUrl: source!.href, preparation: body.preparation, requestedModes: [...new Set(["free", ...requestedModes])] as ("free" | "ranked" | "raid")[], playGuide: validatePlayGuide(body.playGuide, requestedModes as string[]) },
           communityConcept: validateConcept(body.communityConcept), economy: { status: "pending", reason: "Optional economy awaits protocol review." } };
-        if (previous) { game.manifest = { ...previous.manifest, name, description: game.manifest.description, developer: game.manifest.developer }; game.createdAt = previous.createdAt; game.community = previous.community; game.communityStrategy = previous.communityStrategy; game.minicoin = previous.minicoin; game.economy = previous.economy; }
+        if (previous) { game.manifest = { ...previous.manifest, name, description: game.manifest.description, developer: game.manifest.developer }; game.createdAt = previous.createdAt; game.publishedAt = previous.publishedAt; game.community = previous.community; game.communityStrategy = previous.communityStrategy; game.minicoin = previous.minicoin; game.economy = previous.economy; }
         store.saveGame(game);
         return respond(response, method === "POST" ? 201 : 200, { game });
       }
@@ -770,6 +783,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
             if (body.manifest !== undefined) {
               const manifest = validateManifest(body.manifest);
               if (manifest.id !== game.manifest.id) fail(400, "INVALID_MANIFEST", "Game ID cannot change");
+              if (game.publishedAt && manifest.version === game.manifest.version && JSON.stringify(manifest.playGuide ?? {}) !== JSON.stringify(game.manifest.playGuide ?? {})) fail(409, "VERSION_REQUIRED", "Use a new build version when changing a published challenge");
               if (store.listRaids().some((raid) => raid.gameId === manifest.id && raid.status === "open")) fail(409, "ACTIVE_RAID", "Close and finalize open raids before changing the cartridge");
               if (store.db.prepare("SELECT 1 FROM run_sessions WHERE game_id = ? AND consumed_at IS NULL AND julianday(json_extract(json, '$.expiresAt')) > julianday('now') LIMIT 1").get(manifest.id)) fail(409, "ACTIVE_RUNS", "Wait for issued runs to finish or expire before updating this game");
               game.manifest = manifest;
@@ -1040,6 +1054,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
             if (body.manifest !== undefined) {
               const manifest = validateManifest(body.manifest);
               if (manifest.id !== game.manifest.id) fail(400, "INVALID_MANIFEST", "Game ID cannot change");
+              if (game.publishedAt && manifest.version === game.manifest.version && JSON.stringify(manifest.playGuide ?? {}) !== JSON.stringify(game.manifest.playGuide ?? {})) fail(409, "VERSION_REQUIRED", "Use a new build version when changing a published challenge");
               if ((manifest.version !== game.manifest.version || JSON.stringify(manifest.supportedObjectives) !== JSON.stringify(game.manifest.supportedObjectives)) &&
                   store.listRaids().some((raid) => raid.gameId === manifest.id && raid.status === "open" && Date.parse(raid.endsAt) > Date.now())) {
                 fail(409, "ACTIVE_RAID", "End or close active raids before changing the game version or objectives");
