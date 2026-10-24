@@ -1,0 +1,239 @@
+/*
+ * Dark theme. Activated by <html data-theme="dark">, set before first paint by
+ * the inline script in index.html (system preference by default, user choice
+ * persisted in localStorage "ta-theme"). The light theme is untouched.
+ *
+ * Neo-brutalist rules kept: chunky borders and hard offset shadows, now drawn in
+ * cream on a deep plum / near-black page. Bright panels (lime, pink, cyan,
+ * orange) keep dark ink locally so their text stays readable.
+ */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --cream: #f6ead9;
+  --ink: var(--cream);
+  --ticket: #150a19;
+  --surface: #211126;
+  --surface-2: #2b1731;
+  --violet: #3d1848;
+  --violet-text: #dcb2ea;
+  --muted: #cbbccf;
+  --line: #f6ead933;
+  color: var(--cream);
+  background: var(--ticket);
+}
+:root[data-theme="dark"] body { background: var(--ticket); }
+:root[data-theme="dark"] ::selection { background: #aecf3e; color: #1a0e20; }
+
+/* Generated remap of hard-coded light surfaces and mid-tone text. */
+:root[data-theme="dark"] ::selection { background:#aecf3e; --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .brand-symbol { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:3px solid var(--cream); box-shadow:3px 3px 0 var(--cream); }
+:root[data-theme="dark"] .passport-chip { background:var(--surface-2); }
+:root[data-theme="dark"] .passport-chip:hover { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .dev-dot { background:#2e1a14; color:#f5b98c; }
+:root[data-theme="dark"] .hero-ticket { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; border:3px solid var(--cream); box-shadow:8px 8px 0 var(--cream); }
+:root[data-theme="dark"] .live-dot { background:#53a677; --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .action-lime { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .action-light { background:var(--surface-2); }
+:root[data-theme="dark"] .stage-symbols span { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); box-shadow:2px 2px 0 var(--cream); }
+:root[data-theme="dark"] .stage-symbols span:nth-child(2) { background:#e8845a; --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .stage-symbols span:nth-child(3) { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .stage-symbols span:nth-child(4) { background:var(--surface-2); }
+:root[data-theme="dark"] .stage-play { background:#e8845a; --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); box-shadow:2px 2px 0 var(--cream); }
+:root[data-theme="dark"] .stage-play:hover { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .ticket-stub { background:#def2a9; --ink:#1a0e20; color:#1a0e20; border-left:3px dashed var(--cream); }
+:root[data-theme="dark"] .game-tile { background:var(--surface); }
+:root[data-theme="dark"] .game-art-pink { background:#ff74dd; --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .game-art-cyan { background:#00d1d8; --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .game-art-lime { background:#aecf3e; --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .game-art-violet { background:#a63fb0; --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .art-corner { background:var(--surface); }
+:root[data-theme="dark"] .status-neutral { background:var(--surface-2); color:var(--muted); }
+:root[data-theme="dark"] .status-good { background:#122a1c; color:#8fe0b2; }
+:root[data-theme="dark"] .status-wait { background:#2e1a14; color:#f0c98a; }
+:root[data-theme="dark"] .status-pink { background:#33142c; color:#f6a8e0; }
+:root[data-theme="dark"] .tile-body p { color:var(--muted); }
+:root[data-theme="dark"] .round-arrow { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .round-arrow:hover { background:var(--pink); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .warmup-panel { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .raid-panel { background:var(--pink); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .panel-icon { background:var(--surface-2); }
+:root[data-theme="dark"] .panel-icon-pink { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .warmup-panel-art span { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:3px solid var(--cream); box-shadow:3px 3px 0 var(--cream); }
+:root[data-theme="dark"] .warmup-panel-art span:nth-child(2) { background:var(--surface-2); }
+:root[data-theme="dark"] .warmup-panel-art span:nth-child(3) { background:var(--pink); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .raid-feature,
+:root[data-theme="dark"] .raid-empty { background:#f6ead91a; }
+:root[data-theme="dark"] .closing-play { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); box-shadow:3px 3px 0 var(--cream); }
+:root[data-theme="dark"] .footer-stamp { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:3px solid var(--cream); }
+:root[data-theme="dark"] .detail-art-frame { background:var(--surface-2); }
+:root[data-theme="dark"] .detail-lead { color:var(--muted); }
+:root[data-theme="dark"] .mode-free { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .mode-ranked { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .mode-raid { background:var(--pink); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .pending-note { background:#2e1a14; }
+:root[data-theme="dark"] .detail-info,
+:root[data-theme="dark"] .detail-board,
+:root[data-theme="dark"] .rules-panel,
+:root[data-theme="dark"] .raid-board { background:var(--surface); }
+:root[data-theme="dark"] .detail-info>p { color:var(--muted); }
+:root[data-theme="dark"] .empty-list { color:var(--muted); }
+:root[data-theme="dark"] .player-mode { background:var(--surface-2); }
+:root[data-theme="dark"] .pad-0 { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .pad-1 { background:var(--pink); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .pad-2 { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .pad-3 { background:var(--surface); }
+:root[data-theme="dark"] .warmup-restart { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .player-foot { color:var(--muted); }
+:root[data-theme="dark"] .result-panel { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; border:3px solid var(--cream); box-shadow:4px 4px 0 var(--cream); }
+:root[data-theme="dark"] .result-medal { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:3px solid var(--cream); }
+:root[data-theme="dark"] .intro-icon { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:3px solid var(--cream); box-shadow:3px 3px 0 var(--cream); }
+:root[data-theme="dark"] .page-intro p { color:var(--muted); }
+:root[data-theme="dark"] .raid-list-item { background:var(--surface); }
+:root[data-theme="dark"] .raid-list-item:hover { background:#2e1a14; }
+:root[data-theme="dark"] .raid-list-mark { background:var(--pink); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .raid-hero { background:var(--pink); --ink:#1a0e20; color:#1a0e20; border:3px solid var(--cream); box-shadow:5px 5px 0 var(--cream); }
+:root[data-theme="dark"] .raid-unavailable { background:#f6ead91a; }
+:root[data-theme="dark"] .account-prompt { background:var(--surface); }
+:root[data-theme="dark"] .prompt-art { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; border-right:3px solid var(--cream); }
+:root[data-theme="dark"] .setup-note { background:#2e1a14; }
+:root[data-theme="dark"] .demo-controls button { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .passport-avatar { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:3px solid var(--cream); }
+:root[data-theme="dark"] .passport-name button { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .stat { background:var(--surface); }
+:root[data-theme="dark"] .passport-history,
+:root[data-theme="dark"] .passport-wallet { background:var(--surface); }
+:root[data-theme="dark"] .name-form button { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .console-panel { background:var(--surface); }
+:root[data-theme="dark"] .console-hint { color:var(--muted); }
+:root[data-theme="dark"] .admin-game button { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .console-form input,
+:root[data-theme="dark"] .console-form textarea,
+:root[data-theme="dark"] .console-form select { background:var(--surface-2); }
+:root[data-theme="dark"] .console-raid-panel { background:#2e1a14; }
+:root[data-theme="dark"] .console-setup-panel { background:#2a1433; }
+:root[data-theme="dark"] .setup-indicator { background:var(--pink); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .setup-indicator.is-ready { background:#65c292; --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .console-setup-panel>p { color:var(--muted); }
+:root[data-theme="dark"] .error-note,
+:root[data-theme="dark"] .success-note { background:#331614; color:#ffc2b8; }
+:root[data-theme="dark"] .success-note { background:#122a1c; color:#8fe0b2; }
+:root[data-theme="dark"] .raid-quickfacts>div { background:var(--surface); }
+:root[data-theme="dark"] .admin-game-actions button { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .admin-game-actions button:first-child { background:var(--surface-2); }
+:root[data-theme="dark"] .console-editor { background:#13232a; }
+:root[data-theme="dark"] .readiness-list { background:#2e1a14; }
+:root[data-theme="dark"] .wallet-link-button { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); box-shadow:2px 2px 0 var(--cream); }
+:root[data-theme="dark"] .editor-close { background:var(--surface-2); }
+:root[data-theme="dark"] .minicoin-config>p { color:var(--muted); }
+:root[data-theme="dark"] .minicoin-reconcile p { color:var(--muted); }
+:root[data-theme="dark"] .cabinet-economy { background:#2a1c16; }
+:root[data-theme="dark"] .cabinet-economy p,
+:root[data-theme="dark"] .verification-note,
+:root[data-theme="dark"] .orientation-note { color:var(--muted); }
+:root[data-theme="dark"] .result-details dt { color:var(--muted); }
+:root[data-theme="dark"] .creator-lifecycle li { background:var(--surface-2); }
+:root[data-theme="dark"] .creator-lifecycle li::before { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .creator-error,
+:root[data-theme="dark"] .creator-blockers { background:#331614; }
+:root[data-theme="dark"] .minicoin-evidence { background:#2a1433; }
+:root[data-theme="dark"] .minicoin-evidence > p { color:var(--muted); }
+:root[data-theme="dark"] .minicoin-evidence-grid > div { background:var(--surface-2); }
+:root[data-theme="dark"] .minicoin-protocol-note { background:var(--surface-2); color:var(--muted); }
+:root[data-theme="dark"] .demo-cabinet-picker { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); box-shadow:4px 4px 0 var(--cream); }
+:root[data-theme="dark"] .demo-cabinet-picker select { background:var(--surface-2); }
+:root[data-theme="dark"] .demo-run-of-show { background:var(--surface); }
+:root[data-theme="dark"] .demo-run-of-show li { background:#1d2414; }
+:root[data-theme="dark"] .demo-run-of-show details p { color:var(--muted); }
+:root[data-theme="dark"] .demo-step { background:var(--surface); }
+:root[data-theme="dark"] .demo-step.is-complete { background:#1d2414; }
+:root[data-theme="dark"] .demo-step-number { background:var(--pink); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .demo-step.is-complete .demo-step-number { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .demo-step p { color:var(--muted); }
+:root[data-theme="dark"] .demo-step .minicoin-evidence { background:#2a1433; }
+:root[data-theme="dark"] .demo-readiness { background:#2a1c16; }
+:root[data-theme="dark"] .demo-account-setup { background:#2a1c16; }
+:root[data-theme="dark"] .demo-account-setup code { background:var(--surface-2); }
+:root[data-theme="dark"] .demo-account-setup button { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .demo-explainer { background:#2a1433; }
+:root[data-theme="dark"] .demo-definitions > div { background:var(--surface-2); }
+:root[data-theme="dark"] .demo-definitions p { color:var(--muted); }
+:root[data-theme="dark"] .guide-heading-stamp { background:var(--pink); --ink:#1a0e20; color:#1a0e20; border:3px solid var(--cream); box-shadow:4px 4px 0 var(--cream); }
+:root[data-theme="dark"] .guide-intro-band .action { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-card { background:var(--surface); }
+:root[data-theme="dark"] .guide-card-cyan { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-card-lime { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-card-pink { background:var(--pink); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-card-orange { background:#e8845a; --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-dropdown { background:var(--surface); }
+:root[data-theme="dark"] .guide-dropdown summary { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-dropdown:nth-child(2) summary { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-chapter-head { background:var(--surface); }
+:root[data-theme="dark"] .guide-chapter-head.guide-card-cyan { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-chapter-head.guide-card-lime { background:var(--lime); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-chapter-head.guide-card-pink { background:var(--pink); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-chapter-head.guide-card-orange { background:#e8845a; --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-chapter-head p { color:var(--muted); }
+:root[data-theme="dark"] .guide-progress-dot { background:var(--surface-2); }
+:root[data-theme="dark"] .guide-progress-dot.is-current { background:var(--lime); --ink:#1a0e20; color:#1a0e20; box-shadow:2px 2px 0 var(--cream); }
+:root[data-theme="dark"] .guide-progress-dot.is-complete { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; }
+:root[data-theme="dark"] .guide-step-tab { background:var(--surface); }
+:root[data-theme="dark"] .guide-step-tab > span:first-child { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .guide-step-tab.is-current > span:first-child { background:var(--surface-2); }
+:root[data-theme="dark"] .guide-step-tab:hover { background:#13282a; }
+:root[data-theme="dark"] .guide-step-tab.is-current { background:var(--cyan); --ink:#1a0e20; color:#1a0e20; box-shadow:3px 3px 0 var(--cream); }
+:root[data-theme="dark"] .guide-step-panel { background:var(--surface); }
+:root[data-theme="dark"] .guide-step-kicker { background:var(--pink); --ink:#1a0e20; color:#1a0e20; border:2px solid var(--cream); }
+:root[data-theme="dark"] .guide-tip { background:#1d2414; }
+@media (max-width: 520px) { :root[data-theme="dark"] .guide-chapter-head { background:var(--surface); } }
+
+/* Hand fixes. */
+:root[data-theme="dark"] .nav-link:hover, :root[data-theme="dark"] .footer-links a:hover,
+:root[data-theme="dark"] .back-link:hover, :root[data-theme="dark"] .leaderboard-rank,
+:root[data-theme="dark"] .player-rule svg, :root[data-theme="dark"] .player-foot svg,
+:root[data-theme="dark"] .centered-state > svg, :root[data-theme="dark"] .guide-tip svg,
+:root[data-theme="dark"] .guide-context-link:hover, :root[data-theme="dark"] .hero-tour-link:hover,
+:root[data-theme="dark"] .demo-run-of-show li::before { color: var(--violet-text); }
+:root[data-theme="dark"] .ticket-left .action-lime { background: #1a0e20; color: #fff7ed; border-color: #1a0e20; }
+:root[data-theme="dark"] .action-ink { background: var(--cream); color: #1a0e20; }
+:root[data-theme="dark"] .game-art-glyph { color: #fff7ed; text-shadow: 6px 7px 0 #1a0e20, -3px -3px 0 #1a0e20, 3px -3px 0 #1a0e20, -3px 3px 0 #1a0e20; }
+:root[data-theme="dark"] .game-art-lime .game-art-glyph { color: var(--pink); }
+:root[data-theme="dark"] .game-art-violet .game-art-glyph { color: var(--cyan); }
+:root[data-theme="dark"] .game-art-ink .game-art-glyph { color: var(--lime); }
+:root[data-theme="dark"] .art-corner { color: #1a0e20; background: #fff7ed; border-color: #1a0e20; }
+:root[data-theme="dark"] .ticket-left h1 span { text-shadow: 3px 3px 0 #1a0e20; -webkit-text-stroke: 2px #1a0e20; }
+:root[data-theme="dark"] .ticket-stage { box-shadow: 5px 6px 0 #00000080; }
+:root[data-theme="dark"] .stage-symbols span:nth-child(4), :root[data-theme="dark"] .warmup-panel-art span:nth-child(2) { background: #fff7ed; }
+:root[data-theme="dark"] .pad-3 { background: #fff7ed; color: #1a0e20; }
+:root[data-theme="dark"] .warmup-pad { color: #1a0e20; }
+:root[data-theme="dark"] .passport-card-bottom { border-top-color: #ffffff40; }
+:root[data-theme="dark"] .cartridge-frame { color-scheme: normal; }
+@media (max-width: 760px) { :root[data-theme="dark"] .primary-nav { box-shadow: 0 5px 0 #00000055; } }
+
+:root[data-theme="dark"] .action-light { background: var(--surface-2); color: var(--cream); border-color: var(--cream); box-shadow: 3px 3px 0 var(--cream); }
+:root[data-theme="dark"] :is(.guide-card-cyan, .guide-card-lime, .guide-card-pink, .guide-card-orange) { border-color: var(--cream); box-shadow: 4px 4px 0 var(--cream); }
+:root[data-theme="dark"] :is(.guide-card-cyan, .guide-card-lime, .guide-card-pink, .guide-card-orange):is(:hover, :focus-within) { box-shadow: 2px 2px 0 var(--cream); }
+
+.theme-toggle { display: inline-grid; place-items: center; width: 40px; height: 40px; border: 2px solid var(--ink); border-radius: 10px; background: var(--ticket); color: var(--ink); box-shadow: 2px 2px 0 var(--ink); padding: 0; flex: none; }
+.theme-toggle:hover { background: var(--lime); color: #1a0e20; }
+.theme-toggle:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+
+/* Post-rebase cream-UI surfaces added on main after the original dark-mode tip. */
+:root[data-theme="dark"] .shipped-jump a { background: var(--surface-2); color: var(--cream); border-color: var(--cream); box-shadow: 2px 2px 0 var(--cream); }
+:root[data-theme="dark"] .shipped-jump a:hover { background: var(--lime); color: #1a0e20; }
+:root[data-theme="dark"] .shipped-section { background: var(--surface); border-color: var(--cream); box-shadow: 5px 5px 0 var(--cream); }
+:root[data-theme="dark"] .shipped-at-submission { background: var(--cyan); color: #1a0e20; --ink: #1a0e20; }
+:root[data-theme="dark"] .shipped-after-deadline { background: #2a1433; }
+:root[data-theme="dark"] .shipped-next { background: #2e1a14; }
+:root[data-theme="dark"] .shipped-section header p { color: var(--muted); }
+:root[data-theme="dark"] .shipped-item { background: var(--surface-2); border-color: var(--cream); box-shadow: 3px 3px 0 var(--cream); }
+:root[data-theme="dark"] .shipped-item small { color: var(--violet-text); }
+:root[data-theme="dark"] .shipped-links a:hover { color: var(--violet-text); }
+:root[data-theme="dark"] .shipped-empty { background: #f6ead91a; color: var(--muted); border-color: #f6ead955; }
+:root[data-theme="dark"] .free-play-analytics th,
+:root[data-theme="dark"] .free-play-analytics td { border-bottom-color: var(--line); }
+:root[data-theme="dark"] .free-play-analytics pre { color: var(--muted); }
+
+/* Nested surfaces must use the ink belonging to their own background. */
+:root[data-theme="dark"] :is(.panel-icon, .raid-quickfacts>div, .admin-game-actions button:first-child, .demo-cabinet-picker select, .guide-step-tab.is-current > span:first-child) { color: var(--cream); --ink: var(--cream); }
+:root[data-theme="dark"] :is(.guide-card-cyan, .guide-card-lime, .guide-card-pink, .guide-card-orange, .shipped-at-submission) { --muted: #453449; }
+:root[data-theme="dark"] .shipped-item { color: var(--cream); --ink: var(--cream); --muted: #cbbccf; }
