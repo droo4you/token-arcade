@@ -25,7 +25,6 @@
 :root[data-theme="dark"] ::selection { background: #aecf3e; color: #1a0e20; }
 
 /* Generated remap of hard-coded light surfaces and mid-tone text. */
-:root[data-theme="dark"] :root { background:var(--surface); }
 :root[data-theme="dark"] ::selection { background:#aecf3e; --ink:#1a0e20; color:#1a0e20; }
 :root[data-theme="dark"] .brand-symbol { background:var(--lime); --ink:#1a0e20; color:#1a0e20; border:3px solid var(--cream); box-shadow:3px 3px 0 var(--cream); }
 :root[data-theme="dark"] .passport-chip { background:var(--surface-2); }
@@ -233,3 +232,8 @@
 :root[data-theme="dark"] .free-play-analytics th,
 :root[data-theme="dark"] .free-play-analytics td { border-bottom-color: var(--line); }
 :root[data-theme="dark"] .free-play-analytics pre { color: var(--muted); }
+
+/* Nested surfaces must use the ink belonging to their own background. */
+:root[data-theme="dark"] :is(.panel-icon, .raid-quickfacts>div, .admin-game-actions button:first-child, .demo-cabinet-picker select, .guide-step-tab.is-current > span:first-child) { color: var(--cream); --ink: var(--cream); }
+:root[data-theme="dark"] :is(.guide-card-cyan, .guide-card-lime, .guide-card-pink, .guide-card-orange, .shipped-at-submission) { --muted: #453449; }
+:root[data-theme="dark"] .shipped-item { color: var(--cream); --ink: var(--cream); --muted: #cbbccf; }
