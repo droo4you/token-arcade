@@ -139,6 +139,8 @@ export interface GameVerifier {
 }
 
 export interface Raid {
+  /** Reviewed rules version, when pinned by a versioned cabinet at creation. */
+  gameVersion?: string;
   funding?: { chainId: 10143; vault: string; chainRaidId: string; rulesHash: string; gameVersion: string; prizeWei: string; payoutMode?: "automatic" };
   payout?: { status: "pending" | "submitted" | "paid" | "attention"; transactionHash?: string };
   id: string;
