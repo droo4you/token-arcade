@@ -1,0 +1,113 @@
+Token Arcade — dark-mode edit v5
+78.5s · 60 fps · 1920x1080 and 1080x1920 · H.264 + AAC 48 kHz
+Soundtrack: Bellbones Phonk Energy by sametspasha
+https://pixabay.com/music/upbeat-bellbones-phonk-energy-197097/
+Pixabay Content License. See MUSIC_LICENSE.md.
+No synthesized music. The raw audio is not in the repo.
+No Buy Bounce.
+
+The cut follows the track. Earshot sections, about 122 BPM:
+
+  0:00.00–0:07.90   quieter lead
+  0:07.90–0:15.75   first drop, trap beat
+  0:15.75–0:45.45   biggest drop, heavy bass, aggressive
+  0:45.45–0:49.40   switch / breakdown (stop at 0:48.90)
+  0:49.40–1:18.50   groove back in, punchy kicks through the end
+
+There is no separate late breakdown. The submission build sits on the
+groove’s downbeats from 1:01, and the end card hits the kick at 1:09.46,
+one of the strongest accents in the file.
+
+PICTURE (onset times)
+A  0.043–7.902   Intro tease
+     0.043  light homepage, gm, TOKEN ARCADE
+     3.961  dark-mode flip, DARK MODE / LIVE
+B  7.902–15.769  First drop — the pivot
+     NOT / THE NEWS, punches at 9.861 and 13.796
+C 15.769–45.271  Biggest drop — COMMUNITY RAIDS
+     15.769  COMMUNITY RAIDS / LIVE
+     19.698  raid list, two cleared (punch 21.665)
+     25.599  playhouse 51,538 / RAID CLEARED
+     29.533  GUY / GG
+     33.468  58,331 / GG
+     37.402  RAID CLEARED
+     41.337  droober 53,327
+D 45.271–49.205  Switch-up
+     45.271  TESTNET REWARDS / PAID / 0.0000609375 test WMON
+     47.238  AUTO-DISTRIBUTION / ROLLING OUT
+             player auto-payout: not yet
+E 49.205–61.008  Groove — POLISHING THE GAMES
+     49.205  shelf, 5 cabinets
+     51.167  UPPERS
+     53.140  COINDLE (kick punch 53.720)
+     55.107  SKIP TO 10K
+     57.074  TWO PLACES (kick punch 57.650)
+     59.041  SKRUMPEY SLIDE
+F 61.008–69.460  Build on the groove — SUBMISSION FLOW / IN PROGRESS
+     61.008  Sign in to submit (kick punch 61.546)
+     64.943  Submit source / Configure & review (kick punch 65.520)
+     66.910  Creator deploys → Published
+             file uploads: not yet
+G 69.460–78.498  End card on the 1:09.46 kick
+     TOKEN ARCADE / THE INTERNET IS FUN
+     token-arcade.onrender.com / @droo4you
+     punches on the later downbeats at 72.812 and 76.746
+
+31 picture hits in 78.5s (0.39 per second). Holds are about 2–6 seconds.
+Hits carry a short shake, chromatic split, flash, and on the hard hits a
+zoom snap plus a two-frame glitch. The whole punch is inside 0.1s so it
+reads as one hit.
+
+EVIDENCE (same facts as v4, live site + repo, 24 Oct 2026)
+Production release 10ab578 (origin/main). Health: automaticPayouts true,
+minicoin.ready false, settlement.ready false, testnet chain 10143.
+
+Dark mode is LIVE. PR #20 is in the live SHA. The production bundle ships
+button.theme-toggle and the ta-theme no-flash script.
+
+Community raids are live and both events are closed:
+- Skrumpey Slide — First Community Raid. No prize.
+  playhouse 51,538 · droober 19,677 · willllliam 5,595.
+- Skrumpey Slide · funded testnet pilot.
+  Guy 58,331 · droober 53,327 · beezwax 45,917 · playhouse 37,669.
+  Prize on the page: 0.0000609375 test WMON.
+  Vault 0x2e9497F8f8fc1cb4b51ACd35E5E27A21b389af7D (legacy).
+  funding has no payoutMode. The player payout field is null.
+  Guy’s prize was a manual claim:
+  tx 0xebbfe7c8551f9da0e8d8dbf41572bad15100d4e30a839f41d6e6d86e763170e6.
+
+Automatic distribution is enabled and not yet proven on a player raid.
+On screen: “testnet rewards / PAID” and “auto-distribution / ROLLING OUT”
+plus “player auto-payout: not yet”. Not “distributed automatically.”
+
+Five cabinets: Coindle, Uppers (public name Uppers, button GO), Skip to 10K,
+Skrumpey Slide, Two Places at Once. MiniCoin is still not ready and is not
+in this cut.
+
+Submission flow is real and unfinished at /launch: Submit source, Configure
+& review, Creator deploys, Published, and the sign-in gate. File uploads
+and automatic packaging are not available yet. Labeled IN PROGRESS.
+
+EARSHOT (timeline --detail low on the landscape master)
+Bellbones, as used in the film: −12.6 LUFS, −2.7 dBTP, LRA 6.0 LU.
+Sections match the map above. The biggest section is the heavy-bass drop
+from 15.75s to 45.45s. The switch is the 45.45–49.40 breakdown.
+
+Frame-diff detector: 31 picture hits, 0.39/s, on both aspect ratios.
+Every planned hit is the detected hit. None are extras.
+
+timeline sync, 30 scored cuts from 3.97s through 76.75s (the open at 0.050s
+is the wooden-block hit at 0.043s, 7ms, and is not in that scored list):
+100% have an onset within 1 frame (16.7ms). Chance of that by accident is 22%.
+100% within 100ms. Median |offset| 4ms. Largest |offset| 9ms.
+70% land on a strong accent within 1 frame (chance 4%).
+87% sit on the beat grid within 50ms (chance 20%).
+The remaining kicks (53.72, 57.65, 65.52, 69.46) are the real transients.
+The beat tracker places those beats about 90ms early, so those hits are
+locked to the kick, not to the early grid line.
+No cut is unanswered.
+
+Selection, before the cut, on the source file:
+describe 16–24s: Music 0.88, hip hop with heavy bass z +3.9, trap z +2.9.
+match 16–32s vs “hard drift phonk with a distorted cowbell melody, heavy
+808 and real drums”: strong, z +3.1, over 99% versus a cheap toy synth.
