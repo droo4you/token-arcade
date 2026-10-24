@@ -20,16 +20,27 @@ test("public share origins stay absolute HTTPS off loopback", () => {
   assert.equal(publicOrigin({}), CANONICAL_ORIGIN);
 });
 
-test("promo clips are short baseline MP4s with matching posters", () => {
+test("promo clips are short faststart MP4s with matching posters", () => {
   for (const name of clips) {
-    const video = readFileSync(join(shareDir, `${name}.mp4`));
+    const file = join(shareDir, `${name}.mp4`);
+    const video = readFileSync(file);
     const image = readFileSync(join(shareDir, `${name}.png`));
-    assert.ok(video.byteLength > 1000 && video.byteLength < 1_500_000, name);
+    assert.ok(video.byteLength > 20_000 && video.byteLength < 3_200_000, `${name} ${video.byteLength}`);
     assert.equal(video.subarray(4, 8).toString(), "ftyp");
     assert.ok(video.subarray(0, 64).includes(Buffer.from("moov")), `${name} faststart`);
     assert.equal(image.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
-    const probe = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,codec_name,pix_fmt", "-of", "csv=p=0", join(shareDir, `${name}.mp4`)], { encoding: "utf8" });
-    if (probe.status === 0) assert.equal(probe.stdout.trim(), "h264,1280,720,yuv420p");
+    const probe = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,codec_name,pix_fmt,avg_frame_rate", "-of", "csv=p=0", file], { encoding: "utf8" });
+    if (probe.status === 0) {
+      const [codec, width, height, pix, rate] = probe.stdout.trim().split(",");
+      assert.equal(`${codec},${width},${height},${pix}`, "h264,1280,720,yuv420p", name);
+      const [num, den] = rate.split("/").map(Number);
+      assert.ok(Math.abs(num / den - 30) < 0.2, `${name} fps ${rate}`);
+    }
+    const duration = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file], { encoding: "utf8" });
+    if (duration.status === 0) {
+      const seconds = Number(duration.stdout.trim());
+      assert.ok(seconds >= 4 && seconds <= 6.2, `${name} duration ${seconds}`);
+    }
   }
 });
 
