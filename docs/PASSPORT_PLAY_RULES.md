@@ -17,7 +17,7 @@ Approved by droober, 2026-10-13. Status markers: **LIVE** = enabled on `grok/fin
 
 | Track | What feeds it | Where it shows | Status |
 |---|---|---|---|
-| **Records** | Verified **Passport Play** runs only | Leaderboards, raids, Passport best scores/wins | **LIVE** (Uppers, Two Places, Skrumpey Slide, Skip to 10K) |
+| **Records** | Verified **Passport Play** runs only | Leaderboards, raids, Passport best scores/wins | **LIVE** (Mood Swings, Two Places, Skrumpey Slide, Skip to 10K) |
 | **Progress** | Signed-in **Free Play** | Passport casual progress only: levels beaten, apples, best casual runs | **PLANNED** (post-hackathon) |
 
 - Progress **never** touches leaderboards or raids, however good the run. It is casual, unverified, and
@@ -45,7 +45,7 @@ plausibility.
 
 | Game | Free Play | Passport Play | Status |
 |---|---|---|---|
-| **Uppers** (paired community eMONAD; Buy Bounce skeleton) | Random seed, unlimited retries | Issued seed + 390×844 playfield; server replays the seeded input track | **LIVE** |
+| **Mood Swings** (paired community eMONAD) | Random seed, unlimited retries | Issued seed + 390×844 playfield; server replays the seeded input track | **LIVE** |
 | **Two Places** | The full 20-level campaign, for fun | **Server-picked level time trial**: ranked uses the issued level, and raids use an issued 3-level set; server replays fixed-step inputs (apples rank before time) | **LIVE** (ranked level 0 by default; per-session random level PLANNED) |
 | **Skip to 10K** | Players may max out upgrades | **Fixed standard loadout** (`standard-v1` = all upgrades at level 0) + issued seed → `SIM.issuedSeed`; the cartridge sends `{v:1, seed, loadout, angle, power, input}` (one char per 120 Hz tick: tilt, skip, bounce, rc); the server replays the throw and every tick with `sim.js` and recomputes days, peak, skips, perfects, streak, gems and time. Saved upgrades are ignored | **LIVE** on this branch |
 | **Coindle** | Daily puzzle (main mode: one shared puzzle/day, streaks, share grid) | **Rapid Fire** (`rapid-fire-v1`, approved by droober Oct 21 2026, replaces the Streak-mode plan): solve as many coins as possible in a **server-timed 3-minute window**; score = coins solved, tie-break = fewest total guesses; 6 guesses per coin, skip allowed. The server picks every coin, judges every guess (`/api/coindle/rapid/:runId/{start,guess,skip,finish,state}`) and the verifier accepts only its own ledger after the window closes. **Raid**: total coins solved by all verified Rapid Fire runs in the window (`communityTotal`) | **Built** on `grok/coindle-modes` (API + cartridge Rapid Fire screen) |
@@ -74,9 +74,9 @@ plausibility.
 
 - **Entry:** pay a small MiniCoin entry fee, like dropping an arcade token. The player then gets one seeded run, verified the same way as Passport Play.
 - **Payouts:** small payouts come from that cabinet's **Community Asset Vault**. Examples:
-  - Pay in the Uppers token and win eMONAD.
+  - Pay in the Mood Swings token and win eMONAD.
   - Pay in the Skrumpey Slide coin and win WMON. That vault mostly saves toward a Skrumpey NFT raid, so payouts stay small.
-- **Not purely skill: ticket orbs.** Buy Bounce-style ticket orbs are collected during the run. Each orb is one entry in a payout draw. Every paid run gets at least 1 entry and can reach roughly 11, so longer runs earn more chances. The orb count comes from the verified replay, not from what the client claims.
+- **Not purely skill: ticket orbs.** Ticket orbs are collected during the run. Each orb is one entry in a payout draw. Every paid run gets at least 1 entry and can reach roughly 11, so longer runs earn more chances. The orb count comes from the verified replay, not from what the client claims.
 - **Records stay separate.** Power Play runs can also post verified records, but leaderboards never weight paid entries.
 
 ### Open questions

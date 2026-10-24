@@ -1,7 +1,7 @@
-# BUY BOUNCE
+# Mood Swings
 
-Arcade game for the $BUY / hoodbuybutton.com community. Zero dependencies, vanilla
-canvas, one HTML file plus one CSS and one JS.
+Engineering notes for the Mood Swings cartridge (`emonad-cabinet`) in Token Arcade.
+Zero dependencies, vanilla canvas, one HTML file plus one CSS and one JS.
 
 ## The game in one paragraph
 
@@ -368,10 +368,6 @@ figure is about 14KB. Still small enough to post in a request body.
 - `determinism.js` asserts same-seed reproducibility (including a hash of the whole
   trail), that a different seed diverges, that the start gate holds, and that 240Hz,
   60Hz and 30Hz produce byte-identical state.
-- `window.js` runs the window mode end to end on the memory store through the real
-  endpoints: sign-in, entry, three attempts, refusals, board.
-- `auth.js` checks `lib/eth.js` (keccak vectors, recovery against OpenSSL, the
-  EIP-191 round trip) and the session and nonce logic in `lib/player.js`.
 - `verify.js` is the server-side check. `node tools/verify.js run.json` validates a
   record; `--self-test [frames]` plays a run, records it, and verifies it from seed
   and track alone. It also asserts that a forged claim, a claim paired with a
@@ -567,15 +563,8 @@ verify time; the client hex-encodes it and passes it to `personal_sign` untouche
 The message says what signing does (free, no transaction, no permissions), because
 the wallet shows it to the player.
 
-**Zero dependencies still holds.** `lib/eth.js` is keccak-256 and secp256k1 public
-key recovery in BigInt, about 200 lines. Node ships sha3-256, which differs from
-keccak by one padding byte, and can verify a secp256k1 signature against a known
-key but cannot recover the key from a signature, and recovery is the whole job when
-all we hold is an address. The keccak tables are generated from their definitions
-rather than typed in, and `node tools/auth.js` checks them against published
-vectors, checks recovery against OpenSSL signatures, and round-trips the full
-EIP-191 path with a signer of its own. About 26ms per recovery, which an auth
-endpoint can afford. Nothing in `lib/eth.js` is reachable from the simulation.
+**Zero dependencies still holds.** The standalone wallet recovery library was removed
+with the old sign-in API. Nothing in that path was reachable from the simulation.
 
 **Sessions and nonces are stateless.** The cookie is `address.expiry.hmac` under
 `SESSION_SECRET`, 30 days, HttpOnly. The nonce is `timestamp.hmac(address,
@@ -655,45 +644,10 @@ wallet the CTA reads "Connect wallet to enter" and runs the sign-in first, then 
 same tap enters. The board gets a Window tab ranked by tickets, and a window run's
 end screen shows the banked total rather than a rank.
 
-`node tools/window.js` drives the whole thing through the real endpoints on the
-memory store: anonymous refusal, three attempts, seed mismatch, double submit,
-exhaustion, a second wallet getting a different seed, and the board.
-
-**What the window does not do yet:** take payment, hold a pool, or draw. Entry is
-free until the Desk contract exists, and `api/window/start.js` is where its run
-authorization gets checked when it does. Nothing downstream needs to move for that.
-
-#### Backend layout
-
-```
-api/daily/start.js   spend a daily attempt, return that attempt's seed
-api/window/start.js  spend a window attempt (wallet required), return its seed
-api/window/state.js  the current window and the wallet's standing in it
-api/run/submit.js    verify a record, store it if it survives
-api/board.js         daily, all-time, and the window
-api/auth.js          wallet sign-in: nonce, verify, me, logout
-lib/store.js         Supabase over REST with plain fetch, memory fallback for dev
-lib/player.js        identity, sessions, and the ranked/unranked gate
-lib/eth.js           keccak-256 and secp256k1 recovery, zero-dep
-supabase/schema.sql  tables plus claim_attempt(), safe to re-run
-supabase/window.sql  window tables, claim_window_attempt(), run AFTER schema.sql
-```
-
-No client library and no `package.json`: Supabase is reached over its REST API with
-`fetch`, so the project keeps its zero-dependency, no-build-step shape.
-
-`claim_attempt` takes an advisory lock on `(player, day)`. Counting attempts with a
-SELECT then an INSERT lets two concurrent requests both read 2 and both insert, so a
-double-click buys a fourth run.
-
-`vercel.json` sets `includeFiles: src/game.js` for `api/**`. The verifier loads the
-game with `fs.readFileSync`, which Vercel's require tracing cannot see, so without it
-`submit` works locally and 500s in production.
-
-`tools/serve.js` routes `/api/*` to the same handler files Vercel runs, so local play
-exercises the real endpoints. The memory store always has one open "Dev window", so
-the window mode is playable locally without a database. Handler modules are uncached per request, though their
-dependencies are not, so restart the server after editing `lib/`.
+The standalone wallet, board, and database (`api/`, `lib/`, `supabase/`, and the
+`tools/window.js` / `tools/auth.js` checks) are no longer in this cartridge. Token
+Arcade issues scored seeds, replays the run, and stores the boards. `tools/serve.js`
+only serves the static page.
 
 #### Tuned runs never rank
 
@@ -717,24 +671,9 @@ accusation of cheating.
 
 #### Deploying
 
-1. Run `supabase/schema.sql` then `supabase/window.sql` in the SQL editor of an
-   existing project. Buy Bounce
-   lives in its own `buybounce` schema, because the free tier allows two active
-   projects and both are taken. Coindle hosts it: it is publicly live so the project
-   stays awake, where a quiet dev project would pause after about a week and take the
-   leaderboard down with it. Removing it is `drop schema buybounce cascade`.
-2. Settings -> API -> Data API -> Exposed schemas: add `buybounce`. PostgREST will
-   not route to an unexposed schema and returns PGRST106 until you do.
-3. Set `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (the service role key, never the
-   anon key: these tables have RLS on with no policies, so the API is the only door)
-   in the Vercel project.
-4. Set `SESSION_SECRET` to 32 or more random bytes as hex
-   (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
-   Wallet sign-in answers 503 without it.
-5. Optionally set `DAILY_ATTEMPTS` (default 3) and `SUPABASE_SCHEMA` (default
-   `buybounce`).
-6. There is no anonymous-ranking switch any more. Daily and free play rank the
-   cookie identity everywhere; only the window mode needs a wallet.
+Mood Swings ships inside Token Arcade. The cartridge server serves `arcade.html`. The
+API verifier replays `tools/verify.js` against the issued seed. This folder no
+longer has its own database or wallet API.
 
 ### 3. Leaderboard
 

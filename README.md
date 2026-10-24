@@ -28,12 +28,12 @@ The built app is served at `http://127.0.0.1:8787`. Both dev/start commands laun
 
 | Cabinet | Source / Skeleton | Association | Economy |
 | --- | --- | --- | --- |
-| Uppers (paired community: eMONAD; id `emonad-cabinet`) | Buy Bounce | Founder-supplied eMONAD reference | Pending protocol verification |
+| Mood Swings (paired community: eMONAD; id `emonad-cabinet`) | Mood Swings | Founder-supplied eMONAD reference | Pending protocol verification |
 | Two Places at Once | Two Places at Once | Skrumpeys ERC-721 | Pending |
 | Coindle | Coindle | COIN / RWA concept | Coming soon |
 | Skip to 10K | Skip to 10K | ETH / WETH concept | Pending |
 
-The eMONAD title is configurable pending final founder naming. Buy Bounce is internal source provenance, not another public cabinet. Two Places, Coindle and Skip retain their original presentation/gameplay. Warmup remains an automated test fixture. Skrumpey Slide is deferred.
+Mood Swings is the public name of the eMONAD cabinet (`emonad-cabinet`). Two Places, Coindle and Skip retain their original presentation/gameplay. Warmup remains an automated test fixture. Skrumpey Slide is deferred.
 
 Coindle plays using its non-price clues without a data key. Configure `PYTH_API_KEY` for its existing Pyth Pro price clues; missing data is visibly unavailable. No fake market data or substitute Community Asset is supplied.
 
@@ -63,7 +63,7 @@ The runner checks that ports 5173, 8787 and 8788 are free, starts a fresh Hardha
 
 Open `http://127.0.0.1:5173/demo`. Sign in with Privy, open the eMONAD rehearsal form, record the experimental token, play eMONAD in Passport Play, and show the accepted score in Passport and the cabinet board. The form and demo page label the token-only boundary. Press Ctrl+C to stop the rehearsal. A new run starts a new chain and database snapshot.
 
-Suggested live order: play the already-published Uppers cabinet (eMONAD community) as a guest in Free Play → sign in with the allowlisted founder/curator Privy account → record the experimental local token association → play the same Cabinet in Passport Play → show its verified score and association record. A burner player account can demonstrate Passport Play before the founder signs in, but it cannot perform curator actions. If showing the separate new-game publication lifecycle, the creator submits a real versioned game build, the curator validates and approves it, and that same creator deploys the Cabinet. The curator may record a MiniCoin association only after the Cabinet is published; submitting a game build is not submitting a MiniCoin.
+Suggested live order: play the already-published Mood Swings cabinet (eMONAD community) as a guest in Free Play → sign in with the allowlisted founder/curator Privy account → record the experimental local token association → play the same Cabinet in Passport Play → show its verified score and association record. A burner player account can demonstrate Passport Play before the founder signs in, but it cannot perform curator actions. If showing the separate new-game publication lifecycle, the creator submits a real versioned game build, the curator validates and approves it, and that same creator deploys the Cabinet. The curator may record a MiniCoin association only after the Cabinet is published; submitting a game build is not submitting a MiniCoin.
 
 ## Documentation
 

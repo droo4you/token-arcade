@@ -1,4 +1,4 @@
-// Headless determinism check for Buy Bounce.
+// Headless determinism check for Mood Swings.
 // Drives the real RAF loop through tools/harness.js and compares final game state.
 const crypto = require('crypto');
 const { makeTrial } = require('./harness');

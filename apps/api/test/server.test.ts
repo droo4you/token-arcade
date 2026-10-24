@@ -490,7 +490,7 @@ test("built web files and SPA routes are served from the API origin", async () =
     await new Promise<void>((resolve) => staticServer.listen(0, "127.0.0.1", resolve));
     const origin = `http://127.0.0.1:${(staticServer.address() as AddressInfo).port}`;
     assert.match(await (await fetch(origin + "/")).text(), /arcade test/);
-    assert.match(await (await fetch(origin + "/games/buy-bounce")).text(), /arcade test/);
+    assert.match(await (await fetch(origin + "/games/unknown-cabinet")).text(), /arcade test/);
     assert.equal((await (await fetch(origin + "/api/games")).json() as any).games.length, 4);
   } finally {
     await new Promise<void>((resolve) => staticServer.close(() => resolve()));
@@ -636,7 +636,7 @@ test("legacy import migration preserves cabinet state and history and only runs 
     migrated.acceptResult({ config, playerId: passport.playerId }, resultFor(config, 123), (current) => current);
     migrated.close(); migrated = new ArcadeStore(filename, false);
     const repaired = migrated.getGame("emonad-cabinet")!;
-    assert.equal(repaired.manifest.name, "Uppers");
+    assert.equal(repaired.manifest.name, "Mood Swings");
     assert.deepEqual(repaired.manifest.supportedModes, ["free", "ranked", "raid"]);
     assert.equal(repaired.status, "paused");
     assert.equal(repaired.communityStrategy, "retained-strategy");

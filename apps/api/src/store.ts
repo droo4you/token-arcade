@@ -117,7 +117,7 @@ export class ArcadeStore {
           prior.manifest.adapterId === game.manifest.adapterId) {
         // Reviewed platform upgrade of an untouched legacy import (e.g. Passport Play enabled): new modes and
         // verifier declaration; keep the stored entry origin and everything else.
-        // Revision 3 also carries reviewed public display copy (e.g. eMONAD cabinet -> "Uppers"); id is unchanged.
+        // Revision 3 carries reviewed public display copy. Revision 4 renames the eMONAD cabinet to "Mood Swings". The cabinet id is unchanged.
         this.saveGame({ ...prior, manifest: { ...prior.manifest, name: game.manifest.name, description: game.manifest.description, supportedModes: game.manifest.supportedModes,
           supportedObjectives: game.manifest.supportedObjectives, ...(game.manifest.verifier ? { verifier: game.manifest.verifier } : {}) },
           legacyImportRevision: game.legacyImportRevision });

@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { GameRunConfig, GameRunResult } from "../../../packages/sdk/src/index.ts";
-import { buyBounceSeed, createEmonadVerifier, createTwoPlacesVerifier } from "../src/gameVerification.ts";
+import { moodSwingsSeed, createEmonadVerifier, createTwoPlacesVerifier } from "../src/gameVerification.ts";
 
 const requireSource = createRequire(import.meta.url);
 const { makeTrial } = requireSource("../../../cartridges/emonad-cabinet/tools/harness.js") as {
@@ -24,7 +24,7 @@ function issued(gameId: string, objective: GameRunConfig["objective"], rules?: G
 test("eMONAD accepts a terminal source replay and rejects forged or partial scores", async () => {
   const config = issued("emonad-cabinet", "score", { viewportWidth: 390, viewportHeight: 844 });
   const trial = makeTrial(390, 844);
-  trial.run(buyBounceSeed(config.seed!), 1_000, 16, () => 195);
+  trial.run(moodSwingsSeed(config.seed!), 1_000, 16, () => 195);
   const record = trial.BB.record();
   const state = trial.BB.state;
   assert.equal(state.shown, true, "fixture reaches the original game over screen");
@@ -42,7 +42,7 @@ test("eMONAD accepts a terminal source replay and rejects forged or partial scor
   assert.equal((await verifier.verify(config, { ...result, proof: { ...record, seed: 42 } })).valid, false);
 
   const partial = makeTrial(390, 844);
-  partial.run(buyBounceSeed(config.seed!), 2, 16, () => 195);
+  partial.run(moodSwingsSeed(config.seed!), 2, 16, () => 195);
   const partialState = partial.BB.state;
   const partialResult = {
     ...result,

@@ -8,10 +8,10 @@ const reject = (reason: string): Verdict => ({ valid: false, reason });
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
-/** The host issues opaque seeds. Buy Bounce's existing simulation consumes uint32. */
+/** The host issues opaque seeds. The Mood Swings simulation consumes uint32. */
 const seedModule = createRequire(import.meta.url)("../../../cartridges/emonad-cabinet/src/arcade-seed.js") as
-  { buyBounceSeed(seed: string): number };
-export const buyBounceSeed = seedModule.buyBounceSeed;
+  { moodSwingsSeed(seed: string): number };
+export const moodSwingsSeed = seedModule.moodSwingsSeed;
 
 type BuyState = {
   over: boolean; shown?: boolean; steps: number; ath: number;
@@ -34,17 +34,17 @@ export function createEmonadVerifier(gameId = "emonad-cabinet"): GameVerifier {
       if (width !== 390 || height !== 844) return reject("An issued 390×844 playfield is required");
       const record = result.proof;
       if (!isRecord(record) || record.v !== 2 || record.tuned !== false ||
-          record.seed !== buyBounceSeed(config.seed) ||
+          record.seed !== moodSwingsSeed(config.seed) ||
           record.w !== width || record.h !== height ||
           !Number.isSafeInteger(record.steps) || Number(record.steps) < 1 || Number(record.steps) > 36_000 ||
           typeof record.track !== "string" || record.track.length > 60_000 ||
           !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(record.track) ||
           !isRecord(record.claim)) {
-        return reject("Missing or invalid Buy Bounce replay record");
+        return reject("Missing or invalid Mood Swings replay record");
       }
       let replay: BuyReplay;
       try { replay = buyReplay.verify(record); }
-      catch { return reject("Buy Bounce replay could not be decoded"); }
+      catch { return reject("Mood Swings replay could not be decoded"); }
       if (!replay.ok) return reject(`Replay mismatch: ${replay.problems[0] ?? "unknown difference"}`);
       const state = replay.recomputed;
       if (!state.over || !state.shown || state.steps !== record.steps || replay.ticks !== record.steps) {

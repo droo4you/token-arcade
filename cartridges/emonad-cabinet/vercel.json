@@ -2,12 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "outputDirectory": ".",
-  "functions": {
-    "api/**/*.js": {
-      "includeFiles": "src/game.js",
-      "maxDuration": 30
-    }
-  },
   "headers": [
     {
       "source": "/public/assets/(.*)",

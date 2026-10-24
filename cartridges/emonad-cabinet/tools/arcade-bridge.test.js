@@ -66,7 +66,7 @@ test('eMONAD adapter starts on first grip and completes a native run through the
   assert.ok(result.secondaryMetrics.ticks > 0);
   assert.equal(result.primaryMetric, Math.round(trial.BB.state.ath));
   assert.equal(result.secondaryMetrics.ticks, trial.BB.state.steps);
-  assert.equal(result.proof.seed, trial.sandbox.buyBounceSeed(config.seed));
+  assert.equal(result.proof.seed, trial.sandbox.moodSwingsSeed(config.seed));
   assert.equal(result.proof.w, 390);
   assert.equal(result.proof.h, 844);
   assert.equal(verify(result.proof).ok, true, 'server source replay matches the native bridge proof');

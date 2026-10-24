@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
 import { test } from "node:test";
 import type { GameRunConfig, GameRunResult } from "../../../packages/sdk/src/index.ts";
-import { buyBounceSeed } from "../src/gameVerification.ts";
+import { moodSwingsSeed } from "../src/gameVerification.ts";
 import { createArcadeServer } from "../src/server.ts";
 import { ArcadeStore } from "../src/store.ts";
 
@@ -45,7 +45,7 @@ test("real cartridge replays pass issued HTTP sessions and update isolated Cabin
       if (gameId === "emonad-cabinet") {
         assert.deepEqual(config.rules, { viewportHeight: 844, viewportWidth: 390 });
         const trial = makeTrial(390, 844);
-        trial.run(buyBounceSeed(config.seed!), 6_000, 16, () => 195);
+        trial.run(moodSwingsSeed(config.seed!), 6_000, 16, () => 195);
         const state = trial.BB.state;
         assert.equal(state.shown, true, "native gameplay reaches its terminal screen");
         proof = trial.BB.record();
