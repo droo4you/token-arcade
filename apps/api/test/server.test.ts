@@ -673,8 +673,9 @@ test("eMONAD raids inherit fixed viewport rules and unchanged paused imports can
 
 
 test("source intake requires configuration and review, privately notifies creator, and supports controlled reassignment", async () => {
-  const body = { name: "Source Demo", description: "A source-only submission", developer: "Maker", sourceUrl: "https://github.com/example/private-game", preparation: "agent", requestedModes: ["free", "ranked", "raid"] };
+  const body = { name: "Source Demo", description: "A source-only submission", developer: "Maker", sourceUrl: "https://github.com/example/private-game", preparation: "agent", requestedModes: ["free", "ranked", "raid"], playGuide: { free: "Explore", ranked: "One timed run", raid: "Three timed runs", scoring: "Highest distance", tieBreak: "Shortest time" } };
   assert.equal((await api("/api/creator/submissions", { method: "POST", body })).status, 401);
+  assert.equal((await api("/api/creator/submissions", { method: "POST", auth: "intake-maker", body: { ...body, playGuide: { free: "Explore" } } })).status, 400, "competitive requests need challenge and scoring descriptions");
   assert.equal((await api("/api/creator/submissions", { method: "POST", auth: "intake-maker", body: { ...body, sourceUrl: "https://secret@example.com/game" } })).status, 400);
   const submitted = await api("/api/creator/submissions", { method: "POST", auth: "intake-maker", body: { ...body, creatorId: "local-demo:admin", status: "approved" } });
   assert.equal(submitted.status, 201, JSON.stringify(submitted.body));
@@ -684,7 +685,8 @@ test("source intake requires configuration and review, privately notifies creato
   assert.deepEqual(submitted.body.game.manifest.supportedModes, ["free"]);
   await api(`/api/admin/games/${id}/validate`, { method: "POST", auth: "admin", body: technicalReview });
   assert.equal((await api(`/api/admin/games/${id}/approve`, { method: "POST", auth: "admin" })).status, 409);
-  const manifest = submittedManifest(id);
+  const manifest = { ...submittedManifest(id), playGuide: { free: body.playGuide.free } };
+  assert.deepEqual(submitted.body.game.submission.playGuide, body.playGuide);
   assert.equal((await api(`/api/admin/games/${id}`, { method: "PATCH", auth: "intake-maker", body: { manifest } })).status, 403);
   const configured = await api(`/api/admin/games/${id}`, { method: "PATCH", auth: "admin", body: { manifest } });
   assert.equal(configured.status, 200, JSON.stringify(configured.body));
@@ -712,4 +714,10 @@ test("source intake requires configuration and review, privately notifies creato
   assert.equal((await api(`/api/creator/games/${id}/deploy`, { method: "POST", auth: "new-owner" })).status, 200);
   assert.equal((await api(`/api/games/${id}`)).body.game.submission, undefined);
   assert.equal((await api("/api/games")).body.games.find((g: any) => g.manifest.id === id).submission, undefined);
+  assert.deepEqual((await api(`/api/games/${id}`)).body.game.manifest.playGuide, { free: "Explore" }, "only the reviewed enabled format is public");
+  await api(`/api/admin/games/${id}`, { method: "PATCH", auth: "admin", body: { status: "paused" } });
+  const changed = { ...manifest, playGuide: { free: "Different challenge" } };
+  for (const [path, auth] of [[`/api/admin/games/${id}`, "admin"], [`/api/creator/games/${id}`, "new-owner"]]) {
+    assert.equal((await api(path, { method: "PATCH", auth, body: { manifest: changed } })).body.error.code, "VERSION_REQUIRED");
+  }
 });

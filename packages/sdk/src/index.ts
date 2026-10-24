@@ -13,6 +13,15 @@ export type GameObjective =
 /** Small server-issued rule set; each game verifier defines the meaning of its keys. */
 export type GameRules = Record<string, string | number | boolean>;
 
+/** Creator/reviewer agreed player-facing descriptions; never executable scoring rules. */
+export interface GamePlayGuide {
+  free: string;
+  ranked?: string;
+  raid?: string;
+  scoring?: string;
+  tieBreak?: string;
+}
+
 export interface GameManifest {
   id: string;
   name: string;
@@ -22,6 +31,7 @@ export interface GameManifest {
   developer: string;
   adapterId: string;
   supportedModes: GameMode[];
+  playGuide?: GamePlayGuide;
   supportedObjectives: GameObjective[];
   communityOptional: boolean;
   minicoinOptional: boolean;
@@ -50,7 +60,7 @@ export interface GameRecord {
   manifest: GameManifest;
   status: "draft" | "submitted" | "approved" | "rejected" | "published" | "paused";
   creatorId?: string;
-  submission?: { sourceUrl: string; preparation: "help" | "agent"; requestedModes: GameMode[]; configuredAt?: string; configuredBy?: string };
+  submission?: { sourceUrl: string; preparation: "help" | "agent"; requestedModes: GameMode[]; playGuide?: GamePlayGuide; configuredAt?: string; configuredBy?: string };
   submittedAt?: string;
   /** Internal migration marker for the curated initial import only. */
   legacyImportRevision?: number;
