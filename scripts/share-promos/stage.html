@@ -31,7 +31,7 @@ const POSTER_AT = {
   uppers: 0.8,
   "skip-to-10k": 0.8,
   "skrumpey-slide": 0.78,
-  "two-places": 0.8,
+  "two-places": 0.88,
 };
 
 const ASSETS = {
@@ -41,6 +41,9 @@ const ASSETS = {
   cap: "/buy/buy-cap.png",
   lip: "/buy/buy-lip.png",
   icon: "/coindle/icon-1024.png",
+  btc: "/coins/btc.png",
+  eth: "/coins/eth.png",
+  sol: "/coins/sol.png",
   skip: "/sprites/skip.png",
   two: "/sprites/two.png",
 };
@@ -352,9 +355,99 @@ function hopPose(t, cycles, phase) {
   else { sx = lerp(0.94, 1, 1 - air); sy = lerp(1.1, 1, 1 - air); }
   return { hop, air, sx, sy };
 }
+function springHop(t, cycles, phase) {
+  let hop = (t * cycles + phase) % 1;
+  if (hop < 0) hop += 1;
+  const air = Math.pow(Math.sin(hop * Math.PI), 0.72);
+  let sx = 1, sy = 1, rot = Math.sin(hop * Math.PI * 2) * 0.14;
+  if (hop < 0.16) {
+    const e = easeOutBack(hop / 0.16);
+    sx = lerp(1.46, 0.84, e);
+    sy = lerp(0.58, 1.2, e);
+  } else if (hop > 0.8) {
+    const u = easeOutCubic((hop - 0.8) / 0.2);
+    sx = lerp(0.86, 1.5, u);
+    sy = lerp(1.22, 0.55, u);
+  } else {
+    sx = lerp(0.78, 1, 1 - air);
+    sy = lerp(1.32, 1, 1 - air);
+  }
+  return { hop, air, sx, sy, rot };
+}
+function pulsed(t, speed) { return speed * (t + 0.16 * Math.sin(t * Math.PI * 4)); }
+function lerpColorHex(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const r = Math.round(((pa >> 16) & 255) * (1 - t) + ((pb >> 16) & 255) * t);
+  const g = Math.round(((pa >> 8) & 255) * (1 - t) + ((pb >> 8) & 255) * t);
+  const bl = Math.round((pa & 255) * (1 - t) + (pb & 255) * t);
+  return "#" + ((1 << 24) | (r << 16) | (g << 8) | bl).toString(16).slice(1);
+}
+function keyed(t, keys) {
+  let i = 0;
+  while (i < keys.length - 2 && t > keys[i + 1][0]) i++;
+  const [t0, v0] = keys[i];
+  const [t1, v1] = keys[i + 1];
+  const u = clamp((t - t0) / Math.max(0.0001, t1 - t0), 0, 1);
+  return lerp(v0, v1, easeInOutCubic(u));
+}
+const GLYPHS = {
+  A: [14, 17, 17, 31, 17, 17, 17], B: [30, 17, 17, 30, 17, 17, 30], C: [14, 17, 16, 16, 16, 17, 14],
+  D: [28, 18, 17, 17, 17, 18, 28], E: [31, 16, 16, 30, 16, 16, 31], F: [31, 16, 16, 30, 16, 16, 16],
+  G: [14, 17, 16, 23, 17, 17, 15], H: [17, 17, 17, 31, 17, 17, 17], I: [14, 4, 4, 4, 4, 4, 14],
+  J: [7, 2, 2, 2, 2, 18, 12], K: [17, 18, 20, 24, 20, 18, 17], L: [16, 16, 16, 16, 16, 16, 31],
+  M: [17, 27, 21, 21, 17, 17, 17], N: [17, 17, 25, 21, 19, 17, 17], O: [14, 17, 17, 17, 17, 17, 14],
+  P: [30, 17, 17, 30, 16, 16, 16], Q: [14, 17, 17, 17, 21, 18, 13], R: [30, 17, 17, 30, 20, 18, 17],
+  S: [15, 16, 16, 14, 1, 1, 30], T: [31, 4, 4, 4, 4, 4, 4], U: [17, 17, 17, 17, 17, 17, 14],
+  V: [17, 17, 17, 17, 17, 10, 4], W: [17, 17, 17, 21, 21, 21, 10], X: [17, 17, 10, 4, 10, 17, 17],
+  Y: [17, 17, 10, 4, 4, 4, 4], Z: [31, 1, 2, 4, 8, 16, 31],
+  0: [14, 17, 19, 21, 25, 17, 14], 1: [4, 12, 4, 4, 4, 4, 14], 2: [14, 17, 1, 2, 4, 8, 31],
+  3: [31, 2, 4, 2, 1, 17, 14], 4: [2, 6, 10, 18, 31, 2, 2], 5: [31, 16, 30, 1, 1, 17, 14],
+  6: [6, 8, 16, 30, 17, 17, 14], 7: [31, 1, 2, 4, 8, 8, 8], 8: [14, 17, 17, 14, 17, 17, 14],
+  9: [14, 17, 17, 15, 1, 2, 12], " ": [0, 0, 0, 0, 0, 0, 0], ".": [0, 0, 0, 0, 0, 12, 12],
+  ",": [0, 0, 0, 0, 12, 4, 8], "!": [4, 4, 4, 4, 4, 0, 4], "-": [0, 0, 0, 31, 0, 0, 0],
+  "/": [1, 1, 2, 4, 8, 16, 16], $: [4, 15, 20, 14, 5, 30, 4], "^": [4, 14, 31, 4, 4, 4, 0],
+};
+const glyphCache = new Map();
+function glyphStrip(color) {
+  if (glyphCache.has(color)) return glyphCache.get(color);
+  const keys = Object.keys(GLYPHS);
+  const c = document.createElement("canvas");
+  c.width = keys.length * 6; c.height = 7;
+  const g = c.getContext("2d");
+  g.fillStyle = color;
+  const index = {};
+  keys.forEach((key, i) => {
+    index[key] = i * 6;
+    GLYPHS[key].forEach((row, y) => { for (let x = 0; x < 5; x++) if (row & (16 >> x)) g.fillRect(i * 6 + x, y, 1, 1); });
+  });
+  const out = { c, index };
+  glyphCache.set(color, out);
+  return out;
+}
+function pixText(text, x, y, color, scale = 2) {
+  const s = String(text).toUpperCase();
+  const { c, index } = glyphStrip(color);
+  ctx.imageSmoothingEnabled = false;
+  for (let i = 0; i < s.length; i++) {
+    const sx = index[s[i]];
+    if (sx === undefined || s[i] === " ") continue;
+    ctx.drawImage(c, sx, 0, 5, 7, Math.round(x + i * 6 * scale), Math.round(y), 5 * scale, 7 * scale);
+  }
+}
+function pixTextC(text, cx, y, color, scale = 2, outline = null) {
+  const w = String(text).length * 6 * scale;
+  if (outline) {
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) pixText(text, cx - w / 2 + dx * scale, y + dy * scale, outline, scale);
+  }
+  pixText(text, cx - w / 2, y, color, scale);
+}
+const GEM_ROWS = ["...o...", "..oLo..", ".oLLDo.", "oLLLDDo", ".oDDDo.", "..oDo..", "...o..."];
+const CRAB_ROWS = ["o.......o", "oo.....oo", ".orrrrro.", "orrwrwrro", ".rrrrrrr.", "r.r...r.r"];
 
 function drawSkrumpey(t, opts = {}) {
   const titles = opts.titles !== false;
+  ctx.save();
+  ctx.translate(Math.sin(t * Math.PI * 2) * 8, Math.sin(t * Math.PI * 5.2) * 14);
   ctx.fillStyle = "#4fa8ff";
   const sky = ctx.createLinearGradient(0, 0, 0, H);
   sky.addColorStop(0, "#3c93f5");
@@ -384,7 +477,7 @@ function drawSkrumpey(t, opts = {}) {
     { y: 560, amp: 28, color: "#62c45a", period: 280, speed: 260 },
   ];
   for (const layer of layers) {
-    const shift = t * layer.speed;
+    const shift = pulsed(t, layer.speed);
     ctx.beginPath();
     ctx.moveTo(0, H);
     for (let x = 0; x <= W; x += 10) {
@@ -399,15 +492,15 @@ function drawSkrumpey(t, opts = {}) {
   ctx.fillRect(0, 600, W, 120);
   ctx.fillStyle = "#62c45a";
   for (let x = -40; x < W + 40; x += 36) {
-    const px = x - (t * 320 % 36);
+    const px = x - (pulsed(t, 460) % 36);
     ctx.fillRect(px, 612, 18, 8);
   }
   speedLines(t, 390, "rgba(255,255,255,0.45)", 0.55);
   sparkles(t, 18, "#fff4a8", 180, 560, 12);
   if (media.nuts) {
     for (let i = 0; i < 6; i++) {
-      const nx = ((i * 230 - t * 340) % (W + 80) + W + 80) % (W + 80) - 40;
-      const bob = Math.sin(t * Math.PI * 4 + i) * 8;
+      const nx = ((i * 230 - pulsed(t, 380)) % (W + 80) + W + 80) % (W + 80) - 40;
+      const bob = -Math.pow(Math.abs(Math.sin(t * Math.PI * 2.6 + i * 0.7)), 0.65) * 26;
       ctx.save();
       ctx.translate(nx, 575 + bob);
       ctx.rotate(Math.sin(t * 6 + i) * 0.4);
@@ -415,134 +508,224 @@ function drawSkrumpey(t, opts = {}) {
       ctx.restore();
     }
   }
-  const pose = hopPose(t, 2.2, 0.5);
-  const ground = 548 - pose.air * 86;
-  const leadX = 470 + Math.sin(t * Math.PI * 4) * 26;
-  const env = t < 0.16 ? easeOutCubic(t / 0.16) * 0.2 : t < 0.48 ? lerp(0.2, 1, easeOutBack(clamp((t - 0.16) / 0.32, 0, 1))) : t < 0.9 ? 1 : 1 - easeInCubic((t - 0.9) / 0.1);
+  const pose = springHop(t, 2.6, 0.62);
+  const ground = 530 - pose.air * 128;
+  const leadX = 620 + Math.sin(t * Math.PI * 4) * 90;
+  const env = t < 0.12 ? easeOutBack(t / 0.12) * 0.15 : t < 0.5 ? lerp(0.15, 1, easeOutBack(clamp((t - 0.12) / 0.38, 0, 1))) : t < 0.9 ? 1 : 1 - easeInCubic((t - 0.9) / 0.1);
   const train = buddies.slice(1, 4);
   train.forEach((sprite, index) => {
-    const appear = clamp((env - index * 0.16) / 0.2, 0, 1);
+    const appear = clamp((env - index * 0.18) / 0.16, 0, 1);
     if (appear <= 0.02) return;
-    const pop = appear < 1 ? easeOutBack(appear) : 1;
-    const follow = hopPose(t, 2.2, 0.5 - (index + 1) * 0.18);
-    const x = leadX - (index + 1) * 200;
-    const gy = 568 - follow.air * 54;
-    const nextX = index === 0 ? leadX - 90 : leadX - index * 200 - 70;
+    const pop = appear < 1 ? easeOutBack(Math.min(1, appear)) : 1 + Math.sin(clamp((appear - 1) * 8, 0, Math.PI)) * 0.08;
+    const lag = (index + 1) * 0.14;
+    const follow = springHop(t - lag, 2.6, 0.62);
+    const x = 620 + Math.sin((t - lag) * Math.PI * 4) * 90 - (index + 1) * 168;
+    const gy = 548 - follow.air * (110 - index * 10) + Math.sin(t * Math.PI * 8 - index) * 10;
+    const nextX = index === 0 ? leadX - 80 : 620 + Math.sin((t - index * 0.14) * Math.PI * 4) * 90 - index * 168 - 50;
     ctx.save();
     ctx.strokeStyle = "#241028";
-    ctx.lineWidth = 8;
+    ctx.lineWidth = 10;
     ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.moveTo(x + 36, gy - 70);
-    ctx.quadraticCurveTo((x + nextX) / 2, gy - 10, nextX, gy - 120);
+    ctx.moveTo(x + 30, gy - 90);
+    ctx.quadraticCurveTo((x + nextX) / 2, gy + Math.sin(t * 16 + index) * 18, nextX, gy - 130);
     ctx.stroke();
-    ctx.fillStyle = "#fff36b";
-    ctx.beginPath();
-    ctx.arc((x + nextX) / 2, gy - 28, 7, 0, Math.PI * 2);
-    ctx.fill();
     ctx.restore();
-    buddyAt(sprite, x, gy, (210 - index * 28) * pop, follow.sx, follow.sy * Math.max(pop, 0.2), -0.05);
+    const wob = follow.rot + Math.sin(t * Math.PI * 8 - index * 1.4) * 0.18;
+    buddyAt(sprite, x, gy, (200 - index * 18) * Math.min(pop, 1.2), follow.sx, follow.sy * Math.max(0.4, Math.min(pop, 1.15)), wob);
+    if (appear > 0.05 && appear < 0.92) {
+      for (let k = 0; k < 7; k++) {
+        const ang = k / 7 * Math.PI * 2 + t * 6;
+        const rad = easeOutCubic(appear) * 70;
+        drawStar(x + Math.cos(ang) * rad, gy - 100 + Math.sin(ang) * rad * 0.55, 6 + (k % 3) * 3, k % 2 ? "#fff36b" : "#ff74dd", 1 - appear, ang);
+      }
+    }
   });
   if (buddies[0]) {
+    const vx = Math.cos(t * Math.PI * 4);
     ctx.save();
-    ctx.globalAlpha = 0.22;
-    buddyAt(buddies[0], leadX - 36, ground + 6, 250, pose.sx, pose.sy, -0.12);
+    ctx.globalAlpha = 0.28;
+    buddyAt(buddies[0], leadX - vx * 46, ground + 10, 250, pose.sx, pose.sy, pose.rot);
     ctx.restore();
-    buddyAt(buddies[0], leadX, ground, 268, pose.sx, pose.sy, -0.08 + pose.air * 0.08);
+    buddyAt(buddies[0], leadX, ground, 280, pose.sx, pose.sy, pose.rot);
+    if (pose.hop > 0.86) {
+      ctx.fillStyle = "rgba(255,244,168,0.7)";
+      ctx.beginPath();
+      ctx.ellipse(leadX, 560, 20 + (pose.hop - 0.86) * 180, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
+  ctx.restore();
   vignette(0.18);
   if (titles) titleBlock(t, "SKRUMPEY SLIDE", "Rescue them. Grow the train.", { fill: "#fff36b", y: 640, size: 86 });
 }
 
-function drawTile(x, y, size, letter, color, flip, pop) {
-  const sy = Math.max(0.05, Math.abs(Math.cos(flip * Math.PI)));
+function drawCatCell(x, y, w, h, label, value, color, flip, arrow) {
+  const s = Math.cos(clamp(flip, 0, 1) * Math.PI);
   const front = flip >= 0.5;
   ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(pop, sy * pop);
-  roundRect(-size / 2, -size / 2, size, size, 16);
-  ctx.fillStyle = front ? color : "#22262E";
-  ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = front ? "rgba(255,255,255,0.28)" : "#343b49";
-  ctx.stroke();
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.scale(Math.max(0.05, Math.abs(s)), 1);
+  roundRect(-w / 2, -h / 2, w, h, 12);
   if (!front) {
-    ctx.fillStyle = "rgba(255,255,255,0.04)";
-    roundRect(-size / 2 + 8, -size / 2 + 8, size - 16, size * 0.42, 10);
+    ctx.fillStyle = "#2A2F38";
     ctx.fill();
-  }
-  if (front && sy > 0.28) {
-    ctx.fillStyle = color === "#3a4150" ? "#d5d8e0" : "#172117";
-    ctx.font = `700 ${Math.round(size * 0.46)}px "Space Grotesk"`;
+    ctx.setLineDash([6, 5]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#3A3F4A";
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#6B6774";
+    ctx.font = `600 15px "DM Sans"`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(letter, 0, size * 0.04);
+    ctx.fillText(label.toUpperCase(), 0, 0);
+  } else {
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 ${value.length > 10 ? 16 : 20}px "DM Sans"`;
+    ctx.fillText(value, 0, arrow ? -12 : 0);
+    if (arrow) {
+      ctx.beginPath();
+      if (arrow === "up") { ctx.moveTo(0, 4); ctx.lineTo(-9, 18); ctx.lineTo(9, 18); }
+      else { ctx.moveTo(0, 22); ctx.lineTo(-9, 8); ctx.lineTo(9, 8); }
+      ctx.fill();
+    }
   }
   ctx.restore();
 }
 
-function drawCoin(x, y, r, spin) {
-  const sx = Math.cos(spin);
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(Math.max(0.12, Math.abs(sx)), 1);
-  const g = ctx.createLinearGradient(-r, 0, r, 0);
-  g.addColorStop(0, "#a87424");
-  g.addColorStop(0.45, "#ffe7a8");
-  g.addColorStop(1, "#c99238");
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.fillStyle = g;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(0, 0, r * 0.8, 0, Math.PI * 2);
-  ctx.save();
-  ctx.clip();
-  if (media.icon) ctx.drawImage(media.icon, -r * 0.8, -r * 0.8, r * 1.6, r * 1.6);
-  ctx.restore();
-  ctx.restore();
-}
+const COINDLE_ROWS = [
+  {
+    logo: "sol", ticker: "SOL", name: "Solana", price: "$178.20", change: "+1.1%", up: true, start: -0.05,
+    cells: [
+      ["Type", "L1", "#4ADE80", ""],
+      ["Color", "Purple", "#4ADE80", ""],
+      ["Year", "2020", "#FACC15", "up"],
+      ["Ticker", "3 letters", "#4ADE80", ""],
+      ["Price", "$100-$1K", "#FACC15", "down"],
+      ["FDV", "10B-100B", "#FACC15", "down"],
+    ],
+  },
+  {
+    logo: "eth", ticker: "ETH", name: "Ethereum", price: "$3,482", change: "+0.6%", up: true, start: 0.42,
+    cells: [
+      ["Type", "L1", "#4ADE80", ""],
+      ["Color", "Purple", "#4ADE80", ""],
+      ["Year", "2015", "#4ADE80", ""],
+      ["Ticker", "3 letters", "#4ADE80", ""],
+      ["Price", "$1K-$10K", "#4ADE80", ""],
+      ["FDV", ">100B", "#4ADE80", ""],
+    ],
+  },
+];
 
 function drawCoindle(t, opts = {}) {
   const titles = opts.titles !== false;
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, "#12151c");
-  bg.addColorStop(1, "#1b2433");
-  ctx.fillStyle = bg;
+  ctx.fillStyle = "#1A1D23";
   ctx.fillRect(0, 0, W, H);
-  const glow = ctx.createRadialGradient(700, 300, 40, 700, 320, 460);
-  glow.addColorStop(0, "rgba(74,222,128,0.16)");
-  glow.addColorStop(1, "rgba(74,222,128,0)");
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, W, H);
-  const rows = [
-    { word: "COINS", colors: ["#FACC15", "#3a4150", "#FACC15", "#4ADE80", "#3a4150"] },
-    { word: "COINS", colors: ["#4ADE80", "#4ADE80", "#FACC15", "#4ADE80", "#FACC15"] },
-    { word: "COINS", colors: ["#4ADE80", "#4ADE80", "#4ADE80", "#4ADE80", "#4ADE80"] },
-  ];
-  const p = 0.05 + t * 1.2;
-  const size = 112, gap = 16;
-  const gridW = 5 * size + 4 * gap;
-  const originX = (W - gridW) / 2 + size / 2 + 70;
-  const originY = 168;
-  rows.forEach((row, r) => {
-    for (let c = 0; c < 5; c++) {
-      const start = r * 0.2 + c * 0.042;
-      const flip = clamp((p - start) / 0.09, 0, 1);
-      const since = p - start - 0.09;
-      const pop = flip >= 1 ? 1 + Math.sin(clamp(since * 16, 0, Math.PI)) * 0.07 * Math.exp(-since * 6) : 1;
-      drawTile(originX + c * (size + gap), originY + r * (size + gap), size, row.word[c], row.colors[c], flip, pop);
-      if (r === 2 && flip >= 1 && since > 0 && since < 0.35) {
-        drawStar(originX + c * (size + gap), originY + r * (size + gap) - 70, 10, "#fff7c2", 1 - since / 0.35, t * 8);
-      }
+  const boardX = 70, boardW = 1140, gap = 10, cellW = (boardW - gap * 5) / 6, cellH = 118;
+  ctx.save();
+  const pop = titles ? easeOutBack(clamp((t - 0.7) / 0.16, 0, 1)) : 0;
+  const wordScale = pop > 0 ? lerp(1, 1.08, pop) : 1;
+  ctx.translate(78, 58);
+  ctx.scale(wordScale, wordScale);
+  if (media.icon) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(28, 0, 28, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(media.icon, 0, -28, 56, 56);
+    ctx.restore();
+  }
+  ctx.font = `800 54px "DM Sans"`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#5B8DEF";
+  ctx.fillText("Coin", 68, 0);
+  const coinW = ctx.measureText("Coin").width;
+  ctx.fillStyle = "#E8E6E1";
+  ctx.fillText("dle", 68 + coinW, 0);
+  ctx.restore();
+  ctx.font = `600 20px "DM Sans"`;
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#9B97A0";
+  ctx.fillText("Guess the mystery crypto - powered by ", 78, 108);
+  const lead = ctx.measureText("Guess the mystery crypto - powered by ").width;
+  ctx.fillStyle = "#5B8DEF";
+  ctx.font = `800 20px "DM Sans"`;
+  ctx.fillText("Pyth", 78 + lead, 108);
+  const attempt = t < 0.42 ? "1 / 6" : "2 / 6";
+  roundRect(78, 132, 168, 40, 12);
+  ctx.fillStyle = "#2A2F38";
+  ctx.fill();
+  ctx.strokeStyle = "#2E333C";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  roundRect(78, 132, 84, 40, 12);
+  ctx.fillStyle = "#5B8DEF";
+  ctx.fill();
+  ctx.font = `800 16px "DM Sans"`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText("Daily", 120, 152);
+  ctx.fillStyle = "#9B97A0";
+  ctx.fillText("Free", 204, 152);
+  ctx.font = `800 16px "DM Sans"`;
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#E8E6E1";
+  ctx.fillText(attempt, 1180, 152);
+  COINDLE_ROWS.forEach((row, r) => {
+    const y = 196 + r * 230;
+    const logo = media[row.logo];
+    if (logo) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(100, y + 16, 16, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(logo, 84, y, 32, 32);
+      ctx.restore();
     }
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 22px "DM Sans"`;
+    ctx.fillStyle = "#E8E6E1";
+    ctx.fillText(row.ticker, 128, y + 16);
+    ctx.font = `600 18px "DM Sans"`;
+    ctx.fillStyle = "#9B97A0";
+    ctx.fillText(row.name, 196, y + 16);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#6B6774";
+    ctx.font = `600 18px "DM Sans"`;
+    ctx.fillText(row.price, 1088, y + 16);
+    ctx.fillStyle = row.up ? "#22c55e" : "#F87171";
+    ctx.font = `800 16px "DM Sans"`;
+    ctx.fillText(row.change, 1188, y + 16);
+    ctx.fillStyle = "#22c55e";
+    ctx.beginPath();
+    ctx.arc(1048, y + 16, 4, 0, Math.PI * 2);
+    ctx.fill();
+    row.cells.forEach((cell, c) => {
+      const start = row.start + c * 0.045;
+      const flip = clamp((t - start) / 0.09, 0, 1);
+      const since = t - start - 0.09;
+      const bounce = flip >= 1 ? 1 + Math.sin(clamp(since * 14, 0, Math.PI)) * 0.06 * Math.exp(-since * 7) : 1;
+      const x = boardX + c * (cellW + gap);
+      ctx.save();
+      ctx.translate(x + cellW / 2, y + 48 + cellH / 2);
+      ctx.scale(bounce, bounce);
+      ctx.translate(-(x + cellW / 2), -(y + 48 + cellH / 2));
+      drawCatCell(x, y + 48, cellW, cellH, cell[0], cell[1], cell[2], flip, cell[3]);
+      ctx.restore();
+      if (r === 1 && flip >= 1 && since > 0 && since < 0.28) {
+        drawStar(x + cellW / 2, y + 36, 12, "#E8E6E1", 1 - since / 0.28, t * 5 + c);
+      }
+    });
   });
-  const coinSpin = t * Math.PI * 5 + 0.9;
-  const coinY = 250 + Math.sin(t * Math.PI * 3) * 16;
-  drawCoin(168, coinY, 78, coinSpin);
-  sparkles(t, 16, "#FACC15", 40, 640, 30);
-  vignette(0.38);
-  if (titles) titleBlock(t, "COINDLE", "A new puzzle every day.", { fill: "#4ADE80", y: 608, size: 92 });
 }
 
 function drawCandle(x, base, height, up) {
@@ -646,161 +829,309 @@ function footShadow(x, y, w) {
   ctx.restore();
 }
 
+function drawWhale(x, y, good) {
+  const body = good ? "#3fa86a" : "#c0404a";
+  const belly = good ? "#a8f0c0" : "#ffb0b0";
+  ctx.fillStyle = body;
+  roundRect(x, y, 150, 36, 16);
+  ctx.fill();
+  ctx.fillStyle = belly;
+  ctx.fillRect(x + 18, y + 22, 100, 10);
+  ctx.fillStyle = "#111";
+  ctx.fillRect(x + 28, y + 10, 8, 8);
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.moveTo(x + 140, y + 10);
+  ctx.lineTo(x + 188, y - 8);
+  ctx.lineTo(x + 150, y + 28);
+  ctx.fill();
+  if (good) {
+    ctx.fillStyle = "rgba(191,232,255,0.85)";
+    for (let i = 0; i < 5; i++) ctx.fillRect(x + 40 + Math.sin(y + i) * 4, y - 20 - i * 16, 28 - i * 3, 10);
+    pixText("BUY", x + 36, y - 108, "#7be08a", 3);
+  }
+}
 function drawSkip(t, opts = {}) {
   const titles = opts.titles !== false;
+  const climb = easeInOutCubic(clamp(t / 0.74, 0, 1));
   const sky = ctx.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, "#120a22");
-  sky.addColorStop(0.6, "#22163a");
-  sky.addColorStop(1, "#3a2460");
+  sky.addColorStop(0, lerpColorHex("#6fbfee", "#120e34", climb * 0.35));
+  sky.addColorStop(1, lerpColorHex("#d8f0ff", "#ff9f5a", climb * 0.45));
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, W, H);
-  for (let i = 0; i < 28; i++) {
-    const tw = 0.4 + 0.6 * Math.sin(t * 6 + i);
-    ctx.fillStyle = `rgba(255,255,255,${0.35 + tw * 0.4})`;
-    ctx.fillRect((rnd(i) * W + t * 20) % W, rnd(i + 5) * 360, 3, 3);
-  }
-  const water = ctx.createLinearGradient(0, 470, 0, H);
-  water.addColorStop(0, "#1c4d86");
-  water.addColorStop(1, "#0d2144");
+  const far = pulsed(t, 90);
+  ctx.fillStyle = "rgba(106,150,196,0.55)";
+  ctx.beginPath();
+  ctx.moveTo(0, 430);
+  for (let x = 0; x <= W; x += 16) ctx.lineTo(x, 390 + Math.sin((x + far) * 0.01) * 28 + Math.sin((x + far) * 0.004) * 18);
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
+  const waterY = 560 - climb * 30;
+  const water = ctx.createLinearGradient(0, waterY, 0, H);
+  water.addColorStop(0, "#3f86c6");
+  water.addColorStop(1, "#1f6f84");
   ctx.fillStyle = water;
-  ctx.fillRect(0, 500, W, 220);
-  ctx.strokeStyle = "rgba(170,220,255,0.35)";
+  ctx.fillRect(0, waterY, W, H - waterY);
+  ctx.strokeStyle = "#d8f4ff";
   ctx.lineWidth = 3;
-  for (let i = 0; i < 5; i++) {
-    const y = 540 + i * 28;
-    ctx.beginPath();
-    for (let x = 0; x <= W; x += 16) {
-      const yy = y + Math.sin((x + t * (180 + i * 40)) * 0.02) * 6;
-      if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+  ctx.beginPath();
+  for (let x = 0; x <= W; x += 12) {
+    const yy = waterY + Math.sin((x + pulsed(t, 220)) * 0.02) * 5;
+    if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+  }
+  ctx.stroke();
+  const price = Math.round(lerp(2480, 10000, climb));
+  const broken = t > 0.7;
+  const lineY = lerp(120, 250, climb);
+  ctx.save();
+  ctx.strokeStyle = broken ? "#7be08a" : "#ff5a6a";
+  ctx.lineWidth = 4;
+  ctx.setLineDash([16, 10]);
+  ctx.beginPath();
+  ctx.moveTo(0, lineY);
+  ctx.lineTo(W, lineY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+  pixTextC(broken ? "$10,000 SUPPORT" : "$10,000 RESISTANCE", W - 250, lineY - 28, broken ? "#7be08a" : "#ff5a6a", 3, "#22163a");
+  const dates = ["JUL 2017", "DEC 2017", "JUN 2020", "AUG 2021", "SEP 2022", "MAY 2024"];
+  const date = dates[Math.min(dates.length - 1, Math.floor(climb * dates.length))];
+  ctx.fillStyle = "rgba(20,12,40,0.62)";
+  ctx.fillRect(0, 0, W, 64);
+  pixText(date, 18, 10, "#ffffff", 3);
+  pixText("DAY " + Math.round(lerp(640, 2200, climb)), 18, 36, "#b8a8e8", 2);
+  pixTextC("ETH $" + price.toLocaleString("en-US"), W / 2 - 20, 14, price >= 9000 ? "#ffe066" : "#7be08a", 5, "#22163a");
+  if (media.gem) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(media.gem, W / 2 + 250, 16, media.gem.width, media.gem.height);
+    pixText(String(Math.round(lerp(2, 18, climb))), W / 2 + 310, 22, "#d6c2ff", 3);
+  }
+  const hop = springHop(t, 4.2, 0.58);
+  const rockX = lerp(160, 1040, 0.08 + t * 0.84);
+  const rockY = waterY - 30 - hop.air * lerp(90, 210, climb);
+  const gemsX = [280, 520, 760, 980];
+  gemsX.forEach((gx, i) => {
+    const got = rockX > gx + 10;
+    const bob = Math.sin(t * 8 + i) * 8;
+    if (!got && media.gem) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(media.gem, gx, waterY - 150 - i * 18 + bob, 42, 42);
+    } else if (rockX - gx < 80 && rockX > gx) {
+      drawStar(gx, waterY - 170, 14, "#d6c2ff", 1 - (rockX - gx) / 80, t * 6);
     }
+  });
+  drawWhale(420 + Math.sin(t * 3) * 20, waterY - 10, true);
+  if (media.crab) {
+    for (let i = 0; i < 4; i++) {
+      const cx = 700 + i * 48 + Math.sin(t * 6 + i) * 10;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(media.crab, cx, waterY - 8, media.crab.width, media.crab.height);
+    }
+  }
+  const eras = [["FRONTIER", 80], ["DEFI SUMMER", 460], ["NFT SEASON", 860]];
+  eras.forEach(([name, x]) => {
+    const bx = x - pulsed(t, 40);
+    if (bx < -80 || bx > W) return;
+    pixTextC(name, bx, waterY + 28, "#22163a", 2);
+  });
+  if (hop.hop < 0.12 || hop.hop > 0.9) {
+    const k = hop.hop < 0.12 ? hop.hop / 0.12 : (hop.hop - 0.9) / 0.1;
+    ctx.strokeStyle = "rgba(216,244,255,0.9)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(rockX, waterY + 4, 18 + k * 70, 8 + k * 10, 0, 0, Math.PI * 2);
     ctx.stroke();
   }
-  const pose = hopPose(t, 3.2, 0.5);
-  const scroll = t * 640;
-  for (let i = -1; i < 8; i++) {
-    const rock = rocks[(i + 8) % rocks.length];
-    const x = ((i * 210 - scroll) % (W + 180) + (W + 180)) % (W + 180) - 40;
+  if (rocks[0]) {
     ctx.save();
+    ctx.translate(rockX - hop.sx * 18, rockY);
+    ctx.rotate(t * 14);
+    ctx.scale(hop.sx, hop.sy);
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(rock, x, 488, rock.width * 1.15, rock.height * 1.15);
+    const rw = rocks[0].width * 2.4, rh = rocks[0].height * 2.4;
+    ctx.drawImage(rocks[0], -rw / 2, -rh / 2, rw, rh);
     ctx.restore();
   }
-  const px = 430;
-  const py = 500 - pose.air * 150;
-  const sprite = pose.air > 0.25 ? "jump" : pose.hop > 0.88 ? "crouch" : "run";
-  if (pose.hop > 0.9 || pose.hop < 0.08) {
-    ctx.fillStyle = "rgba(190,230,255,0.45)";
+  if (media.skip) blitFeet(media.skip, "rcSide", rockX - 90, rockY + 36, 5, false, 1, 1);
+  if (hop.hop > 0.88 && hop.hop < 0.98 && t > 0.2 && t < 0.68) pixTextC("PERFECT", rockX, rockY - 70, "#ffe066", 3, "#22163a");
+  if (broken) {
+    for (let i = 0; i < 16; i++) drawStar(rockX + Math.cos(i) * 40, lineY + Math.sin(i * 2 + t * 8) * 24, 8, i % 2 ? "#ffe066" : "#7be08a", 0.9, t);
+  }
+  if (titles && t > 0.72) {
+    const u = easeOutBack(clamp((t - 0.72) / 0.14, 0, 1));
+    pixTextC("SKIP TO 10K", W / 2, lerp(80, 520, Math.min(1, u)), "#ffe066", 8, "#22163a");
+    if (u > 0.8) pixTextC("SKIP THE ROCK TO $10,000", W / 2, 590, "#ffffff", 3, "#22163a");
+  }
+}
+
+function placePose(t) {
+  const jump1 = t >= 0.14 && t < 0.34;
+  const jump2 = t >= 0.62 && t < 0.78;
+  const crouch = t >= 0.46 && t < 0.6;
+  const celebrate = t >= 0.8;
+  let air = 0, sx = 1, sy = 1, name = "run";
+  if (jump1 || jump2) {
+    const a = jump1 ? 0.14 : 0.62, b = jump1 ? 0.34 : 0.78;
+    const u = (t - a) / (b - a);
+    air = Math.pow(Math.sin(u * Math.PI), 0.7);
+    name = "jump";
+    sx = 0.84; sy = 1.22;
+    if (u < 0.12) { sx = 1.35; sy = 0.7; }
+    if (u > 0.86) { sx = 1.4; sy = 0.62; }
+  } else if (crouch) {
+    name = "crouch";
+    sx = 1.2; sy = 0.78;
+  } else if (celebrate) {
+    name = "wave";
+    sy = 1 + Math.sin(t * 18) * 0.06;
+  } else {
+    const step = (t * 8) % 1;
+    sx = step < 0.5 ? 1.08 : 0.94;
+    sy = step < 0.5 ? 0.94 : 1.08;
+  }
+  return { air, sx, sy, name, crouch, celebrate };
+}
+function drawBrickRun(x, y, w, h, theme) {
+  const grass = theme === "shroom" ? "#5ec44a" : "#b6d846";
+  const soil = theme === "shroom" ? "#8a5a3c" : "#4b3a7a";
+  const soilD = theme === "shroom" ? "#6e4630" : "#3a2c63";
+  ctx.fillStyle = soil;
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = "#22163a";
+  ctx.fillRect(x, y, w, 4);
+  ctx.fillStyle = grass;
+  ctx.fillRect(x, y + 4, w, 10);
+  ctx.fillStyle = theme === "shroom" ? "#9be36a" : "#d6f07a";
+  ctx.fillRect(x, y + 4, w, 3);
+  for (let i = 0; i < w; i += 28) ctx.fillStyle = soilD, ctx.fillRect(x + i, y + 22, 2, h);
+}
+function drawApplePix(x, y, got, pop) {
+  if (got && pop <= 0) return;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(3, 3);
+  ctx.fillStyle = "#22163a";
+  ctx.fillRect(4, 0, 2, 3);
+  ctx.fillStyle = "#5fbf4a";
+  ctx.fillRect(6, 0, 3, 2);
+  ctx.fillStyle = "#e02c2c";
+  ctx.fillRect(1, 3, 8, 7);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(2, 4, 2, 2);
+  ctx.restore();
+  if (pop > 0) drawStar(x, y - 20, 10 + pop * 16, "#f6c02c", 1 - pop, pop * 4);
+}
+function drawHalf(ox, t, theme) {
+  const scroll = keyed(t, [[0, 0], [0.14, 60], [0.32, 240], [0.46, 380], [0.6, 620], [0.78, 900], [1, 1040]]);
+  const pose = placePose(t);
+  const ground = 520;
+  const heroX = ox + 250;
+  const worldX = scroll + 250;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ox, 0, W / 2, H);
+  ctx.clip();
+  const bump = (at) => {
+    const d = Math.abs(t - at);
+    return d < 0.07 ? 1 + 0.07 * Math.sin((1 - d / 0.07) * Math.PI) : 1;
+  };
+  const z = bump(0.33) * bump(0.77);
+  ctx.translate(ox + 320, 400);
+  ctx.scale(z, z);
+  ctx.translate(-(ox + 320), -400);
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  if (theme === "shroom") { sky.addColorStop(0, "#6ec8ff"); sky.addColorStop(1, "#d8f6ff"); }
+  else { sky.addColorStop(0, "#4b3c9a"); sky.addColorStop(0.7, "#8c78d8"); sky.addColorStop(1, "#c4b2f2"); }
+  ctx.fillStyle = sky;
+  ctx.fillRect(ox, 0, W / 2, H);
+  ctx.fillStyle = theme === "shroom" ? "rgba(255,255,255,0.8)" : "rgba(253,251,240,0.45)";
+  for (let i = 0; i < 4; i++) {
+    const cx = ox + ((i * 180 - scroll * 0.15) % 700 + 700) % 700;
     ctx.beginPath();
-    ctx.ellipse(px, 530, 30 + pose.hop * 20, 8, 0, 0, Math.PI * 2);
+    ctx.arc(cx, 70 + i * 16, 22, 0, Math.PI * 2);
+    ctx.arc(cx + 24, 78 + i * 16, 16, 0, Math.PI * 2);
     ctx.fill();
   }
-  footShadow(px, 512, 46);
-  ctx.save();
-  ctx.globalAlpha = 0.25;
-  blitFeet(media.skip, sprite, px - 28, py + 8, 6, sprite === "jump", pose.sx, pose.sy);
+  if (theme === "shroom") {
+    for (let i = 0; i < 5; i++) {
+      const mx = ox + ((i * 150 - scroll * 0.25) % 760 + 760) % 760;
+      ctx.fillStyle = i % 2 ? "#e5484d" : "#4a7fe0";
+      ctx.beginPath();
+      ctx.ellipse(mx, 250, 34, 22, 0, Math.PI, 0);
+      ctx.fill();
+      ctx.fillStyle = "#f4ecd4";
+      ctx.fillRect(mx - 6, 250, 12, 40);
+    }
+  }
+  const plat = (wx, wy, ww) => drawBrickRun(ox + wx - scroll, wy, ww, 70, theme);
+  plat(-40, ground, 1500);
+  plat(520, 390, 180);
+  const bob = Math.sin(t * Math.PI * 4) * 16;
+  plat(760, 430 + bob, 150);
+  for (let i = 0; i < 3; i++) {
+    const sx = ox + 360 + i * 28 - scroll;
+    ctx.fillStyle = "#22163a";
+    ctx.beginPath();
+    ctx.moveTo(sx, ground);
+    ctx.lineTo(sx + 14, ground);
+    ctx.lineTo(sx + 7, ground - 28);
+    ctx.fill();
+    ctx.fillStyle = "#f4ecd4";
+    ctx.fillRect(sx + 6, ground - 22, 2, 8);
+  }
+  const apples = [300, 600, 980];
+  let got = 0;
+  apples.forEach((ax) => {
+    const collected = worldX > ax + 8;
+    if (collected) got++;
+    const since = collected ? clamp((worldX - ax) / 80, 0, 1) : 0;
+    drawApplePix(ox + ax - scroll, ground - 78, collected, collected ? 1 - since : 0);
+  });
+  const zapX = ox + 800 - scroll;
+  const zapOn = t > 0.44 && t < 0.62;
+  if (zapX > ox - 40 && zapX < ox + W / 2) {
+    ctx.globalAlpha = zapOn ? 0.95 : 0.25;
+    ctx.fillStyle = "#1cd2f0";
+    ctx.fillRect(zapX, 392, 160, 10);
+    ctx.globalAlpha = 1;
+    if (pose.crouch && zapOn) {
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(heroX, 500, 36, Math.PI, 0);
+      ctx.stroke();
+    }
+  }
+  const doorX = ox + 1120 - scroll;
+  const open = clamp((t - 0.76) / 0.1, 0, 1);
+  ctx.fillStyle = "#22163a";
+  ctx.fillRect(doorX, ground - 120, 48, 120);
+  ctx.fillStyle = "#f6c02c";
+  ctx.fillRect(doorX + 4, ground - 116 + open * 90, 40, 112 - open * 90);
+  const feet = ground - pose.air * 150 + (pose.crouch ? 18 : 0);
+  const sprite = pose.name === "jump" ? "jump" : pose.name === "crouch" ? "crouch" : pose.name === "wave" ? "wave" : "run";
+  const rcName = pose.name === "jump" ? "rcSide" : "rcFront";
+  footShadow(heroX, ground + 6, 36);
+  blitFeet(media.two, sprite, heroX, feet, 4.4, sprite === "jump", pose.sx, pose.sy);
+  blitFeet(media.skip, rcName, heroX + 78, feet + 24 - pose.air * 40, 9, false, pose.sx, pose.sy);
+  pixText(got + "/3", ox + 24, 24, "#22163a", 3);
+  if (pose.celebrate) {
+    for (let k = 0; k < 8; k++) drawStar(heroX + Math.cos(k + t * 6) * 50, feet - 80 + Math.sin(k) * 30, 8, "#f6c02c", 0.9, k);
+  }
   ctx.restore();
-  blitFeet(media.skip, sprite, px, py, 6.4, sprite === "jump", pose.sx, pose.sy);
-  const count = Math.round(lerp(1860, 10000, easeOutCubic(clamp(t / 0.64, 0, 1))));
-  const label = count.toLocaleString("en-US");
-  ctx.save();
-  ctx.textAlign = "center";
-  ctx.font = `700 120px "Space Grotesk"`;
-  ctx.lineWidth = 16;
-  ctx.strokeStyle = "#1a0e20";
-  ctx.strokeText(label, W / 2, 168);
-  ctx.fillStyle = "#ffe066";
-  ctx.fillText(label, W / 2, 168);
-  ctx.restore();
-  const approach = easeInOutCubic(clamp(t / 0.72, 0, 1));
-  ctx.save();
-  ctx.translate(lerp(1120, 980, approach), 300);
-  ctx.scale(lerp(0.55, 1.05, approach), lerp(0.55, 1.05, approach));
-  ctx.font = `700 64px "Space Grotesk"`;
-  ctx.textAlign = "center";
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = "#1a0e20";
-  ctx.strokeText("10K", 0, 0);
-  ctx.fillStyle = "#ffe066";
-  ctx.fillText("10K", 0, 0);
-  ctx.restore();
-  sparkles(t, 14, "#ffe066", 40, 480, 90);
-  vignette(0.42);
-  if (titles) titleBlock(t, "SKIP TO 10K", "Skip your way up.", { fill: "#ffe066", y: 620, size: 84 });
 }
-
-function drawPlatform(x, y, w, color) {
-  roundRect(x, y, w, 34, 12);
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.fillStyle = "rgba(16,8,28,0.28)";
-  ctx.fillRect(x + 12, y + 10, w - 24, 8);
-}
-
 function drawTwo(t, opts = {}) {
   const titles = opts.titles !== false;
-  const pose = hopPose(t, 2, 0.42);
-  const ground = 500;
-  const y = ground - pose.air * 190;
-  const land = pose.hop < 0.12 || pose.hop > 0.88;
+  const swapped = t >= 0.48;
+  drawHalf(0, t, swapped ? "shroom" : "grass");
+  drawHalf(W / 2, t, swapped ? "grass" : "shroom");
+  const wipe = t > 0.4 && t < 0.56 ? clamp((t - 0.4) / 0.08, 0, 1) * (t < 0.48 ? 1 : 1 - clamp((t - 0.48) / 0.08, 0, 1)) : 0;
+  if (wipe > 0) {
+    ctx.fillStyle = `rgba(253,251,240,${wipe})`;
+    ctx.fillRect(0, 0, W, H);
+  }
   ctx.fillStyle = "#22163a";
-  ctx.fillRect(0, 0, W, H);
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, 0, W / 2, H);
-  ctx.clip();
-  const left = ctx.createLinearGradient(0, 0, 0, H);
-  left.addColorStop(0, "#5a3b8c");
-  left.addColorStop(1, "#22163a");
-  ctx.fillStyle = left;
-  ctx.fillRect(0, 0, W / 2, H);
-  drawPlatform(90, ground, 460, "#cdbdf7");
-  if (land) {
-    ctx.strokeStyle = "rgba(255,247,237,0.8)";
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(320, ground, 24 + (pose.hop < 0.12 ? pose.hop : 1 - pose.hop) * 220, Math.PI, 0);
-    ctx.stroke();
-  }
-  footShadow(320, ground + 10, 60);
-  blitFeet(media.two, pose.air > 0.2 ? "jump" : "run", 320, y, 7.2, pose.air > 0.2, pose.sx, pose.sy);
-  ctx.restore();
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(W / 2, 0, W / 2, H);
-  ctx.clip();
-  const right = ctx.createLinearGradient(0, 0, 0, H);
-  right.addColorStop(0, "#145868");
-  right.addColorStop(1, "#102033");
-  ctx.fillStyle = right;
-  ctx.fillRect(W / 2, 0, W / 2, H);
-  drawPlatform(730, ground, 460, "#7ee7ef");
-  if (land) {
-    ctx.strokeStyle = "rgba(255,247,237,0.8)";
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(960, ground, 24 + (pose.hop < 0.12 ? pose.hop : 1 - pose.hop) * 220, Math.PI, 0);
-    ctx.stroke();
-  }
-  footShadow(960, ground + 10, 48);
-  blitFeet(media.skip, pose.air > 0.2 ? "rcSide" : "rcFront", 960, y + 28, 16, pose.air <= 0.2, pose.sx, pose.sy);
-  ctx.restore();
-  const pulse = 0.45 + Math.sin(t * Math.PI * 8) * 0.35;
-  ctx.save();
-  ctx.strokeStyle = `rgba(255,247,237,${pulse})`;
-  ctx.lineWidth = 6;
-  ctx.beginPath();
-  ctx.moveTo(W / 2, 40);
-  ctx.lineTo(W / 2, H - 40);
-  ctx.stroke();
-  ctx.fillStyle = "#fff7ed";
-  ctx.beginPath();
-  ctx.arc(W / 2, 360, 16 + Math.sin(t * Math.PI * 4) * 4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-  sparkles(t, 12, "#ff74dd", 60, 500, 4);
-  sparkles(t, 12, "#7ee7ef", 60, 500, 8);
-  vignette(0.28);
-  if (titles) titleBlock(t, "TWO PLACES AT ONCE", "One move. Both of you.", { fill: "#fff7ed", y: 640, size: 68 });
+  ctx.fillRect(W / 2 - 4, 0, 8, H);
+  if (titles) titleBlock(t, "TWO PLACES AT ONCE", "One move. Both worlds.", { fill: "#f6c02c", y: 640, size: 64, start: 0.8 });
 }
 
 function drawEndCard(t) {
@@ -930,11 +1261,12 @@ window.__ready = (async () => {
     document.fonts.load('800 28px "DM Sans"'),
     document.fonts.load('600 24px "DM Sans"'),
   ]);
-  const [nuts, housing, cap, lip, icon, skip, two] = await Promise.all([
+  const [nuts, housing, cap, lip, icon, btc, eth, sol, skip, two] = await Promise.all([
     loadImage(ASSETS.nuts), loadImage(ASSETS.housing), loadImage(ASSETS.cap), loadImage(ASSETS.lip),
-    loadImage(ASSETS.icon), loadImage(ASSETS.skip), loadImage(ASSETS.two),
+    loadImage(ASSETS.icon), loadImage(ASSETS.btc), loadImage(ASSETS.eth), loadImage(ASSETS.sol),
+    loadImage(ASSETS.skip), loadImage(ASSETS.two),
   ]);
-  Object.assign(media, { nuts, housing, cap, lip, icon, skip, two });
+  Object.assign(media, { nuts, housing, cap, lip, icon, btc, eth, sol, skip, two });
   const report = [];
   for (const item of ASSETS.buds) {
     const img = await loadImage(item.src);
@@ -943,6 +1275,8 @@ window.__ready = (async () => {
     if (keyed.ok) buddies.push(keyed);
   }
   rocks = [0, 3, 7, 12, 18].map((n) => makeBmp(ROCK_ROWS, rockPalette(n), 5));
+  media.gem = makeBmp(GEM_ROWS, { o: "#3a1f6e", L: "#d6c2ff", D: "#8f6ae0" }, 4);
+  media.crab = makeBmp(CRAB_ROWS, { o: "#b8321e", r: "#f0643c", w: "#fff" }, 4);
   window.__report = { buddies: buddies.length, keys: report };
   return window.__report;
 })();

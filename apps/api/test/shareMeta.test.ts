@@ -25,7 +25,7 @@ test("promo clips are short faststart MP4s with matching posters", () => {
     const file = join(shareDir, `${name}.mp4`);
     const video = readFileSync(file);
     const image = readFileSync(join(shareDir, `${name}.png`));
-    assert.ok(video.byteLength > 20_000 && video.byteLength < 3_200_000, `${name} ${video.byteLength}`);
+    assert.ok(video.byteLength > 20_000 && video.byteLength < 2_200_000, `${name} ${video.byteLength}`);
     assert.equal(video.subarray(4, 8).toString(), "ftyp");
     assert.ok(video.subarray(0, 64).includes(Buffer.from("moov")), `${name} faststart`);
     assert.equal(image.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");

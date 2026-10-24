@@ -24,6 +24,7 @@ const mounts = [
   ["/nuts/", join(root, "cartridges/skrumpey-slide/assets/nuts")],
   ["/buy/", join(root, "cartridges/emonad-cabinet/public/assets")],
   ["/coindle/", join(root, "cartridges/coindle/public")],
+  ["/coins/", join(root, "scripts/share-promos/coins")],
   ["/sprites/skip.png", join(root, "cartridges/skip-to-10k/assets/sprites.png")],
   ["/sprites/two.png", join(root, "cartridges/two-places/assets/sprites.png")],
 ];
@@ -135,21 +136,27 @@ async function evaluate(cdp, expression, timeoutMs) {
 }
 
 function encode(frameDir, file, frames) {
-  const result = spawnSync("ffmpeg", [
-    "-y",
-    "-framerate", "30",
-    "-i", join(frameDir, "%04d.png"),
-    "-frames:v", String(frames),
-    "-c:v", "libx264",
-    "-pix_fmt", "yuv420p",
-    "-profile:v", "high",
-    "-crf", "20",
-    "-preset", "medium",
-    "-movflags", "+faststart",
-    "-an",
-    file,
-  ], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(result.stderr || "ffmpeg encode failed");
+  let last = "";
+  for (const crf of ["20", "24", "28"]) {
+    const result = spawnSync("ffmpeg", [
+      "-y",
+      "-framerate", "30",
+      "-i", join(frameDir, "%04d.png"),
+      "-frames:v", String(frames),
+      "-c:v", "libx264",
+      "-pix_fmt", "yuv420p",
+      "-profile:v", "high",
+      "-crf", crf,
+      "-preset", "medium",
+      "-movflags", "+faststart",
+      "-an",
+      file,
+    ], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(result.stderr || "ffmpeg encode failed");
+    last = crf;
+    if (statSync(file).size <= 2_000_000) break;
+  }
+  return last;
 }
 
 function contactSheet(video, sheet) {
