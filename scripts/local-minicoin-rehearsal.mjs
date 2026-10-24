@@ -183,7 +183,7 @@ async function main() {
   };
   const publicEnv = { ...apiEnv };
   for (const key of ["PRIVY_APP_SECRET", "DEPLOYER_PRIVATE_KEY", "REHEARSAL_ADMIN_PRIVY_ID", "ADMIN_PRIVY_IDS"]) delete publicEnv[key];
-  start("Cartridge server", process.execPath, ["scripts/cartridges.mjs"], { cwd: root, env: publicEnv, stdio: "inherit" });
+  start("Cartridge server", process.execPath, ["--experimental-strip-types", "scripts/cartridges.mjs"], { cwd: root, env: publicEnv, stdio: "inherit" });
   start("Arcade API", process.execPath, ["--experimental-sqlite", "--experimental-strip-types", "apps/api/src/server.ts"], { cwd: root, env: apiEnv, stdio: "inherit" });
   start("Vite web", process.execPath, [join(root, "node_modules", "vite", "bin", "vite.js"), "--host", "127.0.0.1", "--strictPort"], { cwd: root, env: publicEnv, stdio: "inherit" });
 

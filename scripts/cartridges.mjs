@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { applyCartridgeShare, arcadeAssetOrigin, cardForCartridge, publicOrigin } from '../apps/api/src/shareMeta.ts';
 
 const root = resolve('cartridges');
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.woff2': 'font/woff2', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary', '.wasm': 'application/wasm' };
@@ -60,6 +61,15 @@ export function createCartridgeServer() {
       if (!info.isFile()) throw new Error('Not a file');
       res.setHeader('Content-Type', types[extname(file)] || 'application/octet-stream');
       res.setHeader('Cache-Control', 'no-cache');
+      if (extname(file) === '.html') {
+        let html = await readFile(file);
+        const card = cardForCartridge(url.pathname);
+        if (card) html = Buffer.from(applyCartridgeShare(html.toString('utf8'), card, publicOrigin(req.headers), arcadeAssetOrigin()));
+        res.setHeader('Content-Length', html.length);
+        res.end(req.method === 'HEAD' ? undefined : html);
+        return;
+      }
+      res.setHeader('Content-Length', info.size);
       res.end(req.method === 'HEAD' ? undefined : await readFile(file));
     } catch { res.writeHead(404); res.end('Cartridge asset not found'); }
   });

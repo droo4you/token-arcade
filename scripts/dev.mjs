@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const children = [
-  spawn(process.execPath, ["--env-file-if-exists=.env", "scripts/cartridges.mjs"], { stdio: "inherit" }),
+  spawn(process.execPath, ["--experimental-strip-types", "--env-file-if-exists=.env", "scripts/cartridges.mjs"], { stdio: "inherit" }),
   spawn(npm, ["run", "dev:api"], { stdio: "inherit", shell: process.platform === "win32" }),
   spawn(npm, ["run", "dev:web"], { stdio: "inherit", shell: process.platform === "win32" }),
 ];

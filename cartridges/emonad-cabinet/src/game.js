@@ -93,7 +93,7 @@ const ASSETS={
   woo:      './public/sounds/button-woo.wav',
   milestone:'./public/sounds/button-milestone.wav'
 };
-let USE_BRAND=true;
+let USE_BRAND=false;
 
 /* Button split into three layers so the green cap travels into the housing.
    Draw order: housing well, cap (offset down on press), front lip. */
@@ -629,15 +629,15 @@ function burst(x,y,col,n){
 
 /* ---------- pickups ---------- */
 const KINDS=[
-  {id:'rbid',label:'BID',   col:()=>'#6fe37a', w:30},
+  {id:'rbid',label:'LIFT',  col:()=>'#6fe37a', w:36},
   {id:'lev', label:'2X',    col:()=>C('--accent'), w:34},
-  {id:'bid', label:'WHALE', col:()=>C('--good'),   w:52},
-  {id:'dump',label:'DUMP',  col:()=>C('--danger'), w:44},
-  {id:'hold',label:'HOLD',  col:()=>'#7fe6ff',     w:44},
+  {id:'bid', label:'SURGE', col:()=>C('--good'),   w:52},
+  {id:'dump',label:'DROP',  col:()=>C('--danger'), w:44},
+  {id:'hold',label:'GUARD', col:()=>'#7fe6ff',     w:52},
   // Tickets draw bigger than the other pickups because their catch box is
   // bigger. A target that grabs from further than it looks reads as the game
   // being loose with its own rules, so the box and the art move together.
-  {id:'tick',label:'TICKET',col:()=>'#ffc93c',     w:98, h:34}
+  {id:'tick',label:'ORB',   col:()=>'#ffc93c',     w:98, h:34}
 ];
 
 /* Tickets are the second objective and they do not come out of the random
@@ -711,7 +711,7 @@ function doBounce(off){
   }
   S.baseT+=26+34*a+16*diff;
   const b=1+a*1.4;
-  pop(sx(S.head.x), sy(S.base)-26, a>0.62?('EDGE '+b.toFixed(1)+'x'):arcadeLabel('event.bounce','BUY'), a>0.62?C('--accent'):'#cfd4c4');
+  pop(sx(S.head.x), sy(S.base)-26, a>0.62?('EDGE '+b.toFixed(1)+'x'):arcadeLabel('event.bounce','BOUNCE'), a>0.62?C('--accent'):'#cfd4c4');
   // every catch adds altitude. edge hits add more, leverage doubles the step.
   S.climb+=(1+0.8*a)*S.mult;
   S.pad.flash=1; S.pad.hit=1; S.cam.shake=Math.min(9,3+a*7);
@@ -725,7 +725,7 @@ function die(){
   if(S.shield){
     S.shield=false; S.streak=0;
     S.head.y=S.base+2; S.head.vy=T.bounce*0.95; S.baseT+=10; S.armed=false;
-    pop(sx(S.head.x),sy(S.base)-30,'DIAMOND HANDS','#7fe6ff');
+    pop(sx(S.head.x),sy(S.base)-30,'GUARD','#7fe6ff');
     burst(sx(S.head.x),sy(S.base),'#7fe6ff',24);
     blip(880,0.22,'sine',0.07);
     S.cam.shake=8;
@@ -862,18 +862,18 @@ function update(dt){
         S.chain=(S.t-S.lastBid<1.1)?S.chain+1:1; S.lastBid=S.t;
         h.vy=Math.max(h.vy,0)+T.bounce*0.52;
         S.climb+=0.5*Math.min(5,S.chain)*S.mult;
-        pop(sx(p.x),sy(p.y),arcadeLabel('event.rbid','BID')+(S.chain>1?' x'+S.chain:''),'#6fe37a');
+        pop(sx(p.x),sy(p.y),arcadeLabel('event.rbid','LIFT')+(S.chain>1?' x'+S.chain:''),'#6fe37a');
         burst(sx(p.x),sy(p.y),'#6fe37a',9);
         blip(560+S.chain*90,0.07,'square',0.045);
       }
-      if(p.k.id==='lev'){ S.mult=2; S.multT=8; S.topMult=Math.max(S.topMult,2); pop(sx(p.x),sy(p.y),arcadeLabel('event.lev','LEVERAGE 2X'),C('--accent')); burst(sx(p.x),sy(p.y),C('--accent'),20); blip(660,0.14,'square',0.06); }
-      if(p.k.id==='bid'){ h.vy=Math.max(h.vy,0)+T.bounce*1.78; S.climb+=8; pop(sx(p.x),sy(p.y),arcadeLabel('event.bid','WHALE BUY'),C('--good')); burst(sx(p.x),sy(p.y),C('--good'),34); SFX.woo.play(0.7, ()=>swoop(0.11)); S.flashGood=0.7; S.cam.shake=Math.max(S.cam.shake,10); }
-      if(p.k.id==='dump'){ const room=Math.max(0,h.y-S.base); h.vy=-T.bounce*(room>230?1.15:0.7); S.climb=Math.max(0,S.climb-4); S.dumpFlash=0.55; pop(sx(p.x),sy(p.y),arcadeLabel('event.dump','WHALE SELL'),C('--danger')); burst(sx(p.x),sy(p.y),C('--danger'),26); blip(150,0.25,'sawtooth',0.07); S.cam.shake=12; }
-      if(p.k.id==='hold'){ S.shield=true; pop(sx(p.x),sy(p.y),'DIAMOND HANDS','#7fe6ff'); burst(sx(p.x),sy(p.y),'#7fe6ff',20); blip(760,0.16,'triangle',0.06); }
+      if(p.k.id==='lev'){ S.mult=2; S.multT=8; S.topMult=Math.max(S.topMult,2); pop(sx(p.x),sy(p.y),arcadeLabel('event.lev','POWER 2X'),C('--accent')); burst(sx(p.x),sy(p.y),C('--accent'),20); blip(660,0.14,'square',0.06); }
+      if(p.k.id==='bid'){ h.vy=Math.max(h.vy,0)+T.bounce*1.78; S.climb+=8; pop(sx(p.x),sy(p.y),arcadeLabel('event.bid','SURGE'),C('--good')); burst(sx(p.x),sy(p.y),C('--good'),34); SFX.woo.play(0.7, ()=>swoop(0.11)); S.flashGood=0.7; S.cam.shake=Math.max(S.cam.shake,10); }
+      if(p.k.id==='dump'){ const room=Math.max(0,h.y-S.base); h.vy=-T.bounce*(room>230?1.15:0.7); S.climb=Math.max(0,S.climb-4); S.dumpFlash=0.55; pop(sx(p.x),sy(p.y),arcadeLabel('event.dump','DROP'),C('--danger')); burst(sx(p.x),sy(p.y),C('--danger'),26); blip(150,0.25,'sawtooth',0.07); S.cam.shake=12; }
+      if(p.k.id==='hold'){ S.shield=true; pop(sx(p.x),sy(p.y),arcadeLabel('pickup.hold','GUARD'),'#7fe6ff'); burst(sx(p.x),sy(p.y),'#7fe6ff',20); blip(760,0.16,'triangle',0.06); }
       // A ticket pays no climb. The only assist is enough lift to get back out of
       // the dive, which is deliberately less than a BID: you keep the ticket and
       // you eat the height you spent reaching it.
-      if(p.k.id==='tick'){ S.tickets++; h.vy=Math.max(h.vy,0)+T.bounce*0.45; pop(sx(p.x),sy(p.y),arcadeLabel('event.tick','TICKET')+' '+S.tickets+'/'+TICKET_MAX,'#ffc93c'); burst(sx(p.x),sy(p.y),'#ffc93c',24); blip(880,0.13,'triangle',0.06); S.flashGood=0.5; }
+      if(p.k.id==='tick'){ S.tickets++; h.vy=Math.max(h.vy,0)+T.bounce*0.45; pop(sx(p.x),sy(p.y),arcadeLabel('event.tick','ORB')+' '+S.tickets+'/'+TICKET_MAX,'#ffc93c'); burst(sx(p.x),sy(p.y),'#ffc93c',24); blip(880,0.13,'triangle',0.06); S.flashGood=0.5; }
     }
   }
   S.pickups=S.pickups.filter(p=>!p.got && p.x>S.cam.x-80);
@@ -1080,7 +1080,7 @@ function draw(){
       ctx.shadowBlur=0;
       ctx.fillStyle='#000'; ctx.font='800 18px '+C('--sans'); ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.letterSpacing='2px';
-      ctx.fillText(arcadeLabel('button','BUY'),S.pad.x,Y+hh/2-S.pad.flash*2);
+      ctx.fillText(arcadeLabel('button','GO'),S.pad.x,Y+hh/2-S.pad.flash*2);
       ctx.letterSpacing='0px';
     }
   }
@@ -1130,10 +1130,10 @@ function hud(){
   let h='';
   // Tickets sit first and are always shown, including at 0/10. The second
   // objective only works as an objective if the player can see it going up.
-  h+='<span class="pill ticket'+(S.tickets>0?' on':'')+'">'+(ARCADE?'ORBS ':'TICKETS ')+S.tickets+'/'+TICKET_MAX+'</span>';
+  h+='<span class="pill ticket'+(S.tickets>0?' on':'')+'">ORBS '+S.tickets+'/'+TICKET_MAX+'</span>';
   h+='<span class="pill'+(S.streak>2?' on':'')+'">STREAK '+S.streak+'</span>';
   if(S.mult>1) h+='<span class="pill on">2X &middot; '+S.multT.toFixed(1)+'s</span>';
-  if(S.shield) h+='<span class="pill shield">DIAMOND HANDS</span>';
+  if(S.shield) h+='<span class="pill shield">GUARD</span>';
   if(S.warn) h+='<span class="pill warn">SELL INCOMING</span>';
   elP.innerHTML=h;
 }
@@ -1635,7 +1635,7 @@ function showOver(){
   document.getElementById('fMult').textContent=Math.round(S.climb);
   document.getElementById('fTime').textContent=S.t.toFixed(1)+'s';
   const tk=document.getElementById('fTickets');
-  tk.textContent=(ARCADE?'ORBS ':'TICKETS ')+S.tickets+'/'+TICKET_MAX+(S.ticketsOut<TICKET_MAX?'  ('+(TICKET_MAX-S.ticketsOut)+' never released)':'');
+  tk.textContent='ORBS '+S.tickets+'/'+TICKET_MAX+(S.ticketsOut<TICKET_MAX?'  ('+(TICKET_MAX-S.ticketsOut)+' never released)':'');
   tk.className='ticketline'+(S.tickets>=TICKET_MAX?' max':S.tickets>0?' on':'');
   const v=document.getElementById('verdict');
   v.textContent = S.ath>3e9?'Legendary run' : S.ath>5e8?'Solid bags' : S.ath>5e7?'Respectable' : 'Paper hands';

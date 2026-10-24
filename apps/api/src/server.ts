@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { randomBytes, randomUUID } from "node:crypto";
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAddress, isAddress, verifyMessage, type Address } from "viem";
@@ -19,6 +19,7 @@ import { TestnetMinicoinService } from "./testnet-minicoin.ts";
 import { FundedRaids, FundedRaidError } from "./fundedRaids.ts";
 import { AutomaticPayouts } from "./automaticPayouts.ts";
 import { freePlayReport } from "./freePlayAnalytics.ts";
+import { applyShareDocument, cabinetId, cardForPath, publicOrigin } from "./shareMeta.ts";
 
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses", "coins_solved"]);
 const MODES = new Set(["free", "ranked", "raid"]);
@@ -364,16 +365,65 @@ function isLoopbackRpc(url?: string): boolean {
   } catch { return false; }
 }
 
-function serveStatic(request: IncomingMessage, response: ServerResponse, pathname: string, staticRoot: string): void {
+function serveStatic(request: IncomingMessage, response: ServerResponse, pathname: string, staticRoot: string, publishedGame?: (id: string) => { name: string; description: string } | null): void {
   if (request.method !== "GET" && request.method !== "HEAD") return respond(response, 405, { error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } });
   const root = resolve(staticRoot);
   const target = resolve(root, `.${decodeURIComponent(pathname)}`);
   if (target !== root && !target.startsWith(root + sep)) return respond(response, 404, { error: { code: "NOT_FOUND", message: "Not found" } });
   const file = existsSync(target) && statSync(target).isFile() ? target : resolve(root, "index.html");
   if (!existsSync(file)) return respond(response, 404, { error: { code: "NOT_FOUND", message: "Web build not found" } });
-  const mime: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".woff2": "font/woff2" };
-  response.writeHead(200, { "content-type": mime[extname(file)] ?? "application/octet-stream" });
-  if (request.method === "HEAD") response.end(); else createReadStream(file).pipe(response);
+  const mime: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".mp4": "video/mp4", ".webp": "image/webp", ".ico": "image/x-icon", ".woff2": "font/woff2" };
+  const type = mime[extname(file).toLowerCase()] ?? "application/octet-stream";
+  if (file === resolve(root, "index.html")) {
+    const id = cabinetId(pathname);
+    const published = id ? publishedGame?.(id) ?? null : null;
+    const card = cardForPath(pathname, published);
+    const html = card ? applyShareDocument(readFileSync(file, "utf8"), card, publicOrigin(request.headers)) : readFileSync(file, "utf8");
+    const body = Buffer.from(html);
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-length": body.length, "cache-control": "no-cache" });
+    response.end(request.method === "HEAD" ? undefined : body);
+    return;
+  }
+  sendFile(request, response, file, type);
+}
+
+function sendFile(request: IncomingMessage, response: ServerResponse, file: string, type: string): void {
+  const size = statSync(file).size;
+  const requestedRange = request.headers.range;
+  const range = type === "video/mp4" ? (Array.isArray(requestedRange) ? requestedRange[0] : requestedRange) : undefined;
+  if (range) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+    const unsatisfiable = !match || (match[1] === "" && match[2] === "");
+    let start = 0;
+    let end = size - 1;
+    if (!unsatisfiable && match) {
+      if (match[1] === "") {
+        const suffix = Number(match[2]);
+        start = Number.isFinite(suffix) ? Math.max(0, size - suffix) : size;
+      } else {
+        start = Number(match[1]);
+        end = match[2] === "" ? size - 1 : Number(match[2]);
+      }
+    }
+    if (unsatisfiable || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start) {
+      response.writeHead(416, { "content-range": `bytes */${size}` });
+      response.end();
+      return;
+    }
+    end = Math.min(end, size - 1);
+    response.writeHead(206, { "content-type": type, "content-length": end - start + 1, "content-range": `bytes ${start}-${end}/${size}`, "accept-ranges": "bytes" });
+    if (request.method === "HEAD") response.end();
+    else createReadStream(file, { start, end }).pipe(response);
+    return;
+  }
+  const headers: Record<string, string | number> = { "content-type": type, "content-length": size };
+  if (type === "video/mp4") {
+    headers["accept-ranges"] = "bytes";
+    headers["cache-control"] = "public, max-age=86400";
+  }
+  response.writeHead(200, headers);
+  if (request.method === "HEAD") response.end();
+  else createReadStream(file).pipe(response);
 }
 
 export function createArcadeServer(options: ApiOptions = {}): Server {
@@ -450,7 +500,10 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       const url = new URL(request.url ?? "/", "http://localhost");
       const path = url.pathname;
       const method = request.method ?? "GET";
-      if (!path.startsWith("/api/")) return serveStatic(request, response, path, staticRoot);
+      if (!path.startsWith("/api/")) return serveStatic(request, response, path, staticRoot, (id) => {
+        const game = store.getGame(id);
+        return game?.status === "published" ? { name: game.manifest.name, description: game.manifest.description } : null;
+      });
       const fundedRoute = path.match(/^\/api\/admin\/raids\/([^/]+)\/funded\/(rules|bind|settlement)$/);
       if (fundedRoute) {
         requireAdmin(await auth.authenticate(request));

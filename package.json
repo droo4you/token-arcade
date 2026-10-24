@@ -14,7 +14,8 @@
     "build": "npm run build:cartridges && tsc --noEmit && vite build",
     "setup:cartridges": "npm ci --prefix cartridges/coindle",
     "build:cartridges": "vite build --config cartridges/coindle/arcade.vite.config.ts",
-    "dev:cartridges": "node --env-file-if-exists=.env scripts/cartridges.mjs",
+    "dev:cartridges": "node --experimental-strip-types --env-file-if-exists=.env scripts/cartridges.mjs",
+    "promos": "node scripts/share-promos.mjs",
     "test": "node --experimental-sqlite --experimental-strip-types scripts/run-tests.mjs",
     "test:testnet-launch": "node --experimental-sqlite --experimental-strip-types apps/api/test/testnet-launch.local-chain.ts",
     "start": "node scripts/start.mjs"
