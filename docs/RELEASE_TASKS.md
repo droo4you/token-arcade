@@ -27,7 +27,7 @@ Deadline supplied by droober: 8:59 PM Pacific. Focus on a demonstrable, accurate
 
 ## QA agent — live game and identity checks
 
-Use the live site with a normal player account. Test guest Free Play, Privy sign-in, Passport Play on Uppers/Skip/Skrumpey, seed replay rejection, persistence after refresh, avatar upload/removal, and mobile orientation. Record actual results and browser/device; avoid recording guessed passes. Do not mutate production leaderboards directly or enable demo authentication. Put fixes on a separate branch; leave economy contracts and deployment records to Codex.
+Use the live site with a normal player account. Test guest Free Play, Privy sign-in, Passport Play on Mood Swings/Skip/Skrumpey, seed replay rejection, persistence after refresh, avatar upload/removal, and mobile orientation. Record actual results and browser/device; avoid recording guessed passes. Do not mutate production leaderboards directly or enable demo authentication. Put fixes on a separate branch; leave economy contracts and deployment records to Codex.
 
 ## Presentation agent — submission evidence
 

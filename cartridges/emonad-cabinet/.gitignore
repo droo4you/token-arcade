@@ -9,7 +9,3 @@
 node_modules/
 
 .vercel
-
-# season paperwork that is not part of the shipped product
-buybouncefiles/03-buy-bounce-handoff.md
-buybouncefiles/netnet-reference/

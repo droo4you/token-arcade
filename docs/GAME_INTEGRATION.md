@@ -20,7 +20,7 @@ The intended model is: reusable **Skeleton** → versioned **Cartridge** using t
 
 | Earlier implementation | Owning requirement | Resolution |
 | --- | --- | --- |
-| Static homepage list included Buy Bounce/Skrumpey Slide and excluded Skip | Product pp4,13–16: current cabinet map; Buy Bounce is eMONAD source, Skip is fourth; Slide deferred | Public shelf derives only from published Registry records; four legacy imports seeded |
+| Static homepage list included the eMONAD source cabinet and Skrumpey Slide and excluded Skip | Product pp4,13–16: current cabinet map; Mood Swings is the eMONAD cabinet, Skip is fourth; Slide deferred | Public shelf derives only from published Registry records; four legacy imports seeded |
 | Admin `publish` immediately exposed a game | Product pp3,19–20 and Index p4: “Who sees Deploy after a game is approved?” → developer/creator | Owner submission/revision, admin technical review/approve/reject, owner deploy; retired endpoint rejects |
 | Adapter/verifier readiness assumed a single game ID | Product p4: cabinet identity; Index p3: reusing a Skeleton does not reuse a leaderboard | Reusable adapter key separated from cabinet ID; saves, sessions, boards and raids remain scoped to cabinet |
 | Old integration notes demanded deterministic replay for every competition | Product p22; Economy §10; Index p4: “Must every Raid-ready game support deterministic replay? No.” | Game-specific verifier boundary retained; actual replay reused only where supported |
@@ -36,7 +36,7 @@ These are pinned local adaptations, not remote GitHub forks. Each folder include
 
 | Cabinet / source | Pinned commit | Stack, loop, native metrics | Initial gaps |
 | --- | --- | --- | --- |
-| eMONAD / [Buy Bounce](https://github.com/droo4you/buy-bounce) | `ec57f1a19d665c695ad6087c694d466d2df99d99` | Static canvas/IIFE;120Hz seeded simulation; native replay v2; peak chart score, bounces, streak, collectibles; pointer/touch | Own wallet/window/leaderboard calls, viewport-sensitive scoring, upstream verifier accepts nonterminal traces |
+| Mood Swings / [upstream source](https://github.com/droo4you/buy-bounce) | `ec57f1a19d665c695ad6087c694d466d2df99d99` | Static canvas/IIFE;120Hz seeded simulation; native replay v2; peak chart score, bounces, streak, collectibles; pointer/touch | Own wallet/window/leaderboard calls, viewport-sensitive scoring, upstream verifier accepts nonterminal traces |
 | [Two Places at Once](https://github.com/droo4you/droober-two-places) | `17ba50fe90360427b7c37a4e9d0e0c705f92c57a` | Static canvas;60Hz pure World;20 authored levels; completion time, apples, deaths; keyboard/gamepad/touch | No host lifecycle or accepted score path; level selection/proof needed server binding |
 | [Coindle](https://github.com/droo4you/coindle) | `1131534ace997fd83cb9c0721a7b7708b9de5b3a` | Next16/React19/TypeScript/Tailwind4; daily/random deduction; guesses, solved, hints, elapsed time, streak; responsive DOM | Client-computable answers and old client-trusted Supabase leaderboard; Pyth Pro credentials required for price clues |
 | [Skip to 10K](https://github.com/droo4you/skip-to-10k) | `27d2494e1e143655b3faec743c306466c510591a` | Static canvas; seeded120Hz SIM; native days/distance, peak, skips, perfects, streak, gems; mouse/keyboard/touch landscape | No host lifecycle; upgrades/local progression need an explicit competitive loadout and replay contract |
@@ -106,7 +106,7 @@ Platform additions: `packages/sdk/src/iframe.ts`, `launch.ts`, `browser/bridge.j
 
 | Imported source | Modified upstream files | New integration files |
 | --- | --- | --- |
-| eMONAD / Buy Bounce | `src/game.js`, `tools/harness.js` (test harness support) | `arcade.html`, `skin.json`, `src/arcade-seed.js`, CommonJS `package.json`, `tools/arcade-bridge.test.js`, `UPSTREAM_COMMIT` |
+| Mood Swings | `src/game.js`, `tools/harness.js` (test harness support) | `arcade.html`, `skin.json`, `src/arcade-seed.js`, CommonJS `package.json`, `tools/arcade-bridge.test.js`, `UPSTREAM_COMMIT` |
 | Two Places | `src/main.js` | `arcade.html`, `tests/arcade-bridge.mjs`, `UPSTREAM_COMMIT` |
 | Coindle | `package.json`; `src/app/globals.css`; components `AnswerRow`, `CategoryCell`, `GameBoard`, `GuessRow`, `Header`, `RevealCard`, `Sparkline`; hooks `useGame`, `useLivePrices`, `useLocalStorage`, `useTheme`; libraries `compare`, `sounds`, `types` | `arcade/index.html`, `arcade/main.tsx`, `arcade.vite.config.ts`, `src/lib/arcade.ts`, `tsconfig.arcade.json`, `test/arcade.test.ts`, `ARCADE_INTEGRATION.md`, `UPSTREAM_COMMIT` |
 | Skip to10K | `src/main.js` | `arcade.html`, CommonJS `package.json`, `UPSTREAM_COMMIT` |
@@ -121,4 +121,4 @@ Original standalone entry files, simulations and source-specific credits remain.
 
 `npm test`: **48/48 passed**, including both native bridge tests and real eMONAD/Two Places replay acceptance through production API sessions into independent standings/Passport history. Forged metrics and reused sessions are rejected. `npm --prefix cartridges/coindle run test:arcade`: **3/3 passed**. Root and Coindle TypeScript checks pass. `npm run build` passes.
 
-Original-source checks passed: Buy `tools/verify.js --self-test`, `tools/determinism.js`, syntax check; Two Places `tests/levels.mjs` (20 levels), `rules.mjs` (14 checks), `rules2.mjs` (20 checks), `client.mjs` (screens/levels/touch/pause/restart), `solve.mjs` (all20); Skip `tests/harness.mjs`, `sim.mjs`, `meta.mjs` (35 missions). The legacy Skip CDP mobile harness was not run; mobile layout was inspected using the supported browser controls.
+Original-source checks passed: Mood Swings `tools/verify.js --self-test`, `tools/determinism.js`, syntax check; Two Places `tests/levels.mjs` (20 levels), `rules.mjs` (14 checks), `rules2.mjs` (20 checks), `client.mjs` (screens/levels/touch/pause/restart), `solve.mjs` (all20); Skip `tests/harness.mjs`, `sim.mjs`, `meta.mjs` (35 missions). The legacy Skip CDP mobile harness was not run; mobile layout was inspected using the supported browser controls.

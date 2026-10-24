@@ -1481,7 +1481,7 @@ async function startMode(m){
     if(starting||running||arcadeDestroyed) return;
     mode=window.TokenArcade.config.mode==='free'?MODE.FREE:MODE.DAILY;
     USE_BRAND=false; T.head=0;
-    const seed=mode===MODE.FREE?newSeed():window.buyBounceSeed(window.TokenArcade.config.seed);
+    const seed=mode===MODE.FREE?newSeed():window.moodSwingsSeed(window.TokenArcade.config.seed);
     start(seed); paintMode(); return;
   }
   if(starting||running) return;

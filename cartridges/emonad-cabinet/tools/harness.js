@@ -78,7 +78,7 @@ function makeTrial(W, H, opts) {
     btoa: s => Buffer.from(s, 'binary').toString('base64'),
     atob: s => Buffer.from(s, 'base64').toString('binary'),
     // the shared-setup link reads the hash and the copy button writes the clipboard
-    location: { hash: opts.hash || '', origin: 'https://buy-bounce.test', pathname: '/', search: '' },
+    location: { hash: opts.hash || '', origin: 'https://mood-swings.test', pathname: '/', search: '' },
     history: { replaceState() {} },
     navigator: { clipboard: { writeText: async () => {} } },
     URL, URLSearchParams,

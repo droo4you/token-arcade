@@ -29,13 +29,16 @@ test("existing Skip to 10K legacy import gains Passport Play on restart, keeping
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("untouched emonad-cabinet legacy import is renamed to Uppers, id unchanged", async () => {
-  const file = join(mkdtempSync(join(tmpdir(), "uppers-")), "a.sqlite");
+test("untouched emonad-cabinet legacy import is renamed to Mood Swings, id unchanged", async () => {
+  const file = join(mkdtempSync(join(tmpdir(), "mood-swings-")), "a.sqlite");
   let store = new ArcadeStore(file, false);
   const prior = store.getGame("emonad-cabinet")!;
-  store.saveGame({ ...prior, manifest: { ...prior.manifest, name: "eMONAD cabinet" }, legacyImportRevision: 2 });
+  store.saveGame({ ...prior, manifest: { ...prior.manifest, name: "Uppers", description: "Catch the falling chart and keep the bounce alive. Paired community: eMONAD." }, legacyImportRevision: 3 });
   store.close(); store = new ArcadeStore(file, false);
   const g = store.getGame("emonad-cabinet")!;
-  assert.equal(g.manifest.id, "emonad-cabinet"); assert.equal(g.manifest.name, "Uppers"); assert.equal(g.legacyImportRevision, 3);
+  assert.equal(g.manifest.id, "emonad-cabinet");
+  assert.equal(g.manifest.name, "Mood Swings");
+  assert.equal(g.manifest.description, "Keep Emonad's mood up. Paired community: eMONAD.");
+  assert.equal(g.legacyImportRevision, 4);
   store.close();
 });

@@ -1,7 +1,7 @@
 {
   "skinId": "emonad-cabinet.abstract-v1",
   "version": "1.0.0",
-  "skeletonId": "buy-bounce",
+  "skeletonId": "mood-swings",
   "slots": ["palette", "button", "pickups", "strings", "communityDisplay"],
   "palette": {
     "bg": "#100b20", "bg2": "#17102b", "grid": "#281d42",
@@ -16,7 +16,7 @@
     "event.lev": "POWER 2X", "event.bid": "SURGE", "event.dump": "DROP",
     "event.tick": "ORB"
   },
-  "communityDisplay": { "name": "Uppers", "official": false },
+  "communityDisplay": { "name": "Mood Swings", "official": false },
   "assets": [],
   "rights": []
 }

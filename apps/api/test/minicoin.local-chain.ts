@@ -10,7 +10,7 @@ import { custom, keccak256, stringToHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type { GameRunConfig, GameRunResult } from "../../../packages/sdk/src/index.ts";
 import { ArcadeAuth, type Identity } from "../src/auth.ts";
-import { buyBounceSeed } from "../src/gameVerification.ts";
+import { moodSwingsSeed } from "../src/gameVerification.ts";
 import { createArcadeServer } from "../src/server.ts";
 import { ArcadeStore } from "../src/store.ts";
 
@@ -149,7 +149,7 @@ test("local founder rehearsal associates an experimental Minicoin with a playabl
     assert.equal(run.gameId, gameId);
     assert.deepEqual(run.rules, { viewportHeight: 844, viewportWidth: 390 });
     const trial = makeTrial(390, 844);
-    trial.run(buyBounceSeed(run.seed!), 6_000, 16, () => 195);
+    trial.run(moodSwingsSeed(run.seed!), 6_000, 16, () => 195);
     const state = trial.BB.state;
     assert.equal(state.shown, true, "native gameplay reaches its terminal screen");
     const score = Math.round(state.ath);

@@ -24,7 +24,7 @@ export const shippedSections: ShippedSection[] = [
       { title: "Passport Play", detail: "Privy sign-in gives each player a Passport. Runs are replayed and verified on the server before a record counts." },
       { title: "Leaderboards and profiles", detail: "Per-game leaderboards show verified runs only. Passports carry a username, avatar and run history.", links: [{ label: "Passport", href: "/passport" }] },
       { title: "Creator launch flow", detail: "Creators submit a browser game at /launch, an arcade admin reviews and approves it in /admin-tools, and the creator deploys it to the public arcade.", when: "Final piece committed Oct 13, 7:15 PM PT", links: [{ label: "Launch Console", href: "/launch" }, commit("38c4c95")] },
-      { title: "Live cabinets", detail: "Skrumpey Slide, Uppers, Two Places at Once, Skip to 10K and Coindle.", links: [{ label: "Browse the arcade", href: "/" }] },
+      { title: "Live cabinets", detail: "Skrumpey Slide, Mood Swings, Two Places at Once, Skip to 10K and Coindle.", links: [{ label: "Browse the arcade", href: "/" }] },
       { title: "MiniCoin economy on Monad testnet", detail: "An operator-run Skrumpey Slide demo bought SLIDE, distributed trading fees, funded a raid, settled to the operator wallet using a demo result hash, and claimed WMON. This demonstrated the contracts; it did not connect a real player's website score to a payout.", links: [
         { label: "SLIDE MiniCoin", href: `${EXPLORER}/address/0x85043f5C86Fe1CC5a0dFECf8803Ba2d7C7406760` },
         { label: "Prize claim tx", href: `${EXPLORER}/tx/0x061ff1bb51c4b4396eea2d59c9a3d3d1a56f4ce14318b8aa2aad7188e1580d1a` },
@@ -56,7 +56,7 @@ export const shippedSections: ShippedSection[] = [
     items: [
       { title: "Next: automatic testnet raid rewards", detail: "Run a real funded event where the winner receives the prize without a claim signature or gas balance. Automatic payout code has passed an isolated testnet rehearsal; real player delivery and indexing of the new vault still need verification." },
       { title: "Power Play", detail: "Design stage: MiniCoin entry, verified ticket-orb draw entries and community-asset rewards. Randomness, prices, payout limits and launch requirements remain unresolved." },
-      { title: "Mainnet", detail: "Target a paired Uppers/eMONAD and Skrumpey Slide/Skrumpeys launch after the reward flow is proven. Deployment, funding and asset-specific reward handling remain to be completed." },
+      { title: "Mainnet", detail: "Target a paired Mood Swings/eMONAD and Skrumpey Slide/Skrumpeys launch after the reward flow is proven. Deployment, funding and asset-specific reward handling remain to be completed." },
       { title: "After Power Play: friend 1v1s", detail: "Challenge a friend using MiniCoins, with community-asset rewards. Funding and match rules still need design." },
       { title: "More cartridges", detail: "Bring more community games into the arcade through the cartridge integration kit. Canyon Jump is in development and needs more gameplay tuning before release." },
       { title: "Creator onboarding", detail: "Help people build the game they have always imagined, then bring it to Token Arcade with a community behind it." },
