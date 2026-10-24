@@ -8,6 +8,8 @@
   @font-face { font-family: "Space Grotesk"; src: url("/fonts/SpaceGrotesk-Medium.ttf") format("truetype"); font-weight: 500; font-style: normal; }
   @font-face { font-family: "DM Sans"; src: url("/fonts/DMSans-ExtraBold.ttf") format("truetype"); font-weight: 800; font-style: normal; }
   @font-face { font-family: "DM Sans"; src: url("/fonts/DMSans-SemiBold.ttf") format("truetype"); font-weight: 600; font-style: normal; }
+  @font-face { font-family: "Pixelify Sans"; src: url("/skr-fonts/PixelifySans.woff2") format("woff2"); font-weight: 700; font-style: normal; }
+  @font-face { font-family: "Silkscreen"; src: url("/skr-fonts/Silkscreen-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; }
   html, body { margin: 0; background: #000; overflow: hidden; }
   canvas { display: block; width: 1280px; height: 720px; }
 </style>
@@ -35,11 +37,9 @@ const POSTER_AT = {
 };
 
 const ASSETS = {
-  buds: [3, 38, 10, 210, 2912, 314, 1924, 2067, 164, 690].map((id) => ({ id, src: `/skrumpey/${id}.png` })),
-  nuts: "/nuts/site-nuts.png",
-  housing: "/buy/buy-housing.png",
-  cap: "/buy/buy-cap.png",
-  lip: "/buy/buy-lip.png",
+  buds: [314, 3, 38, 2912, 164, 10, 690, 210, 1924, 2067].map((id) => ({ id, src: `/skrumpey/${id}.png` })),
+  nuts: "/nuts/site-nuts-plain.png",
+  nutsRare: "/nuts/site-nuts.png",
   icon: "/coindle/icon-1024.png",
   btc: "/coins/btc.png",
   eth: "/coins/eth.png",
@@ -92,7 +92,7 @@ function chromaKey(img) {
   const qx = new Int32Array(w * h);
   const qy = new Int32Array(w * h);
   let qe = 0;
-  const tol2 = 36 * 36;
+  const tol2 = 72 * 72;
   const seed = (x, y) => {
     const i = y * w + x;
     if (seen[i]) return;
@@ -152,7 +152,7 @@ function chromaKey(img) {
     }
   }
   const ratio = opaque / (w * h);
-  if (ratio < 0.07 || ratio > 0.2 || maxX <= minX + 8) return { ok: false, ratio };
+  if (ratio < 0.04 || ratio > 0.92 || maxX <= minX + 8) return { ok: false, ratio };
   const bw = maxX - minX + 1, bh = maxY - minY + 1, pad = 10;
   const out = document.createElement("canvas");
   out.width = bw + pad * 2; out.height = bh + pad * 2;
@@ -274,10 +274,11 @@ function titleBlock(t, text, tag, opts = {}) {
   ctx.globalAlpha = alpha;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `700 ${size}px "Space Grotesk"`;
+  const face = opts.font || "Space Grotesk";
+  ctx.font = `700 ${size}px "${face}"`;
   while (ctx.measureText(text).width > 1120 && size > 46) {
     size -= 4;
-    ctx.font = `700 ${size}px "Space Grotesk"`;
+    ctx.font = `700 ${size}px "${face}"`;
   }
   ctx.lineJoin = "round";
   ctx.miterLimit = 2;
@@ -327,6 +328,27 @@ function cutLabel(text, local) {
 const media = {};
 let buddies = [];
 let rocks = [];
+
+function blitFeet(sheet, name, x, y, scale, flip, sx, sy) {
+  const rect = RECTS[name];
+  if (!sheet || !rect) return;
+  const [rx, ry, rw, rh] = rect;
+  const dw = rw * scale, dh = rh * scale;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(x, y);
+  ctx.scale((flip ? -1 : 1) * (sx || 1), sy || 1);
+  ctx.drawImage(sheet, rx, ry, rw, rh, -dw / 2, -dh, dw, dh);
+  ctx.restore();
+}
+function footShadow(x, y, w) {
+  ctx.save();
+  ctx.fillStyle = "rgba(8,4,20,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(x, y, w, 12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
 
 function buddyAt(sprite, x, ground, height, sx, sy, rot) {
   const aspect = sprite.canvas.width / sprite.canvas.height;
@@ -557,7 +579,48 @@ function drawSkrumpey(t, opts = {}) {
   }
   ctx.restore();
   vignette(0.18);
-  if (titles) titleBlock(t, "SKRUMPEY SLIDE", "Rescue them. Grow the train.", { fill: "#fff36b", y: 640, size: 86 });
+  ctx.save();
+  ctx.fillStyle = "#1a1038";
+  roundRect(28, 22, 280, 14, 2);
+  ctx.fill();
+  const day = 1 - clamp((t - 0.72) / 0.22, 0, 1) * 0.85;
+  ctx.fillStyle = "#ffd84a";
+  ctx.fillRect(30, 24, 276 * day, 10);
+  pixText("SUN", 28, 42, "#1a1038", 2);
+  ctx.restore();
+  if (t < 0.28) {
+    const pull = Math.sin(t * 18) * 0.5 + 0.5;
+    ctx.save();
+    ctx.translate(150, 470);
+    ctx.fillStyle = "#7a4a26";
+    ctx.fillRect(-70, -80, 16, 120);
+    ctx.fillRect(54, -80, 16, 120);
+    ctx.fillStyle = "#ff4f8f";
+    ctx.fillRect(-66, -92, 20, 16);
+    ctx.fillRect(50, -92, 20, 16);
+    ctx.strokeStyle = "#e0306f";
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(-54, -70);
+    ctx.quadraticCurveTo(0, -20 + pull * 70, 54, -70);
+    ctx.stroke();
+    if (pull > 0.82) pixTextC("PERFECT LAUNCH", 0, -130, "#ffd84a", 3, "#1a1038");
+    ctx.restore();
+  }
+  if (t > 0.34 && t < 0.48) pixTextC("PERFECT", 640, 180, "#ffd84a", 5, "#1a1038");
+  ctx.save();
+  ctx.font = `700 22px "Silkscreen"`;
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#1a1038";
+  ctx.fillText("1240", 36, 78);
+  ctx.fillStyle = "#ffd84a";
+  ctx.fillText("1240", 34, 76);
+  if (media.nuts) ctx.drawImage(media.nuts, 1180, 48, 28, 28);
+  ctx.fillStyle = "#1a1038";
+  ctx.textAlign = "right";
+  ctx.fillText("DN " + Math.min(6, Math.floor(t * 8)), 1172, 72);
+  ctx.restore();
+  if (titles) titleBlock(t, "SKRUMPEY SLIDE", "Four worlds. One sunset. Lots of DN.", { fill: "#ffd84a", ink: "#1a1038", y: 640, size: 72, font: "Pixelify Sans", start: 0.62 });
 }
 
 function drawCatCell(x, y, w, h, label, value, color, flip, arrow) {
@@ -568,14 +631,14 @@ function drawCatCell(x, y, w, h, label, value, color, flip, arrow) {
   ctx.scale(Math.max(0.05, Math.abs(s)), 1);
   roundRect(-w / 2, -h / 2, w, h, 12);
   if (!front) {
-    ctx.fillStyle = "#2A2F38";
+    ctx.fillStyle = "#EDE8DC";
     ctx.fill();
     ctx.setLineDash([6, 5]);
     ctx.lineWidth = 2;
-    ctx.strokeStyle = "#3A3F4A";
+    ctx.strokeStyle = "#D6CFC2";
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = "#6B6774";
+    ctx.fillStyle = "#A39E94";
     ctx.font = `600 15px "DM Sans"`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -602,30 +665,30 @@ const COINDLE_ROWS = [
   {
     logo: "sol", ticker: "SOL", name: "Solana", price: "$178.20", change: "+1.1%", up: true, start: -0.05,
     cells: [
-      ["Type", "L1", "#4ADE80", ""],
-      ["Color", "Purple", "#4ADE80", ""],
-      ["Year", "2020", "#FACC15", "up"],
-      ["Ticker", "3 letters", "#4ADE80", ""],
-      ["Price", "$100-$1K", "#FACC15", "down"],
-      ["FDV", "10B-100B", "#FACC15", "down"],
+      ["Type", "L1", "#2D8C56", ""],
+      ["Color", "Purple", "#2D8C56", ""],
+      ["Year", "2020", "#C89B2A", "up"],
+      ["Ticker", "3 letters", "#2D8C56", ""],
+      ["Price", "$100–$1K", "#C89B2A", "down"],
+      ["FDV", "10B-100B", "#C89B2A", "down"],
     ],
   },
   {
-    logo: "eth", ticker: "ETH", name: "Ethereum", price: "$3,482", change: "+0.6%", up: true, start: 0.42,
+    logo: "eth", ticker: "ETH", name: "Ethereum", price: "$3,482", change: "+0.6%", up: true, start: 0.12,
     cells: [
-      ["Type", "L1", "#4ADE80", ""],
-      ["Color", "Purple", "#4ADE80", ""],
-      ["Year", "2015", "#4ADE80", ""],
-      ["Ticker", "3 letters", "#4ADE80", ""],
-      ["Price", "$1K-$10K", "#4ADE80", ""],
-      ["FDV", ">100B", "#4ADE80", ""],
+      ["Type", "L1", "#2D8C56", ""],
+      ["Color", "Purple", "#2D8C56", ""],
+      ["Year", "2015", "#2D8C56", ""],
+      ["Ticker", "3 letters", "#2D8C56", ""],
+      ["Price", "$1K–$10K", "#2D8C56", ""],
+      ["FDV", ">100B", "#2D8C56", ""],
     ],
   },
 ];
 
 function drawCoindle(t, opts = {}) {
   const titles = opts.titles !== false;
-  ctx.fillStyle = "#1A1D23";
+  ctx.fillStyle = "#F5F0E8";
   ctx.fillRect(0, 0, W, H);
   const boardX = 70, boardW = 1140, gap = 10, cellW = (boardW - gap * 5) / 6, cellH = 118;
   ctx.save();
@@ -644,43 +707,63 @@ function drawCoindle(t, opts = {}) {
   ctx.font = `800 54px "DM Sans"`;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "#5B8DEF";
+  ctx.fillStyle = "#2D8C56";
   ctx.fillText("Coin", 68, 0);
   const coinW = ctx.measureText("Coin").width;
-  ctx.fillStyle = "#E8E6E1";
+  ctx.fillStyle = "#2C2C2C";
   ctx.fillText("dle", 68 + coinW, 0);
   ctx.restore();
   ctx.font = `600 20px "DM Sans"`;
   ctx.textAlign = "left";
-  ctx.fillStyle = "#9B97A0";
-  ctx.fillText("Guess the mystery crypto - powered by ", 78, 108);
-  const lead = ctx.measureText("Guess the mystery crypto - powered by ").width;
-  ctx.fillStyle = "#5B8DEF";
+  ctx.fillStyle = "#7A7468";
+  ctx.fillText("Guess the mystery crypto — powered by ", 78, 108);
+  const lead = ctx.measureText("Guess the mystery crypto — powered by ").width;
+  ctx.fillStyle = "#2D8C56";
   ctx.font = `800 20px "DM Sans"`;
   ctx.fillText("Pyth", 78 + lead, 108);
   const attempt = t < 0.42 ? "1 / 6" : "2 / 6";
   roundRect(78, 132, 168, 40, 12);
-  ctx.fillStyle = "#2A2F38";
+  ctx.fillStyle = "#EDE8DC";
   ctx.fill();
-  ctx.strokeStyle = "#2E333C";
+  ctx.strokeStyle = "#D6CFC2";
   ctx.lineWidth = 1;
   ctx.stroke();
   roundRect(78, 132, 84, 40, 12);
-  ctx.fillStyle = "#5B8DEF";
+  ctx.fillStyle = "#2D8C56";
   ctx.fill();
   ctx.font = `800 16px "DM Sans"`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#ffffff";
   ctx.fillText("Daily", 120, 152);
-  ctx.fillStyle = "#9B97A0";
+  ctx.fillStyle = "#7A7468";
   ctx.fillText("Free", 204, 152);
   ctx.font = `800 16px "DM Sans"`;
   ctx.textAlign = "right";
-  ctx.fillStyle = "#E8E6E1";
-  ctx.fillText(attempt, 1180, 152);
+  ctx.fillStyle = "#2C2C2C";
+  ctx.fillText(attempt + " guesses", 1180, 152);
+  roundRect(430, 132, 150, 40, 12);
+  ctx.fillStyle = "#EDE8DC";
+  ctx.fill();
+  ctx.strokeStyle = "#D6CFC2";
+  ctx.stroke();
+  roundRect(430, 132, 74, 40, 12);
+  ctx.fillStyle = "#2C2C2C";
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `800 14px "DM Sans"`;
+  ctx.textAlign = "center";
+  ctx.fillText("Easy", 467, 152);
+  ctx.fillStyle = "#7A7468";
+  ctx.fillText("Hard", 542, 152);
+  const headers = ["Type", "Color", "Year", "Ticker", "Price", "FDV"];
+  ctx.font = `700 13px "DM Sans"`;
+  ctx.fillStyle = "#7A7468";
+  headers.forEach((name, c) => {
+    ctx.fillText(name.toUpperCase(), boardX + c * (cellW + gap) + cellW / 2, 196);
+  });
   COINDLE_ROWS.forEach((row, r) => {
-    const y = 196 + r * 230;
+    const y = 214 + r * 210;
     const logo = media[row.logo];
     if (logo) {
       ctx.save();
@@ -693,19 +776,19 @@ function drawCoindle(t, opts = {}) {
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.font = `800 22px "DM Sans"`;
-    ctx.fillStyle = "#E8E6E1";
+    ctx.fillStyle = "#2C2C2C";
     ctx.fillText(row.ticker, 128, y + 16);
     ctx.font = `600 18px "DM Sans"`;
-    ctx.fillStyle = "#9B97A0";
+    ctx.fillStyle = "#7A7468";
     ctx.fillText(row.name, 196, y + 16);
     ctx.textAlign = "right";
-    ctx.fillStyle = "#6B6774";
+    ctx.fillStyle = "#7A7468";
     ctx.font = `600 18px "DM Sans"`;
     ctx.fillText(row.price, 1088, y + 16);
-    ctx.fillStyle = row.up ? "#22c55e" : "#F87171";
+    ctx.fillStyle = row.up ? "#2D8C56" : "#C45042";
     ctx.font = `800 16px "DM Sans"`;
     ctx.fillText(row.change, 1188, y + 16);
-    ctx.fillStyle = "#22c55e";
+    ctx.fillStyle = "#2D8C56";
     ctx.beginPath();
     ctx.arc(1048, y + 16, 4, 0, Math.PI * 2);
     ctx.fill();
@@ -722,416 +805,402 @@ function drawCoindle(t, opts = {}) {
       drawCatCell(x, y + 48, cellW, cellH, cell[0], cell[1], cell[2], flip, cell[3]);
       ctx.restore();
       if (r === 1 && flip >= 1 && since > 0 && since < 0.28) {
-        drawStar(x + cellW / 2, y + 36, 12, "#E8E6E1", 1 - since / 0.28, t * 5 + c);
+        drawStar(x + cellW / 2, y + 36, 12, "#2D8C56", 1 - since / 0.28, t * 5 + c);
       }
     });
   });
+  if (t < 0.68) {
+    roundRect(78, 652, 1124, 48, 12);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.strokeStyle = "#D6CFC2";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.font = `600 18px "DM Sans"`;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#A39E94";
+    ctx.fillText("Search coin name or ticker...", 100, 676);
+  }
+  if (t > 0.7) {
+    const u = easeOutBack(clamp((t - 0.7) / 0.14, 0, 1));
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, (t - 0.7) / 0.08);
+    ctx.translate(W / 2, 668);
+    ctx.scale(lerp(1.4, 1, u), lerp(0.8, 1, u));
+    ctx.font = `800 40px "DM Sans"`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#2D8C56";
+    ctx.fillText("We Love Green Candles", 0, 0);
+    ctx.restore();
+  }
 }
 
-function drawCandle(x, base, height, up) {
-  const body = up ? "#ccff00" : "#ff5d8f";
-  const top = base - height;
-  ctx.fillStyle = "rgba(255,255,255,0.7)";
-  ctx.fillRect(x - 2, top - 18, 4, 18);
-  roundRect(x - 18, top, 36, Math.max(8, height), 8);
-  ctx.fillStyle = body;
+function drawGoButton(x, y, w, press) {
+  const h = 64;
+  const lift = press * 10;
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  roundRect(x - w / 2, y + 8, w, h, 16);
   ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
-  ctx.fillRect(x - 12, top + 6, 6, Math.max(0, height - 16));
+  ctx.fillStyle = "#6747a8";
+  roundRect(x - w / 2, y + 6 - lift, w, h, 16);
+  ctx.fill();
+  ctx.fillStyle = "#ae8cff";
+  ctx.shadowColor = "#ae8cff";
+  ctx.shadowBlur = 18 * press;
+  roundRect(x - w / 2, y - lift, w, h, 16);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#000";
+  ctx.font = `800 28px "DM Sans"`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("GO", x, y + h / 2 - lift);
 }
-
-function drawBuy(x, y, w, squash, press) {
-  if (!media.housing) return;
-  const ih = w * (media.housing.height / media.housing.width);
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(1 + (1 - squash) * 0.35, squash);
-  const travel = press * 22;
-  ctx.drawImage(media.housing, -w / 2, -ih / 2, w, ih);
-  if (media.cap) ctx.drawImage(media.cap, -w / 2, -ih / 2 + travel, w, ih);
-  if (media.lip) ctx.drawImage(media.lip, -w / 2, -ih / 2, w, ih);
-  ctx.restore();
+function drawChip(x, y, label, fill) {
+  ctx.font = `800 16px "DM Sans"`;
+  const w = ctx.measureText(label).width + 22;
+  roundRect(x - w / 2, y - 14, w, 28, 6);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.fillStyle = "#000";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, x, y);
 }
-
 function drawUppers(t, opts = {}) {
   const titles = opts.titles !== false;
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, "#140c28");
-  bg.addColorStop(1, "#100b20");
-  ctx.fillStyle = bg;
+  ctx.fillStyle = "#100b20";
   ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = "rgba(174,140,255,0.13)";
+  ctx.strokeStyle = "#281d42";
   ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 64) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-  for (let y = 40; y < H; y += 64) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-  const tt = 0.16 + t * 0.7;
-  const tops = [];
-  for (let i = 0; i < 10; i++) {
-    const appear = clamp(0.5 + t * 0.85 - i * 0.012, 0, 1);
-    const h = (80 + i * 26 + Math.sin(i * 1.3 + t * 5) * 10) * easeOutCubic(appear);
-    const x = 78 + i * 92;
-    drawCandle(x, 430, h, i % 4 !== 2);
-    tops.push([x, 430 - h]);
+  const drift = t * 80;
+  for (let x = -((drift % 54)); x < W; x += 54) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 54) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  const base = 520;
+  const catches = [0.16, 0.34, 0.52, 0.7];
+  let y = 180;
+  let vy = 220;
+  const pts = [];
+  const steps = 90;
+  for (let i = 0; i <= steps; i++) {
+    const u = i / steps;
+    const tt = u * Math.max(t, 0.02);
+    vy += 900 * (1 / steps);
+    for (const c of catches) if (Math.abs(tt - c) < 0.012) vy = -420 - (c > 0.4 ? 180 : 0);
+    y += vy * (1 / steps) * 0.42;
+    y = Math.max(90, Math.min(base - 8, y));
+    pts.push([80 + u * 980, y + Math.sin(i * 0.7) * 3]);
   }
-  let heroY;
-  if (tt < 0.36) heroY = lerp(430, 80, easeOutBack(tt / 0.36));
-  else if (tt < 0.52) heroY = lerp(80, 430, easeInCubic((tt - 0.36) / 0.16));
-  else {
-    const u = clamp((tt - 0.52) / 0.3, 0, 1);
-    heroY = 430 - Math.sin(u * Math.PI) * 190;
-  }
-  const catching = tt > 0.48 && tt < 0.6;
-  const squash = catching ? lerp(1, 0.76, Math.sin(clamp((tt - 0.48) / 0.12, 0, 1) * Math.PI)) : 1;
-  drawBuy(640, 520, 400, squash, catching ? 1 : 0.12);
-  ctx.save();
-  ctx.strokeStyle = "#ccff00";
-  ctx.lineWidth = 7;
-  ctx.lineJoin = "round";
-  ctx.shadowColor = "#ccff00";
-  ctx.shadowBlur = 14;
+  const head = pts[Math.min(pts.length - 1, Math.floor(t * steps))];
+  const btnX = head[0];
+  const catching = catches.some((c) => Math.abs(t - c) < 0.04);
+  ctx.strokeStyle = "rgba(174,140,255,0.35)";
+  ctx.setLineDash([8, 8]);
   ctx.beginPath();
-  tops.forEach((point, i) => { if (i === 0) ctx.moveTo(point[0], point[1]); else ctx.lineTo(point[0], point[1]); });
-  ctx.lineTo(640, heroY);
+  ctx.moveTo(0, base);
+  ctx.lineTo(W, base);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.save();
+  ctx.strokeStyle = t > 0.9 ? "#ff3b30" : "#ae8cff";
+  ctx.lineWidth = 4;
+  ctx.lineJoin = "miter";
+  ctx.shadowColor = ctx.strokeStyle;
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); });
   ctx.stroke();
   ctx.restore();
-  ctx.save();
-  ctx.translate(640, heroY);
-  const stretch = tt < 0.36 ? 1.18 : catching ? 0.78 : 1.05;
-  ctx.scale(2 - stretch, stretch);
-  drawCandle(0, 20, 110, true);
-  ctx.restore();
-  if (tt < 0.45) {
-    for (let i = 0; i < 8; i++) {
-      drawStar(640 + Math.sin(i * 2 + t * 20) * 50, heroY - 30 - i * 14, 8, "#fff7a1", 0.85, t * 10);
-    }
+  ctx.fillStyle = "#ae8cff";
+  ctx.shadowColor = "#ae8cff";
+  ctx.shadowBlur = 16;
+  ctx.fillRect(head[0] - 6, head[1] - 6, 12, 12);
+  ctx.shadowBlur = 0;
+  const chips = [
+    [0.22, "LIFT", "#6fe37a"],
+    [0.4, "2X", "#ae8cff"],
+    [0.58, "SURGE", "#00c805"],
+    [0.76, "ORB", "#ffc93c"],
+  ];
+  chips.forEach(([at, label, col], i) => {
+    if (t + 0.08 < at) return;
+    const x = 220 + i * 220;
+    const cy = 150 + Math.sin(t * 6 + i) * 8;
+    drawChip(x, cy, label, col);
+  });
+  if (catching) {
+    ctx.font = `800 22px "DM Sans"`;
+    ctx.fillStyle = "#cfd4c4";
+    ctx.textAlign = "center";
+    ctx.fillText("BOUNCE", head[0], head[1] - 36);
   }
-  sparkles(t, 20, "#ae8cff", 40, 600, 70);
-  vignette(0.4);
-  if (titles) titleBlock(t, "UPPERS", "Catch the chart.", { fill: "#ccff00", y: 652, size: 84, start: 0.62 });
+  drawGoButton(btnX, base + 18, 150, catching ? 1 : 0.08);
+  ctx.font = `700 13px "DM Sans"`;
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#a59abd";
+  ctx.fillText("SIGNAL", 36, 36);
+  ctx.fillText("PEAK", 1080, 36);
+  ctx.font = `800 28px "DM Sans"`;
+  ctx.fillStyle = "#f2f2ef";
+  ctx.fillText("$" + Math.round(lerp(120, 2400, easeOutCubic(t))) + "K", 36, 68);
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#ae8cff";
+  ctx.fillText("$" + Math.round(lerp(180, 3100, easeOutCubic(t))) + "K", 1244, 68);
+  roundRect(36, 88, 118, 28, 14);
+  ctx.fillStyle = t > 0.76 ? "#ffc93c" : "transparent";
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#ffc93c";
+  ctx.stroke();
+  ctx.font = `800 13px "DM Sans"`;
+  ctx.textAlign = "center";
+  ctx.fillStyle = t > 0.76 ? "#000" : "#ffc93c";
+  ctx.fillText("ORBS " + (t > 0.76 ? "1" : "0") + "/10", 95, 102);
+  ctx.textAlign = "left";
+  ctx.font = `700 13px "DM Sans"`;
+  ctx.fillStyle = "#a59abd";
+  ctx.fillText("STREAK", 176, 108);
+  ctx.font = `800 16px "DM Sans"`;
+  ctx.fillStyle = "#f2f2ef";
+  ctx.fillText(String(Math.min(4, Math.floor(t * 6))), 236, 108);
+  ctx.save();
+  ctx.strokeStyle = "rgba(174,140,255,0.45)";
+  ctx.setLineDash([6, 6]);
+  ctx.beginPath();
+  ctx.moveTo(head[0], head[1]);
+  ctx.lineTo(W - 24, head[1]);
+  ctx.stroke();
+  ctx.restore();
+  if (t < 0.12) {
+    ctx.globalAlpha = 1 - t / 0.12;
+    ctx.fillStyle = "#ae8cff";
+    ctx.font = `800 18px "DM Sans"`;
+    ctx.textAlign = "center";
+    ctx.fillText("GRAB THE BUTTON TO START", W / 2, base - 36);
+    ctx.globalAlpha = 1;
+  }
+  if (titles) titleBlock(t, "UPPERS", "Catch the signal. Keep climbing.", { fill: "#ae8cff", ink: "#100b20", y: 660, size: 78, start: 0.72 });
 }
 
-function blitFeet(sheet, name, x, y, scale, flip, sx, sy) {
-  const [rx, ry, rw, rh] = RECTS[name];
-  const dw = rw * scale, dh = rh * scale;
+function inView(gw, gh, draw) {
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.translate(x, y);
-  ctx.scale((flip ? -1 : 1) * sx, sy);
-  ctx.drawImage(sheet, rx, ry, rw, rh, -dw / 2, -dh, dw, dh);
+  ctx.scale(W / gw, H / gh);
+  draw();
   ctx.restore();
 }
-function footShadow(x, y, w) {
-  ctx.save();
-  ctx.fillStyle = "rgba(8,4,20,0.35)";
-  ctx.beginPath();
-  ctx.ellipse(x, y, w, 12, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawWhale(x, y, good) {
-  const body = good ? "#3fa86a" : "#c0404a";
-  const belly = good ? "#a8f0c0" : "#ffb0b0";
-  ctx.fillStyle = body;
-  roundRect(x, y, 150, 36, 16);
-  ctx.fill();
-  ctx.fillStyle = belly;
-  ctx.fillRect(x + 18, y + 22, 100, 10);
-  ctx.fillStyle = "#111";
-  ctx.fillRect(x + 28, y + 10, 8, 8);
-  ctx.fillStyle = body;
-  ctx.beginPath();
-  ctx.moveTo(x + 140, y + 10);
-  ctx.lineTo(x + 188, y - 8);
-  ctx.lineTo(x + 150, y + 28);
-  ctx.fill();
-  if (good) {
-    ctx.fillStyle = "rgba(191,232,255,0.85)";
-    for (let i = 0; i < 5; i++) ctx.fillRect(x + 40 + Math.sin(y + i) * 4, y - 20 - i * 16, 28 - i * 3, 10);
-    pixText("BUY", x + 36, y - 108, "#7be08a", 3);
+function drawPixelWhale(x, y, spout = 70) {
+  const px = (c, ox, oy, w, h) => { ctx.fillStyle = c; ctx.fillRect(x + ox, y + oy, w, h); };
+  px("#3fa86a", 4, 0, 44, 10);
+  px("#3fa86a", 8, -3, 34, 3);
+  px("#a8f0c0", 8, 7, 34, 3);
+  px("#111", 10, 2, 2, 2);
+  px("#1e5a3a", 4, 6, 6, 1);
+  px("#3fa86a", 46, 1, 10, 4);
+  px("#3fa86a", 54, -3, 4, 6);
+  for (let i = 0; i < spout; i += 4) {
+    const wob = Math.sin(i / 8 + y) * 2;
+    px(i % 8 ? "#bfe8ff" : "#ffffff", 12 + wob, -4 - i, Math.max(4, 10 - i / 18), 4);
   }
+  pixText("BUY", x + 8, y - spout - 14, "#7be08a", 1);
 }
 function drawSkip(t, opts = {}) {
   const titles = opts.titles !== false;
-  const climb = easeInOutCubic(clamp(t / 0.74, 0, 1));
-  const sky = ctx.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, lerpColorHex("#6fbfee", "#120e34", climb * 0.35));
-  sky.addColorStop(1, lerpColorHex("#d8f0ff", "#ff9f5a", climb * 0.45));
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, H);
-  const far = pulsed(t, 90);
-  ctx.fillStyle = "rgba(106,150,196,0.55)";
-  ctx.beginPath();
-  ctx.moveTo(0, 430);
-  for (let x = 0; x <= W; x += 16) ctx.lineTo(x, 390 + Math.sin((x + far) * 0.01) * 28 + Math.sin((x + far) * 0.004) * 18);
-  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
-  const waterY = 560 - climb * 30;
-  const water = ctx.createLinearGradient(0, waterY, 0, H);
-  water.addColorStop(0, "#3f86c6");
-  water.addColorStop(1, "#1f6f84");
-  ctx.fillStyle = water;
-  ctx.fillRect(0, waterY, W, H - waterY);
-  ctx.strokeStyle = "#d8f4ff";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  for (let x = 0; x <= W; x += 12) {
-    const yy = waterY + Math.sin((x + pulsed(t, 220)) * 0.02) * 5;
-    if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
-  }
-  ctx.stroke();
-  const price = Math.round(lerp(2480, 10000, climb));
-  const broken = t > 0.7;
-  const lineY = lerp(120, 250, climb);
-  ctx.save();
-  ctx.strokeStyle = broken ? "#7be08a" : "#ff5a6a";
-  ctx.lineWidth = 4;
-  ctx.setLineDash([16, 10]);
-  ctx.beginPath();
-  ctx.moveTo(0, lineY);
-  ctx.lineTo(W, lineY);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.restore();
-  pixTextC(broken ? "$10,000 SUPPORT" : "$10,000 RESISTANCE", W - 250, lineY - 28, broken ? "#7be08a" : "#ff5a6a", 3, "#22163a");
-  const dates = ["JUL 2017", "DEC 2017", "JUN 2020", "AUG 2021", "SEP 2022", "MAY 2024"];
-  const date = dates[Math.min(dates.length - 1, Math.floor(climb * dates.length))];
-  ctx.fillStyle = "rgba(20,12,40,0.62)";
-  ctx.fillRect(0, 0, W, 64);
-  pixText(date, 18, 10, "#ffffff", 3);
-  pixText("DAY " + Math.round(lerp(640, 2200, climb)), 18, 36, "#b8a8e8", 2);
-  pixTextC("ETH $" + price.toLocaleString("en-US"), W / 2 - 20, 14, price >= 9000 ? "#ffe066" : "#7be08a", 5, "#22163a");
-  if (media.gem) {
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(media.gem, W / 2 + 250, 16, media.gem.width, media.gem.height);
-    pixText(String(Math.round(lerp(2, 18, climb))), W / 2 + 310, 22, "#d6c2ff", 3);
-  }
-  const hop = springHop(t, 4.2, 0.58);
-  const rockX = lerp(160, 1040, 0.08 + t * 0.84);
-  const rockY = waterY - 30 - hop.air * lerp(90, 210, climb);
-  const gemsX = [280, 520, 760, 980];
-  gemsX.forEach((gx, i) => {
-    const got = rockX > gx + 10;
-    const bob = Math.sin(t * 8 + i) * 8;
-    if (!got && media.gem) {
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(media.gem, gx, waterY - 150 - i * 18 + bob, 42, 42);
-    } else if (rockX - gx < 80 && rockX > gx) {
-      drawStar(gx, waterY - 170, 14, "#d6c2ff", 1 - (rockX - gx) / 80, t * 6);
-    }
-  });
-  drawWhale(420 + Math.sin(t * 3) * 20, waterY - 10, true);
-  if (media.crab) {
-    for (let i = 0; i < 4; i++) {
-      const cx = 700 + i * 48 + Math.sin(t * 6 + i) * 10;
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(media.crab, cx, waterY - 8, media.crab.width, media.crab.height);
-    }
-  }
-  const eras = [["FRONTIER", 80], ["DEFI SUMMER", 460], ["NFT SEASON", 860]];
-  eras.forEach(([name, x]) => {
-    const bx = x - pulsed(t, 40);
-    if (bx < -80 || bx > W) return;
-    pixTextC(name, bx, waterY + 28, "#22163a", 2);
-  });
-  if (hop.hop < 0.12 || hop.hop > 0.9) {
-    const k = hop.hop < 0.12 ? hop.hop / 0.12 : (hop.hop - 0.9) / 0.1;
-    ctx.strokeStyle = "rgba(216,244,255,0.9)";
-    ctx.lineWidth = 4;
+  const GW = 480, GH = 270, WY = 205;
+  const fly = clamp(t / 0.82, 0, 1);
+  const eras = [
+    { top: "#6fbfee", bot: "#d8f0ff", far: "#9cbde0", near: "#6a96c4", water: "#3f86c6", deep: "#2a5f9c", foam: "#d8f4ff" },
+    { top: "#5cc4ff", bot: "#fff6b8", far: "#8acc78", near: "#56a05a", water: "#2f9ab0", deep: "#1f6f84", foam: "#e0fff4" },
+    { top: "#33337f", bot: "#ff9a6a", far: "#7a4a8a", near: "#4a2a6a", water: "#2a4a9a", deep: "#1a306a", foam: "#ffd8b8" },
+  ];
+  const ei = fly * (eras.length - 1);
+  const i0 = Math.min(eras.length - 2, Math.floor(ei));
+  const blend = ei - i0;
+  const col = (k) => lerpColorHex(eras[i0][k], eras[i0 + 1][k], blend);
+  inView(GW, GH, () => {
+    const sky = ctx.createLinearGradient(0, 0, 0, WY);
+    sky.addColorStop(0, col("top"));
+    sky.addColorStop(1, col("bot"));
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, GW, GH);
+    ctx.fillStyle = col("far");
     ctx.beginPath();
-    ctx.ellipse(rockX, waterY + 4, 18 + k * 70, 8 + k * 10, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  if (rocks[0]) {
-    ctx.save();
-    ctx.translate(rockX - hop.sx * 18, rockY);
-    ctx.rotate(t * 14);
-    ctx.scale(hop.sx, hop.sy);
-    ctx.imageSmoothingEnabled = false;
-    const rw = rocks[0].width * 2.4, rh = rocks[0].height * 2.4;
-    ctx.drawImage(rocks[0], -rw / 2, -rh / 2, rw, rh);
-    ctx.restore();
-  }
-  if (media.skip) blitFeet(media.skip, "rcSide", rockX - 90, rockY + 36, 5, false, 1, 1);
-  if (hop.hop > 0.88 && hop.hop < 0.98 && t > 0.2 && t < 0.68) pixTextC("PERFECT", rockX, rockY - 70, "#ffe066", 3, "#22163a");
-  if (broken) {
-    for (let i = 0; i < 16; i++) drawStar(rockX + Math.cos(i) * 40, lineY + Math.sin(i * 2 + t * 8) * 24, 8, i % 2 ? "#ffe066" : "#7be08a", 0.9, t);
-  }
-  if (titles && t > 0.72) {
-    const u = easeOutBack(clamp((t - 0.72) / 0.14, 0, 1));
-    pixTextC("SKIP TO 10K", W / 2, lerp(80, 520, Math.min(1, u)), "#ffe066", 8, "#22163a");
-    if (u > 0.8) pixTextC("SKIP THE ROCK TO $10,000", W / 2, 590, "#ffffff", 3, "#22163a");
-  }
+    ctx.moveTo(0, WY);
+    for (let x = 0; x <= GW; x += 4) ctx.lineTo(x, WY - 26 - Math.sin((x + t * 30) / 50) * 10);
+    ctx.lineTo(GW, WY);
+    ctx.fill();
+    ctx.fillStyle = col("near");
+    ctx.beginPath();
+    ctx.moveTo(0, WY);
+    for (let x = 0; x <= GW; x += 4) ctx.lineTo(x, WY - 12 - Math.sin((x + t * 50) / 26) * 6);
+    ctx.lineTo(GW, WY);
+    ctx.fill();
+    ctx.fillStyle = col("water");
+    ctx.fillRect(0, WY, GW, GH - WY);
+    ctx.fillStyle = col("deep");
+    for (let y = WY + 8; y < GH; y += 8) ctx.fillRect(0, y, GW, 2);
+    ctx.fillStyle = col("foam");
+    for (let x = 0; x < GW; x += 4) ctx.fillRect((x + Math.round(t * 40)) % GW, WY + Math.round(Math.sin((x + t * 40) / 9)), 3, 1);
+    const dockY = WY - 22;
+    ctx.fillStyle = "#6a4422";
+    ctx.fillRect(0, dockY, 118, 5);
+    ctx.fillStyle = "#8a5a30";
+    ctx.fillRect(0, dockY, 118, 1);
+    ctx.fillStyle = "#4a2e16";
+    for (let x = 10; x < 110; x += 28) ctx.fillRect(x, dockY + 5, 4, WY - dockY + 8);
+    ctx.fillStyle = "#5a3a1a";
+    ctx.fillRect(18, dockY - 22, 2, 22);
+    ctx.fillStyle = "#fdf6e0";
+    ctx.fillRect(6, dockY - 34, 44, 13);
+    ctx.fillStyle = "#22163a";
+    ctx.fillRect(6, dockY - 21, 44, 1);
+    pixText("NO SWIM", 9, dockY - 31, "#e5487f", 1);
+    const handX = 96, handY = WY - 38;
+    if (t < 0.2) {
+      ctx.save();
+      ctx.globalAlpha = 1 - t / 0.2;
+      ctx.translate(handX, handY);
+      ctx.fillStyle = "rgba(123,224,138,0.45)";
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, 44, -24 * Math.PI / 180, -8 * Math.PI / 180);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      pixText("SKIP ZONE", 128, handY - 28, "#7be08a", 1);
+    }
+    if (media.skip) {
+      blitFeet(media.skip, t < 0.1 ? "crouch" : "wave", 78, dockY, 1, false, 1, 1);
+      blitFeet(media.skip, "rcFront", 54, dockY - 26 + Math.sin(t * 8) * 2, 1, false, 1, 1);
+    }
+    const hops = 5;
+    const hopT = (fly * hops) % 1;
+    const hopN = Math.floor(fly * hops);
+    const air = Math.sin(Math.min(1, hopT) * Math.PI);
+    const rockX = lerp(handX, 440, fly);
+    const rockY = WY - 6 - air * lerp(22, 64, fly);
+    if (rocks[0]) {
+      ctx.save();
+      ctx.translate(rockX, rockY);
+      ctx.rotate(fly * 10);
+      ctx.drawImage(rocks[0], -8, -6, 16, 11);
+      ctx.restore();
+    }
+    if (air > 0.9 && fly > 0.06 && fly < 0.92) {
+      pixTextC("PERFECT", rockX, rockY - 18, "#ffe066", 1, "#22163a");
+      if (hopN >= 2) pixTextC(hopN + "X STREAK", rockX, rockY - 28, "#ff9f3a", 1, "#22163a");
+    }
+    const lineY = lerp(78, 40, fly);
+    const broke = fly > 0.82;
+    ctx.fillStyle = broke ? "#7be08a" : "#ff5a6a";
+    for (let x = 0; x < GW; x += 12) ctx.fillRect(x, lineY, 7, 2);
+    pixText(broke ? "$10,000 SUPPORT" : "$10,000 RESISTANCE", GW - 148, lineY - 9, broke ? "#7be08a" : "#ff5a6a", 1);
+    if (t > 0.55 && t < 0.8) drawPixelWhale(300, WY - 4, 64);
+    ctx.fillStyle = "rgba(20,12,40,0.55)";
+    ctx.fillRect(0, 0, GW, 22);
+    const names = ["JUL 2015", "ICO MANIA", "DEFI SUMMER", "YOU ARE HERE"];
+    pixText(names[Math.min(names.length - 1, Math.floor(fly * names.length))], 4, 2, "#ffffff", 1);
+    pixText("DAY " + Math.round(lerp(12, 4088, fly)), 4, 12, "#b8a8e8", 1);
+    const price = Math.round(lerp(1100, 10000, easeOutCubic(fly)));
+    pixTextC("ETH $" + price.toLocaleString("en-US"), GW / 2 - 10, 3, price > 9000 ? "#ffe066" : "#7be08a", 2, "#22163a");
+    pixText("GAS 8/12", GW - 62, 4, "#7be08a", 1);
+    ctx.fillStyle = "#322443";
+    ctx.fillRect(GW - 62, 14, 48, 4);
+    ctx.fillStyle = "#7be08a";
+    ctx.fillRect(GW - 62, 14, 32, 4);
+  });
+  if (titles) titleBlock(t, "SKIP TO 10K", "A Droober and RC rock skipping saga.", { fill: "#ffe066", ink: "#22163a", y: 660, size: 72, start: 0.72 });
 }
 
-function placePose(t) {
-  const jump1 = t >= 0.14 && t < 0.34;
-  const jump2 = t >= 0.62 && t < 0.78;
-  const crouch = t >= 0.46 && t < 0.6;
-  const celebrate = t >= 0.8;
-  let air = 0, sx = 1, sy = 1, name = "run";
-  if (jump1 || jump2) {
-    const a = jump1 ? 0.14 : 0.62, b = jump1 ? 0.34 : 0.78;
-    const u = (t - a) / (b - a);
-    air = Math.pow(Math.sin(u * Math.PI), 0.7);
-    name = "jump";
-    sx = 0.84; sy = 1.22;
-    if (u < 0.12) { sx = 1.35; sy = 0.7; }
-    if (u > 0.86) { sx = 1.4; sy = 0.62; }
-  } else if (crouch) {
-    name = "crouch";
-    sx = 1.2; sy = 0.78;
-  } else if (celebrate) {
-    name = "wave";
-    sy = 1 + Math.sin(t * 18) * 0.06;
-  } else {
-    const step = (t * 8) % 1;
-    sx = step < 0.5 ? 1.08 : 0.94;
-    sy = step < 0.5 ? 0.94 : 1.08;
-  }
-  return { air, sx, sy, name, crouch, celebrate };
-}
-function drawBrickRun(x, y, w, h, theme) {
-  const grass = theme === "shroom" ? "#5ec44a" : "#b6d846";
-  const soil = theme === "shroom" ? "#8a5a3c" : "#4b3a7a";
-  const soilD = theme === "shroom" ? "#6e4630" : "#3a2c63";
-  ctx.fillStyle = soil;
-  ctx.fillRect(x, y, w, h);
+function drawPixelApple(x, y) {
   ctx.fillStyle = "#22163a";
-  ctx.fillRect(x, y, w, 4);
-  ctx.fillStyle = grass;
-  ctx.fillRect(x, y + 4, w, 10);
-  ctx.fillStyle = theme === "shroom" ? "#9be36a" : "#d6f07a";
-  ctx.fillRect(x, y + 4, w, 3);
-  for (let i = 0; i < w; i += 28) ctx.fillStyle = soilD, ctx.fillRect(x + i, y + 22, 2, h);
-}
-function drawApplePix(x, y, got, pop) {
-  if (got && pop <= 0) return;
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(3, 3);
-  ctx.fillStyle = "#22163a";
-  ctx.fillRect(4, 0, 2, 3);
+  ctx.fillRect(x + 4, y - 1, 2, 3);
   ctx.fillStyle = "#5fbf4a";
-  ctx.fillRect(6, 0, 3, 2);
-  ctx.fillStyle = "#e02c2c";
-  ctx.fillRect(1, 3, 8, 7);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(2, 4, 2, 2);
-  ctx.restore();
-  if (pop > 0) drawStar(x, y - 20, 10 + pop * 16, "#f6c02c", 1 - pop, pop * 4);
-}
-function drawHalf(ox, t, theme) {
-  const scroll = keyed(t, [[0, 0], [0.14, 60], [0.32, 240], [0.46, 380], [0.6, 620], [0.78, 900], [1, 1040]]);
-  const pose = placePose(t);
-  const ground = 520;
-  const heroX = ox + 250;
-  const worldX = scroll + 250;
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(ox, 0, W / 2, H);
-  ctx.clip();
-  const bump = (at) => {
-    const d = Math.abs(t - at);
-    return d < 0.07 ? 1 + 0.07 * Math.sin((1 - d / 0.07) * Math.PI) : 1;
-  };
-  const z = bump(0.33) * bump(0.77);
-  ctx.translate(ox + 320, 400);
-  ctx.scale(z, z);
-  ctx.translate(-(ox + 320), -400);
-  const sky = ctx.createLinearGradient(0, 0, 0, H);
-  if (theme === "shroom") { sky.addColorStop(0, "#6ec8ff"); sky.addColorStop(1, "#d8f6ff"); }
-  else { sky.addColorStop(0, "#4b3c9a"); sky.addColorStop(0.7, "#8c78d8"); sky.addColorStop(1, "#c4b2f2"); }
-  ctx.fillStyle = sky;
-  ctx.fillRect(ox, 0, W / 2, H);
-  ctx.fillStyle = theme === "shroom" ? "rgba(255,255,255,0.8)" : "rgba(253,251,240,0.45)";
-  for (let i = 0; i < 4; i++) {
-    const cx = ox + ((i * 180 - scroll * 0.15) % 700 + 700) % 700;
-    ctx.beginPath();
-    ctx.arc(cx, 70 + i * 16, 22, 0, Math.PI * 2);
-    ctx.arc(cx + 24, 78 + i * 16, 16, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  if (theme === "shroom") {
-    for (let i = 0; i < 5; i++) {
-      const mx = ox + ((i * 150 - scroll * 0.25) % 760 + 760) % 760;
-      ctx.fillStyle = i % 2 ? "#e5484d" : "#4a7fe0";
-      ctx.beginPath();
-      ctx.ellipse(mx, 250, 34, 22, 0, Math.PI, 0);
-      ctx.fill();
-      ctx.fillStyle = "#f4ecd4";
-      ctx.fillRect(mx - 6, 250, 12, 40);
-    }
-  }
-  const plat = (wx, wy, ww) => drawBrickRun(ox + wx - scroll, wy, ww, 70, theme);
-  plat(-40, ground, 1500);
-  plat(520, 390, 180);
-  const bob = Math.sin(t * Math.PI * 4) * 16;
-  plat(760, 430 + bob, 150);
-  for (let i = 0; i < 3; i++) {
-    const sx = ox + 360 + i * 28 - scroll;
-    ctx.fillStyle = "#22163a";
-    ctx.beginPath();
-    ctx.moveTo(sx, ground);
-    ctx.lineTo(sx + 14, ground);
-    ctx.lineTo(sx + 7, ground - 28);
-    ctx.fill();
-    ctx.fillStyle = "#f4ecd4";
-    ctx.fillRect(sx + 6, ground - 22, 2, 8);
-  }
-  const apples = [300, 600, 980];
-  let got = 0;
-  apples.forEach((ax) => {
-    const collected = worldX > ax + 8;
-    if (collected) got++;
-    const since = collected ? clamp((worldX - ax) / 80, 0, 1) : 0;
-    drawApplePix(ox + ax - scroll, ground - 78, collected, collected ? 1 - since : 0);
-  });
-  const zapX = ox + 800 - scroll;
-  const zapOn = t > 0.44 && t < 0.62;
-  if (zapX > ox - 40 && zapX < ox + W / 2) {
-    ctx.globalAlpha = zapOn ? 0.95 : 0.25;
-    ctx.fillStyle = "#1cd2f0";
-    ctx.fillRect(zapX, 392, 160, 10);
-    ctx.globalAlpha = 1;
-    if (pose.crouch && zapOn) {
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(heroX, 500, 36, Math.PI, 0);
-      ctx.stroke();
-    }
-  }
-  const doorX = ox + 1120 - scroll;
-  const open = clamp((t - 0.76) / 0.1, 0, 1);
+  ctx.fillRect(x + 6, y - 1, 3, 2);
   ctx.fillStyle = "#22163a";
-  ctx.fillRect(doorX, ground - 120, 48, 120);
-  ctx.fillStyle = "#f6c02c";
-  ctx.fillRect(doorX + 4, ground - 116 + open * 90, 40, 112 - open * 90);
-  const feet = ground - pose.air * 150 + (pose.crouch ? 18 : 0);
-  const sprite = pose.name === "jump" ? "jump" : pose.name === "crouch" ? "crouch" : pose.name === "wave" ? "wave" : "run";
-  const rcName = pose.name === "jump" ? "rcSide" : "rcFront";
-  footShadow(heroX, ground + 6, 36);
-  blitFeet(media.two, sprite, heroX, feet, 4.4, sprite === "jump", pose.sx, pose.sy);
-  blitFeet(media.skip, rcName, heroX + 78, feet + 24 - pose.air * 40, 9, false, pose.sx, pose.sy);
-  pixText(got + "/3", ox + 24, 24, "#22163a", 3);
-  if (pose.celebrate) {
-    for (let k = 0; k < 8; k++) drawStar(heroX + Math.cos(k + t * 6) * 50, feet - 80 + Math.sin(k) * 30, 8, "#f6c02c", 0.9, k);
-  }
-  ctx.restore();
+  ctx.fillRect(x + 6, y - 2, 3, 1);
+  ctx.fillStyle = "#e02c2c";
+  ctx.fillRect(x + 1, y + 3, 8, 7);
+  ctx.fillStyle = "#b81e3c";
+  ctx.fillRect(x + 2, y + 9, 6, 1);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(x + 2, y + 4, 2, 2);
 }
 function drawTwo(t, opts = {}) {
   const titles = opts.titles !== false;
-  const swapped = t >= 0.48;
-  drawHalf(0, t, swapped ? "shroom" : "grass");
-  drawHalf(W / 2, t, swapped ? "grass" : "shroom");
-  const wipe = t > 0.4 && t < 0.56 ? clamp((t - 0.4) / 0.08, 0, 1) * (t < 0.48 ? 1 : 1 - clamp((t - 0.48) / 0.08, 0, 1)) : 0;
-  if (wipe > 0) {
-    ctx.fillStyle = `rgba(253,251,240,${wipe})`;
-    ctx.fillRect(0, 0, W, H);
-  }
-  ctx.fillStyle = "#22163a";
-  ctx.fillRect(W / 2 - 4, 0, 8, H);
-  if (titles) titleBlock(t, "TWO PLACES AT ONCE", "One move. Both worlds.", { fill: "#f6c02c", y: 640, size: 64, start: 0.8 });
+  const GW = 384, GH = 216;
+  inView(GW, GH, () => {
+    const sky = ctx.createLinearGradient(0, 0, 0, GH);
+    sky.addColorStop(0, "#4b3c9a");
+    sky.addColorStop(0.6, "#8c78d8");
+    sky.addColorStop(1, "#c4b2f2");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, GW, GH);
+    for (let i = 0; i < 28; i++) {
+      ctx.fillStyle = i % 3 ? "#8cf0ff" : "#f4ecd4";
+      ctx.fillRect((i * 37 + t * 12) % GW, 6 + (i * 13) % 64, 1, 1);
+    }
+    const puff = (base, color, speed, r) => {
+      ctx.fillStyle = color;
+      for (let i = -1; i < 8; i++) {
+        const x = ((i * 64 - t * speed) % (GW + 90) + GW + 90) % (GW + 90) - 30;
+        ctx.beginPath();
+        ctx.arc(x, base, r, 0, Math.PI * 2);
+        ctx.arc(x + r * 0.8, base + 4, r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillRect(0, base, GW, GH);
+    };
+    puff(108, "#7a64c8", 6, 18);
+    puff(132, "#6551b4", 12, 14);
+    puff(156, "#55439e", 20, 12);
+    const brick = (x, y, w, h) => {
+      ctx.fillStyle = "#4b3a7a";
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = "#3a2c63";
+      for (let yy = y + 7; yy < y + h; yy += 8) ctx.fillRect(x, yy, w, 1);
+      ctx.fillStyle = "#22163a";
+      ctx.fillRect(x, y, w, 1);
+      ctx.fillStyle = "#b6d846";
+      ctx.fillRect(x, y + 1, w, 3);
+      ctx.fillStyle = "#d6f07a";
+      ctx.fillRect(x, y + 1, w, 1);
+    };
+    brick(0, 188, GW, 28);
+    const scroll = t * 36;
+    brick(24 - (scroll % 70), 150, 72, 16);
+    brick(150 - (scroll % 90), 118, 68, 16);
+    brick(250 - (scroll % 80), 146, 84, 16);
+    drawPixelApple(168, 100);
+    drawPixelApple(292, 128);
+    const got = Math.min(3, 1 + Math.floor(t * 3.2));
+    const swap = t > 0.42 && t < 0.72;
+    const run = (t * 8) % 1 < 0.5;
+    const heroX = 86;
+    const air = Math.abs(Math.sin(t * 7)) * (swap ? 4 : 16);
+    const ground = 188;
+    if (media.two) {
+      blitFeet(media.two, air > 8 ? "jump" : run ? "run" : "side", heroX, ground - air, 1, false, 1, 1);
+      const rcx = swap ? heroX + 64 : heroX + 4;
+      const rcy = swap ? ground - 46 - Math.abs(Math.sin(t * 10)) * 14 : ground - air - 28;
+      blitFeet(media.two, swap ? "rcSide" : "rcFront", rcx, rcy, 1, false, 1, 1);
+    }
+    pixText(swap ? "RC" : "DROOBER", 6, 6, swap ? "#1cd2f0" : "#f39cc0", 1);
+    for (let i = 0; i < 3; i++) {
+      ctx.globalAlpha = i < got ? 1 : 0.35;
+      drawPixelApple(GW - 42 + i * 12, 4);
+      ctx.globalAlpha = 1;
+    }
+    pixText(got + "/3", GW - 40, 20, "#f4ecd4", 1);
+    if (t > 0.78) {
+      ctx.fillStyle = "rgba(34,22,58,0.55)";
+      ctx.fillRect(0, 0, GW, GH);
+      pixTextC("LEVEL CLEAR!", GW / 2, 78, "#f6c02c", 2, "#22163a");
+      pixTextC(got + "/3 APPLES", GW / 2, 100, "#f4ecd4", 1, "#22163a");
+    }
+  });
+  if (titles) titleBlock(t, "TWO PLACES AT ONCE", "Droober and RC.", { fill: "#f6c02c", ink: "#22163a", y: 650, size: 64, start: 0.7 });
 }
 
 function drawEndCard(t) {
@@ -1261,18 +1330,22 @@ window.__ready = (async () => {
     document.fonts.load('800 28px "DM Sans"'),
     document.fonts.load('600 24px "DM Sans"'),
   ]);
-  const [nuts, housing, cap, lip, icon, btc, eth, sol, skip, two] = await Promise.all([
-    loadImage(ASSETS.nuts), loadImage(ASSETS.housing), loadImage(ASSETS.cap), loadImage(ASSETS.lip),
+  await Promise.all([
+    document.fonts.load('700 64px "Pixelify Sans"'),
+    document.fonts.load('700 32px "Silkscreen"'),
+  ]).catch(() => {});
+  const [nuts, nutsRare, icon, btc, eth, sol, skip, two] = await Promise.all([
+    loadImage(ASSETS.nuts), loadImage(ASSETS.nutsRare),
     loadImage(ASSETS.icon), loadImage(ASSETS.btc), loadImage(ASSETS.eth), loadImage(ASSETS.sol),
     loadImage(ASSETS.skip), loadImage(ASSETS.two),
   ]);
-  Object.assign(media, { nuts, housing, cap, lip, icon, btc, eth, sol, skip, two });
+  Object.assign(media, { nuts, nutsRare, icon, btc, eth, sol, skip, two });
   const report = [];
   for (const item of ASSETS.buds) {
     const img = await loadImage(item.src);
     const keyed = chromaKey(img);
     report.push({ id: item.id, ratio: Number(keyed.ratio.toFixed(3)), ok: Boolean(keyed.ok) });
-    if (keyed.ok) buddies.push(keyed);
+    if (keyed.ok && keyed.ratio <= 0.42) buddies.push(keyed);
   }
   rocks = [0, 3, 7, 12, 18].map((n) => makeBmp(ROCK_ROWS, rockPalette(n), 5));
   media.gem = makeBmp(GEM_ROWS, { o: "#3a1f6e", L: "#d6c2ff", D: "#8f6ae0" }, 4);

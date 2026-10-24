@@ -22,14 +22,14 @@ const mounts = [
   ["/fonts/", join(root, "scripts/share-promos/fonts")],
   ["/skrumpey/", join(root, "cartridges/skrumpey-slide/assets/png")],
   ["/nuts/", join(root, "cartridges/skrumpey-slide/assets/nuts")],
-  ["/buy/", join(root, "cartridges/emonad-cabinet/public/assets")],
+  ["/skr-fonts/", join(root, "cartridges/skrumpey-slide/assets/fonts")],
   ["/coindle/", join(root, "cartridges/coindle/public")],
   ["/coins/", join(root, "scripts/share-promos/coins")],
   ["/sprites/skip.png", join(root, "cartridges/skip-to-10k/assets/sprites.png")],
   ["/sprites/two.png", join(root, "cartridges/two-places/assets/sprites.png")],
 ];
 
-const types = { ".html": "text/html; charset=utf-8", ".png": "image/png", ".ttf": "font/ttf", ".jpg": "image/jpeg" };
+const types = { ".html": "text/html; charset=utf-8", ".png": "image/png", ".ttf": "font/ttf", ".woff2": "font/woff2", ".jpg": "image/jpeg" };
 
 function contentType(file) {
   return types[extname(file)] ?? "application/octet-stream";
@@ -130,7 +130,8 @@ async function evaluate(cdp, expression, timeoutMs) {
     returnByValue: true,
   }, timeoutMs);
   if (result.exceptionDetails) {
-    throw new Error(result.exceptionDetails.text || JSON.stringify(result.exceptionDetails));
+    const details = result.exceptionDetails;
+    throw new Error(details.exception?.description || details.text || JSON.stringify(details));
   }
   return result.result?.value;
 }
