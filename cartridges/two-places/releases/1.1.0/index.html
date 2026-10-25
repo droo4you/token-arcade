@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#b9a6ee">
+<title>Droober & RC: Two Places at Once</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #22163a; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; outline: none; }
+
+  /* Desktop: the handheld shell is invisible, the canvas is just centered. */
+  #shell, #bezel { display: contents; }
+  .bz-top, .brand, #touch { display: none; }
+
+  /* ===== Phones: a Droober handheld ===== */
+  body.touch-on { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
+  body.touch-on #shell { display: flex; position: fixed; inset: 0; flex-direction: column; align-items: center; justify-content: flex-start;
+    background: linear-gradient(160deg, #cdbdf7 0%, #b9a6ee 55%, #a690e2 100%);
+    padding-top: env(safe-area-inset-top, 0px); }
+  body.touch-on #bezel { display: block; position: relative; background: #3a2c63; box-shadow: inset 0 0 0 2px #22163a, 0 2px 0 rgba(255,255,255,0.35); }
+  body.touch-on .bz-top { display: flex; align-items: center; gap: 6px; color: #b096e8; font: 700 9px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.5px; }
+  .led { width: 7px; height: 7px; border-radius: 50%; background: #f39cc0; box-shadow: 0 0 6px #f39cc0; }
+  .bz-top .line { flex: 1; height: 2px; background: #5a3096; }
+  body.touch-on .brand { display: block; color: #5a3096; font: italic 900 20px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 1px; text-shadow: 0 1px 0 rgba(255,255,255,0.4); }
+  .brand small { font-size: 11px; font-weight: 700; letter-spacing: 2px; margin-left: 4px; color: #6e4bb0; }
+  body.touch-on canvas { box-shadow: 0 0 0 2px #22163a; }
+
+  body.touch-on #touch { display: block; position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #touch button { position: absolute; pointer-events: auto; touch-action: none; padding: 0; border: 0; color: #fdfbf0;
+    font: 900 calc(2.6 * var(--u)) / 1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.5px; -webkit-tap-highlight-color: transparent; }
+  .tp-round { border-radius: 50%; box-shadow: inset 0 calc(-1 * var(--u)) 0 rgba(0,0,0,0.25), 0 calc(0.9 * var(--u)) 0 #5a3096; text-shadow: 0 1px 0 rgba(0,0,0,0.35); }
+  #touch button.down { transform: translateY(calc(0.8 * var(--u))); box-shadow: inset 0 calc(-0.4 * var(--u)) 0 rgba(0,0,0,0.25); filter: brightness(1.1); }
+  .tp-a { background: #e5487f; } .tp-b { background: #e5487f; } .tp-x { background: #1cb6d8; } .tp-y { background: #7b55c6; }
+
+  /* d-pad: a chunky cross that tilts toward your thumb */
+  .tp-pad { position: absolute; pointer-events: auto; touch-action: none;
+    transform: perspective(300px) rotateY(calc(var(--tx, 0) * 16deg)) rotateX(calc(var(--ty, 0) * -16deg)); }
+  .tp-pad::before, .tp-pad::after { content: ''; position: absolute; background: #2b2238; border-radius: calc(1.2 * var(--u));
+    box-shadow: inset 0 calc(-0.8 * var(--u)) 0 #15101e, 0 calc(0.9 * var(--u)) 0 #5a3096; }
+  .tp-pad::before { left: 34%; width: 32%; top: 0; height: 100%; }
+  .tp-pad::after { top: 34%; height: 32%; left: 0; width: 100%; }
+  .tp-knob { position: absolute; left: 50%; top: 50%; width: 18%; height: 18%; margin: -9% 0 0 -9%; border-radius: 50%; background: #15101e; z-index: 1; pointer-events: none; }
+
+  .tp-pill { position: absolute; display: flex; flex-direction: column; align-items: center; gap: calc(1 * var(--u)); pointer-events: none; }
+  .tp-pill button { position: static !important; width: calc(13 * var(--u)); height: calc(3.6 * var(--u)); border-radius: calc(2 * var(--u));
+    background: #7a6aa0; transform: rotate(-25deg); box-shadow: 0 calc(0.6 * var(--u)) 0 #5a3096; }
+  .tp-pill button.down { transform: rotate(-25deg) translateY(calc(0.5 * var(--u))) !important; }
+  .tp-pill label { color: #5a3096; font: 900 calc(2.4 * var(--u)) / 1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 1px; transform: rotate(-25deg); }
+  .tp-speaker { position: absolute; width: calc(16 * var(--u)); height: calc(14 * var(--u)); transform: rotate(-25deg);
+    background: repeating-linear-gradient(90deg, #8a74c8 0 calc(1.4 * var(--u)), transparent calc(1.4 * var(--u)) calc(3 * var(--u))); border-radius: calc(1 * var(--u)); opacity: 0.8; }
+
+  /* --- portrait: Game Boy --- */
+  body.portrait #touch { --u: min(1vw, 6px); }
+  body.portrait #shell { border-bottom-right-radius: 16vw; }
+  body.portrait #bezel { margin-top: 4vw; padding: 3vw 6vw 6vw; border-radius: 3vw 3vw 14vw 3vw; }
+  body.portrait .bz-top { margin: 0 0 2.5vw; }
+  body.portrait .brand { margin-top: 3vw; align-self: flex-start; margin-left: 9vw; }
+  body.portrait .tp-pad { left: calc(env(safe-area-inset-left, 0px) + 7 * var(--u)); top: calc(var(--ctl-top, 60vh) + 12 * var(--u)); width: calc(34 * var(--u)); height: calc(34 * var(--u)); }
+  body.portrait .tp-btns { position: absolute; right: calc(5 * var(--u)); top: calc(var(--ctl-top, 60vh) + 5 * var(--u)); width: calc(40 * var(--u)); height: calc(42 * var(--u)); }
+  body.portrait .tp-x { right: calc(1 * var(--u)); top: 0; width: calc(11 * var(--u)); height: calc(11 * var(--u)); }
+  body.portrait .tp-a { right: 0; top: calc(13 * var(--u)); width: calc(17 * var(--u)); height: calc(17 * var(--u)); font-size: calc(3 * var(--u)) !important; }
+  body.portrait .tp-y { right: calc(22 * var(--u)); top: calc(8 * var(--u)); width: calc(11 * var(--u)); height: calc(11 * var(--u)); }
+  body.portrait .tp-b { right: calc(20 * var(--u)); top: calc(21 * var(--u)); width: calc(17 * var(--u)); height: calc(17 * var(--u)); font-size: calc(3 * var(--u)) !important; }
+  body.portrait .tp-pill.p1 { left: 32vw; top: calc(var(--ctl-top, 60vh) + 54 * var(--u)); }
+  body.portrait .tp-pill.p2 { left: 52vw; top: calc(var(--ctl-top, 60vh) + 54 * var(--u)); }
+  body.portrait .tp-speaker { right: calc(6 * var(--u)); top: calc(var(--ctl-top, 60vh) + 55 * var(--u)); }
+
+  /* --- landscape: wide handheld, controls on the grips --- */
+  body.landscape #touch { --u: min(1vh, 6px); }
+  body.landscape #shell { justify-content: center; border-radius: 0; }
+  body.landscape #bezel { padding: 2vh 3vh 3vh; border-radius: 2vh 2vh 6vh 2vh; margin-bottom: calc(9 * min(1vh, 6px)); }
+  body.landscape .bz-top { margin: 0 0 1.2vh; }
+  body.landscape .brand { display: none; }
+  body.landscape .tp-pad { left: calc(env(safe-area-inset-left, 0px) + 3vw); top: 50%; width: calc(32 * var(--u)); height: calc(32 * var(--u)); margin-top: calc(-19 * var(--u)); }
+  body.landscape .tp-btns { position: absolute; right: calc(env(safe-area-inset-right, 0px) + 2.5vw); top: 50%; margin-top: calc(-24 * var(--u)); width: calc(38 * var(--u)); height: calc(42 * var(--u)); }
+  body.landscape .tp-x { right: calc(1 * var(--u)); top: 0; width: calc(11 * var(--u)); height: calc(11 * var(--u)); }
+  body.landscape .tp-a { right: 0; top: calc(13 * var(--u)); width: calc(17 * var(--u)); height: calc(17 * var(--u)); font-size: calc(3 * var(--u)) !important; }
+  body.landscape .tp-y { right: calc(22 * var(--u)); top: calc(8 * var(--u)); width: calc(11 * var(--u)); height: calc(11 * var(--u)); }
+  body.landscape .tp-b { right: calc(20 * var(--u)); top: calc(21 * var(--u)); width: calc(17 * var(--u)); height: calc(17 * var(--u)); font-size: calc(3 * var(--u)) !important; }
+  body.landscape .tp-pill.p1 { left: calc(50% - 18 * var(--u)); bottom: calc(env(safe-area-inset-bottom, 0px) + 2 * var(--u)); }
+  body.landscape .tp-pill.p2 { left: calc(50% + 4 * var(--u)); bottom: calc(env(safe-area-inset-bottom, 0px) + 2 * var(--u)); }
+  body.landscape .tp-speaker { display: none; }
+</style>
+</head>
+<body>
+<div id="shell">
+  <div id="bezel">
+    <div class="bz-top"><span class="led"></span>POWER<span class="line"></span>GOO MATRIX</div>
+    <canvas id="game" tabindex="0"></canvas>
+  </div>
+  <div class="brand">DROOBER &amp; RC<small>TWO PLACES</small></div>
+</div>
+<script src="src/sprites.js"></script>
+<script src="src/font.js"></script>
+<script src="src/input.js"></script>
+<script src="src/touch.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/world.js"></script>
+<script src="src/levels.js"></script>
+<script src="src/levels2.js"></script>
+<script src="src/render.js"></script>
+<script src="src/render2.js"></script>
+<script src="src/rules.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
