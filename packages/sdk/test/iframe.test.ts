@@ -286,3 +286,41 @@ test("pagehide records departure once but preserves a run cached for back naviga
   assert.deepEqual(events.map(e => [e.type, e.reason]), [["started", undefined], ["exited", "pagehide"]]);
   assert.equal(env.windowListeners.get("pagehide")?.size, 0);
 });
+
+test("iframe hydrates account progress before mounting and never sends late progress into another mount", async t => {
+  const env = environment(t), updates: unknown[] = [];
+  let finishPrepare: (value: Record<string, unknown>) => void = () => {};
+  const connection = {
+    async open() { return { scope: "account-alice", keys: ["save"] }; },
+    prepare() { return new Promise<Record<string, unknown>>(resolve => { finishPrepare = resolve; }); },
+    async save(value: unknown) { updates.push(value); }, status() {},
+  };
+  const cartridge = new IframeCartridge(manifest, undefined, undefined, undefined, connection);
+  env.cleanup(() => cartridge.destroy());
+  const mounting = cartridge.mount(env.element, config);
+  const frame = env.frames[0];
+  env.send(frame, "ta:hello", { progress: true });
+  await Promise.resolve();
+  assert.equal(frame.posts.at(-1)?.message.type, "ta:progress_read");
+  env.send(frame, "ta:progress_snapshot", { guest: {} });
+  assert.ok(!frame.posts.some(p => p.message.type === "ta:mount"));
+  finishPrepare({ save: { unlocked: 3 } }); await Promise.resolve();
+  assert.equal(frame.posts.at(-1)?.message.type, "ta:progress_apply");
+  env.send(frame, "ta:progress_ready");
+  assert.equal(frame.posts.at(-1)?.message.type, "ta:mount");
+  env.send(frame, "ta:ready"); await mounting;
+  const operation = { id: "save-once", base: {}, state: { save: 1 } };
+  env.send(frame, "ta:progress_save", operation, { origin: "https://untrusted.example" });
+  assert.equal(updates.length, 0);
+  env.send(frame, "ta:progress_save", operation); env.send(frame, "ta:progress_save", operation);
+  await Promise.resolve();
+  assert.equal(updates.length, 1);
+  assert.equal(frame.posts.at(-1)?.message.type, "ta:progress_ack");
+  cartridge.destroy();
+  const next = cartridge.mount(env.element, config).catch(() => {}), second = env.frames[1];
+  env.send(second, "ta:hello", { progress: true }); await Promise.resolve();
+  env.send(second, "ta:progress_snapshot", { guest: {} });
+  cartridge.destroy(); const posts = second.posts.length;
+  finishPrepare({ save: { unlocked: 9 } }); await Promise.resolve(); await next;
+  assert.equal(second.posts.length, posts, "late hydration does not reach a destroyed cartridge");
+});

@@ -1,3 +1,5 @@
+import { accountProgress } from "./accountProgress.ts";
+import { progressKeys } from "../../../packages/sdk/src/progress.ts";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import { formatEther } from "viem";
 import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, Gamepad2, LockKeyhole, Menu, Moon, Play, Plus, RotateCcw, Settings2, ShieldCheck, Sparkles, Sun, Ticket, Trophy, UserRound, X } from "lucide-react";
@@ -315,6 +317,8 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
 
 function CartridgeView({ config, manifest, onComplete }: { config: GameRunConfig; manifest: GameManifest; onComplete: (result: GameRunResult) => void }) {
   const auth = useArcadeAuth();
+  const identity = useRef(auth.identityKey); identity.current = auth.identityKey;
+  const [saveStatus, setSaveStatus] = useState("");
   const token = useRef(auth.getToken);
   token.current = auth.getToken;
   const container = useRef<HTMLDivElement>(null);
@@ -324,16 +328,20 @@ function CartridgeView({ config, manifest, onComplete }: { config: GameRunConfig
   const [error, setError] = useState("");
   callback.current = onComplete;
   useEffect(() => {
+    const mountedIdentity = auth.identityKey;
+    let active = true;
+    setSaveStatus("");
+    const progress = mountedIdentity && progressKeys(config.gameId).length ? accountProgress(config.gameId, () => token.current(), () => active && identity.current === mountedIdentity, setSaveStatus) : undefined;
     const cartridgeHost = new CartridgeHost();
     host.current = cartridgeHost;
     if (container.current) {
-      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => setPaused(state === "paused"), setError, event => { void recordFreePlayLifecycle(event, token.current); });
+      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => setPaused(state === "paused"), setError, event => { void recordFreePlayLifecycle(event, token.current); }, progress);
       if (!cartridge) setError("The reviewed browser cartridge is not installed for this game.");
       else cartridgeHost.mount(cartridge, container.current, config, (result) => callback.current(result)).then(() => cartridgeHost.start()).catch((reason) => setError(messageFor(reason)));
     }
-    return () => { cartridgeHost.destroy(); host.current = null; };
-  }, [config.runId, manifest.adapterId]);
-  return <><div className="cartridge-mount" ref={container} />{error && <ErrorNote error={error} />}{<button className="under-game-button" onClick={() => { if (paused) host.current?.resume(); else host.current?.pause(); setPaused(!paused); }}>{paused ? "Resume game" : "Pause game"}</button>}</>;
+    return () => { active = false; cartridgeHost.destroy(); host.current = null; };
+  }, [config.runId, manifest.adapterId, auth.identityKey]);
+  return <>{saveStatus && <p role="status">{saveStatus}</p>}<div className="cartridge-mount" ref={container} />{error && <ErrorNote error={error} />}{<button className="under-game-button" onClick={() => { if (paused) host.current?.resume(); else host.current?.pause(); setPaused(!paused); }}>{paused ? "Resume game" : "Pause game"}</button>}</>;
 }
 
 function Player({ game }: { game: ArcadeGame | undefined }) {
@@ -402,7 +410,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
     {result && <div className="result-panel"><div className="result-medal"><Trophy size={31} /></div><div>
       <span>{result.result === "failed" ? "RUN FINISHED" : mode === "free" ? "LOCAL RESULT" : loading ? "VERIFYING RESULT" : verified ? "VERIFIED RESULT" : "RESULT NOT VERIFIED"}</span>
        <h2>{metricText(result.primaryMetric, result.objective)}</h2><span className="result-metric">{result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? "Peak Mood" : result.objective.replaceAll("_", " ")}</span>{verified && rank !== null && <span className="result-rank" data-testid="result-rank">Rank #{rank} on the {mode === "raid" ? "raid" : "Passport Play"} board</span>}
-      <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "Run summaries help us improve game balance. Progress saves on this device; competitive scores require Passport Play or Community Raid." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
+      <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "Run summaries help us improve game balance. Progress saves in this browser and syncs to your account when signed in. Competitive scores require Passport Play or Community Raid." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
       {result.secondaryMetrics && <dl className="result-details">{Object.entries(result.secondaryMetrics).filter(([key]) => !["ticks", "elapsedMs"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1")}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl>}
     </div><button className="action action-lime" disabled={loading} onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
     {game.record?.manifest.controls?.orientation === "landscape" && <p className="orientation-note">On a phone, turn sideways for the full playfield.</p>}
