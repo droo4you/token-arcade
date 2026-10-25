@@ -26,7 +26,14 @@ test("Skrumpey version URLs serve matching frozen rules and reject unsupported g
     const latestSim = await (await fetch(`${origin}/skrumpey-slide/v/1.2.0/sim.js`)).text();
     assert.ok(latestSim.includes("RULES_VERSION='1.2.0'"));
     assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.2.0/`)).status, 200);
-    assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.3.0/`)).status, 404);
+    const frenzySim = await (await fetch(`${origin}/skrumpey-slide/v/1.3.0/sim.js`)).text();
+    assert.equal(frenzySim.replaceAll("\r\n", "\n"), (await readFile(new URL("../../../cartridges/skrumpey-slide/sim.js", import.meta.url), "utf8")).replaceAll("\r\n", "\n"));
+    assert.ok(frenzySim.includes("RULES_VERSION='1.3.0'"));
+    assert.ok(!latestSim.includes("frenzyBoost"), "the previous release keeps its original physics");
+    assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.3.0/`)).status, 200);
+    assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.3.0/vendor/three.module.js`)).status, 200);
+    assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.4.0/`)).status, 404);
+    assert.equal((await fetch(`${origin}/skip-to-10k/v/1.3.0/`)).status, 404);
     assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.0.0/build-arcade.mjs`)).status, 404);
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
 });

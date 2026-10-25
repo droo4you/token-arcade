@@ -1,4 +1,14 @@
 # Skrumpey Slide v2.1 (v2 backup in v2/, v1 in v1/) (Tiny Wings / Dune! style)
+
+## Arcade rules 1.3.0 — DN Frenzy recovery
+
+At 45 meter points (+1 per ordinary DN nut, +3 per rare nut), DN Frenzy adds a one-time +4 m/s kick along the current movement direction, capped at the existing 80 m/s speed limit. It keeps the five-second nut rain and magnet. The kick runs in the shared simulation in Free Play, Passport Play and raids; avatars do not affect it. It adds no slope speed pads or purchasable boosts.
+
+Rules 1.3.0 has a new version URL and fresh boards. The server retains frozen 1.0.0, 1.1.0 and 1.2.0 simulations and assets for their existing runs. Publish the reviewed manifest with version `1.3.0` and entry `/skrumpey-slide/v/1.3.0/` after draining active sessions/raids; stored operator-managed cabinets are not silently changed. The local publishing helper targets 1.3.0.
+
+The +4 m/s amount is an initial tuning choice. Human feel testing is queued separately; it does not block work on the next sprint item.
+
+## Earlier visual iterations
 Run: `cd /workspace/skrumpey-slide && python3 -m http.server 8765` -> http://localhost:8765/ (v1 backup: http://localhost:8765/v1/). Offline; three.js r170 vendored.
 Controls: hold mouse/touch/Space = dive, release = fly. M = mute.
 - Perfect landing on a downslope: +12% speed, combo +1, +0.5 s of daylight. A steep landing costs speed and resets the combo.
@@ -26,7 +36,7 @@ v2.2 (v2.1 backup in v2.1/):
 - Measure frame times with tools/perf.js.
 v3 (in its own folder; the v2.2 submission build in /workspace/skrumpey-slide is untouched):
 - Skrumpey Train: stranded Skrumpeys are the other 11 token models, ordered by CONFIG.buddies (one per chunk). Touch one to rescue it and it follows your path from the sim's position history.
-- Multiplier: each train member adds +0.5x to all bonus points.
+- Multiplier: each train member adds +0.2x to bonus points, capped at 2.5x total.
 - Hits: a hit knocks off the last Skrumpey, which tumbles away. The full penalty only applies when the train is empty.
 - Trait synergy: a star-trait member makes Star last 1.5x and the train shimmers. A beam-trait member adds a rear shot during Beam.
 - Display: up to 12 are visible; beyond that the HUD shows (+N). Game over shows a squad card with a copy-able share text.

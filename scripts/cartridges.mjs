@@ -44,9 +44,9 @@ export function createCartridgeServer() {
       let file;
       if (url.pathname === '/sdk/bridge.js') file = resolve('packages/sdk/browser/bridge.js');
       else {
-        const match = /^\/([a-z0-9-]+)\/v\/(1\.0\.0|1\.1\.0|1\.2\.0|2\.0\.0)\/(.*)$/.exec(decodeURIComponent(url.pathname));
+        const match = /^\/([a-z0-9-]+)\/v\/(1\.0\.0|1\.1\.0|1\.2\.0|1\.3\.0|2\.0\.0)\/(.*)$/.exec(decodeURIComponent(url.pathname));
         if (!match || !/^[a-z0-9-]+$/.test(match[1])) { res.writeHead(404); res.end('Cartridge not found'); return; }
-        if (!(match[2] === '1.0.0' || (match[1] === 'skrumpey-slide' && ['1.1.0', '1.2.0'].includes(match[2])) || (match[1] === 'emonad-cabinet' && match[2] === '2.0.0'))) { res.writeHead(404); res.end('Cartridge version not found'); return; }
+        if (!(match[2] === '1.0.0' || (match[1] === 'skrumpey-slide' && ['1.1.0', '1.2.0', '1.3.0'].includes(match[2])) || (match[1] === 'emonad-cabinet' && match[2] === '2.0.0'))) { res.writeHead(404); res.end('Cartridge version not found'); return; }
         const requested = match[3] || (match[1] === 'coindle' ? 'index.html' : 'arcade.html');
         // Legacy entry points and executable files stay frozen. Art assets are shared
         // unchanged between these two releases; never fall back for executable files.
