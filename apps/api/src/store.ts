@@ -105,6 +105,8 @@ export class ArcadeStore {
       ...launchCabinets(process.env.CARTRIDGE_ORIGIN),
     ]) {
       const prior = this.getGame(game.manifest.id);
+      // Retain published v1 rules and history until an explicit reviewed version upgrade.
+      if (prior?.manifest.id === "two-places" && prior.manifest.version === "1.0.0") continue;
       // One narrow correction for v1 imports created during integration. Admin
       // edits clear this review marker; future starts never overwrite them.
       if (prior && (game.legacyImportRevision ?? 0) >= 2 && prior.legacyImportRevision === undefined &&

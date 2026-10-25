@@ -590,6 +590,8 @@ test("shared Skeleton verifier keeps independent Cabinet scores and lets issued 
 
 test("Two Places standings prioritize apples before time and require three authored raid levels", async () => {
   const isolatedStore = new ArcadeStore(":memory:", false);
+  const legacy = isolatedStore.getGame("two-places")!;
+  isolatedStore.saveGame({ ...legacy, manifest: { ...legacy.manifest, version: "1.0.0", adapterId: "two-places", supportedObjectives: ["completion_time", "stars"] } });
   const adapters = new AdapterRegistry();
   adapters.register({ adapterId: "two-places", gameId: "two-places", freePlaySmokeTest: true, rankedRules: { level: 0 }, verifier: { gameId: "two-places", async verify() { return { valid: true }; } } });
   const isolatedServer = createArcadeServer({ store: isolatedStore, adapters, authSettings: { localDemoMode: true }, staticRoot: "nonexistent-build" });

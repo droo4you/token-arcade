@@ -20,6 +20,12 @@ import { FundedRaids, FundedRaidError } from "./fundedRaids.ts";
 import { AutomaticPayouts } from "./automaticPayouts.ts";
 import { freePlayReport } from "./freePlayAnalytics.ts";
 
+import { twoRules, twoLevelRules, twoRaidRules } from "./twoPlacesBoards.ts";
+function requestedTwoRules(level: unknown = 0) {
+  if (!Number.isSafeInteger(level) || Number(level) < 0 || Number(level) >= twoRules.LEVEL_COUNT) fail(400, "INVALID_LEVEL", "Choose a level from 1 to 20");
+  return normalizeRunRules(twoLevelRules(level));
+}
+
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses", "coins_solved"]);
 const MODES = new Set(["free", "ranked", "raid"]);
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
@@ -54,14 +60,14 @@ function isoDate(value: unknown, field: string): string {
 function respond(response: ServerResponse, status: number, data: unknown): void {
   response.writeHead(status, jsonHeaders).end(JSON.stringify(data));
 }
-async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
+async function readJson(request: IncomingMessage, maxLength = 65_536): Promise<Record<string, unknown>> {
   if (!(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
     fail(415, "UNSUPPORTED_MEDIA_TYPE", "Use application/json");
   }
   let body = "";
   for await (const chunk of request) {
     body += chunk.toString();
-    if (body.length > 65_536) fail(413, "BODY_TOO_LARGE", "JSON body is too large");
+    if (body.length > maxLength) fail(413, "BODY_TOO_LARGE", "JSON body is too large");
   }
   try {
     const parsed: unknown = JSON.parse(body);
@@ -230,6 +236,7 @@ function raidBlockers(raid: Raid, store: ArcadeStore, adapters: AdapterRegistry)
     if (!game.community && conceptId && raid.communityId !== conceptId) blockers.push("Raid community does not match the Cabinet association");
     if (!game.community && !conceptId && raid.gameId !== WARMUP_GAME_ID) blockers.push("Game has no associated community");
     if (game.manifest.adapterId === "coindle" && (!isRapidRules(raid.rules) || raid.objective !== "coins_solved")) blockers.push("Coindle raids must use reviewed Rapid Fire rules: coins_solved, 180 seconds and 6 guesses per coin");
+    if (game.manifest.adapterId === "two-places-v2" && (raid.objective !== "score" || JSON.stringify(raid.rules) !== JSON.stringify(normalizeRunRules(twoRaidRules(raid.seed))))) blockers.push("Two Places raids require the shared shuffled level order and levels-beaten score");
     if (game.manifest.adapterId === "two-places") {
       const levels = typeof raid.rules?.levelSet === "string" && /^\d{1,2}(,\d{1,2}){2}$/.test(raid.rules.levelSet) ? raid.rules.levelSet.split(",").map(Number) : [];
       if (levels.length !== 3 || new Set(levels).size !== 3 || levels.some((level) => level < 0 || level >= 20)) blockers.push("Two Places raids require three distinct authored levels in rules.levelSet");
@@ -304,6 +311,12 @@ function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid"
   const best = new Map<string, AcceptedResult>();
   const twoPlaces = store.getGame(gameId)?.manifest.adapterId === "two-places";
   const compare = (a: AcceptedResult, b: AcceptedResult) => {
+    if (rules?.format === twoRules.FORMAT) {
+      const score = mode === "raid" ? b.result.primaryMetric - a.result.primaryMetric : a.result.primaryMetric - b.result.primaryMetric;
+      return score || (b.result.secondaryMetrics?.apples ?? 0) - (a.result.secondaryMetrics?.apples ?? 0)
+        || (mode === "raid" ? (a.result.secondaryMetrics?.elapsedMs ?? 0) - (b.result.secondaryMetrics?.elapsedMs ?? 0) : 0)
+        || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
+    }
     if (twoPlaces) {
       const apples = (b.result.secondaryMetrics?.apples ?? 0) - (a.result.secondaryMetrics?.apples ?? 0);
       if (apples) return apples;
@@ -338,7 +351,8 @@ function updatePassport(store: ArcadeStore, passport: Passport, result: GameRunR
   const wasFirstGame = !store.hasAcceptedGame(passport.playerId, result.gameId);
   const wasFirstRaid = raid ? !store.hasAcceptedRaid(passport.playerId, raid.id) : false;
   const bestScores = { ...passport.bestScores };
-  const key = `${result.gameId}:${result.objective}`;
+  const key = result.rules?.format === twoRules.FORMAT
+    ? `${result.gameId}@${result.gameVersion}:${result.objective}${result.mode === "ranked" ? `_level_${Number(result.rules.level) + 1}` : "_raid"}` : `${result.gameId}:${result.objective}`;
   const prior = bestScores[key];
   const lowerIsBetter = result.objective === "completion_time" || result.objective === "guesses";
   if (prior === undefined || (lowerIsBetter ? result.primaryMetric < prior : result.primaryMetric > prior)) bestScores[key] = result.primaryMetric;
@@ -441,6 +455,10 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   }
   /** Community Raid total: every verified run in the raid counts, not just each player's best. */
   const raidTotal = (raid: Raid) => {
+    if (raid.rules?.format === twoRules.FORMAT) {
+      const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id).filter(item => item.result.gameVersion === "1.1.0" && item.result.rules?.format === twoRules.FORMAT);
+      return { twoPlacesGoal: { levels: runs.reduce((n, r) => n + r.result.primaryMetric, 0), participants: new Set(runs.map(r => r.playerId)).size } };
+    }
     if (raid.objective !== "coins_solved") return {};
     const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id);
     return { communityTotal: { coinsSolved: runs.reduce((sum, item) => sum + item.result.primaryMetric, 0), runs: runs.length, participants: new Set(runs.map((item) => item.playerId)).size } };
@@ -636,7 +654,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const raid = raidId ? store.getRaid(raidId) : undefined;
         if (mode === "raid" && (!raid || raid.gameId !== gameId || raid.status === "draft")) fail(400, "INVALID_RAID", "A matching raidId is required");
         const objective = mode === "raid" ? raid!.objective : game.manifest.supportedObjectives[0];
-        const rules = mode === "raid" ? raid?.rules : adapters.get(game.manifest.adapterId)?.rankedRules;
+        const rules = mode === "raid" ? raid?.rules : game.manifest.adapterId === "two-places-v2" ? requestedTwoRules(Number(url.searchParams.get("level") ?? 0)) : adapters.get(game.manifest.adapterId)?.rankedRules;
         return respond(response, 200, { gameId, mode, objective, ...(raidId ? { raidId } : {}), ...(raid ? raidTotal(raid) : {}), entries: (raid && publicRaid(raid).finalResult?.entries) ?? leaderboard(store, gameId, mode, raidId, objective, mode === "ranked" ? game.manifest.version : undefined, rules) });
       }
 
@@ -823,7 +841,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const blockers = raidBlockers(raid, store, adapters);
           if (blockers.length) fail(409, "RAID_NOT_READY", "Raid cannot issue runs", blockers);
         }
-        const issuedRules = mode === "raid" ? raid?.rules : adapter.rankedRules;
+        const issuedRules = mode === "raid" ? raid?.rules : game.manifest.adapterId === "two-places-v2" ? requestedTwoRules(body.level ?? 0) : adapter.rankedRules;
         if (raid?.funding) fundedRaids.snapshotWallet(raid, passport);
         const config: GameRunConfig = {
           runId: randomUUID(), gameId, gameVersion: game.manifest.version, mode,
@@ -856,7 +874,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (!session || session.playerId !== passport.playerId) fail(404, "NOT_FOUND", "Run session not found");
         if (session.consumedAt) fail(409, "RUN_CONSUMED", "Run result was already accepted");
         if (Date.now() > Date.parse(session.config.expiresAt ?? "")) fail(409, "RUN_EXPIRED", "Run session expired");
-        const body = await readJson(request);
+        const body = await readJson(request, session.config.rules?.format === twoRules.FORMAT ? 131_072 : 65_536);
         if (Date.now() >= Date.parse(session.config.expiresAt ?? "")) fail(409, "RUN_EXPIRED", "Run submission must arrive before its deadline");
         const checked = validateRunResultShape(session.config, isRecord(body.result) ? body.result : body);
         if (!checked.valid) fail(400, "INVALID_RESULT", checked.reason);
@@ -867,7 +885,8 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (game?.status !== "published" && game?.status !== "paused") fail(409, "GAME_UNAVAILABLE", "Game is no longer available for completing issued runs");
         if (game?.manifest.version !== session.config.gameVersion) fail(409, "GAME_VERSION_CHANGED", "Game version changed during this run");
         const verifier = game && adapters.get(game.manifest.adapterId)?.verifier;
-        if (result.mode === "ranked" && JSON.stringify(session.config.rules ?? {}) !== JSON.stringify(adapters.get(game!.manifest.adapterId)?.rankedRules ?? {})) {
+        const currentRules = game!.manifest.adapterId === "two-places-v2" ? requestedTwoRules(session.config.rules?.level) : adapters.get(game!.manifest.adapterId)?.rankedRules;
+        if (result.mode === "ranked" && JSON.stringify(session.config.rules ?? {}) !== JSON.stringify(currentRules ?? {})) {
           fail(409, "RULES_CHANGED", "Passport Play rules changed during this run");
         }
         if (!verifier) fail(409, "VERIFIER_UNAVAILABLE", "Game-specific verifier is not installed");
@@ -1005,6 +1024,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const raid = validateRaidInput(body);
           const defaults = adapters.get(store.getGame(raid.gameId)?.manifest.adapterId ?? "")?.rankedRules;
           if (defaults || raid.rules) raid.rules = normalizeRunRules({ ...defaults, ...raid.rules });
+          if (store.getGame(raid.gameId)?.manifest.adapterId === "two-places-v2") raid.rules = normalizeRunRules(twoRaidRules(raid.seed));
           const blockers = raidBlockers(raid, store, adapters);
           if (!store.getGame(raid.gameId)) fail(404, "NOT_FOUND", "Game not found");
           if (!blockers.length) raid.status = currentRaid({ ...raid, status: "open" }).status;
