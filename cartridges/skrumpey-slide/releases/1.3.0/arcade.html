@@ -612,8 +612,12 @@ function placeBand(m,ax,ay,az,bx,by,bz){m.position.set((ax+bx)/2,(ay+by)/2,(az+b
 // ---------- UI ----------
 $('title').textContent=CONFIG.title;$('tagline').textContent=CONFIG.tagline;document.title=CONFIG.title;
 let selected=CONFIG.defaultCharacter;
+let progressKey='ta.skrumpey-slide.progress.v1';
+let casualProgress={bestScore:0,earnedNuts:0,runs:0,selected};
+function persistProgress(){try{localStorage.setItem(progressKey,JSON.stringify(casualProgress));}catch{}}
+
 for(const ch of CONFIG.characters){const b=document.createElement('button');b.title=ch.name+' #'+ch.id;b.dataset.id=ch.id;b.innerHTML=`<img src="${CONFIG.assetPath.png}${ch.id}.png" alt="${ch.name}">`;
- b.onclick=()=>{selected=ch.id;document.querySelectorAll('#grid button').forEach(x=>x.classList.toggle('sel',+x.dataset.id===ch.id));loadChar(ch.id);};$('grid').appendChild(b);}
+ b.onclick=()=>{selected=ch.id;casualProgress.selected=selected;if(!hosted||TA.active)persistProgress();document.querySelectorAll('#grid button').forEach(x=>x.classList.toggle('sel',+x.dataset.id===ch.id));loadChar(ch.id);};$('grid').appendChild(b);}
 document.querySelector(`#grid button[data-id="${selected}"]`).classList.add('sel');const characterReady=loadChar(selected); characterReady.catch(error=>hosted&&TA.error(error.message));
 
 // ---------- input ----------
@@ -680,6 +684,7 @@ function lb(){try{return JSON.parse(localStorage.getItem(CONFIG.leaderboardKey)|
 // ---- SUBMIT STUB: replace with a real server call. Server should re-simulate `replay` with sim.js to verify. ----
 async function submitScoreStub(r){console.info('[submit stub] would POST',{seed:r.seed,score:r.score,ticks:r.endTick,replayLen:r.replay.length});return {ok:false,stub:true};}
 function end(){state='over';AQ.length=0;aCur=null;{const a=$('announce');a.style.opacity=0;}document.body.classList.remove('playing');const r=SIM.result(S,mode);r.character=selected;window.LAST_RESULT=r;$('hud').classList.add('hid');$('sunbar').classList.add('hid');
+ if(!hosted||TA.config.mode==='free'){casualProgress.bestScore=Math.max(casualProgress.bestScore,r.score);casualProgress.earnedNuts+=r.gems;casualProgress.runs++;persistProgress();}
  $('oTitle').textContent=CONFIG.gameOverTitle;
  $('oStats').innerHTML=`<div class="big">${r.score}</div>${r.distance} m · best combo x${r.bestCombo} · ${r.perfects} perfect<br>${r.gems} DN · ${r.kills} critters · peak ${r.maxAlt} m`;
  const ids=r.train.map(i=>CONFIG.buddies[i]);$('squadImgs').innerHTML=ids.length?ids.map(id=>`<img src="${CONFIG.assetPath.png}${id}.png" alt="#${id}" title="#${id}">`).join(''):'<i>No Skrumpeys made it to nightfall. Rescue some next run!</i>';
@@ -828,6 +833,9 @@ if(hosted){
       if(config.mode!=='free'&&!config.seed)throw new Error('Passport Play needs a server-issued seed.');
       muted=Boolean(config.muted ?? true);updateAudioButton();
       await Promise.all([buddiesReady,characterReady]);
+      progressKey='ta.'+config.gameId+'.progress.v1';
+      try{const p=JSON.parse(localStorage.getItem(progressKey));if(p&&typeof p==='object'){for(const k of ['bestScore','earnedNuts','runs'])casualProgress[k]=Number.isFinite(p[k])?Math.max(0,Math.min(1e9,Math.floor(p[k]))):0;if(CONFIG.characters.some(c=>c.id===p.selected)){selected=p.selected;casualProgress.selected=selected;document.querySelectorAll('#grid button').forEach(x=>x.classList.toggle('sel',+x.dataset.id===selected));await loadChar(selected);}}}catch{}
+
     },
     start(){},
     pause(){arcadePaused=true;resetInput();acc=0;AC?.suspend();},
