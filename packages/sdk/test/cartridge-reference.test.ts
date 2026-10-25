@@ -30,10 +30,10 @@ test('reference cartridge: published Registry entry -> handshake -> real run -> 
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(readFileSync('packages/sdk/browser/bridge.js', 'utf8'), sandbox);
-  for (const file of ['font', 'sprites', 'sim', 'meta', 'art', 'audio', 'main']) vm.runInContext(readFileSync(`cartridges/skip-to-10k/src/${file}.js`, 'utf8'), sandbox);
+  for (const file of ['font', 'sprites', 'sim', 'meta', 'rules', 'art', 'audio', 'main']) vm.runInContext(readFileSync(`cartridges/skip-to-10k/releases/1.1.0/src/${file}.js`, 'utf8'), sandbox);
   const execute = (code: string) => vm.runInContext(code, sandbox);
   const config = { runId: 'reference-run', gameId: record.manifest.id, gameVersion: record.manifest.version, mode: 'free' as const,
-    objective: 'distance' as const, startedAt: new Date().toISOString() };
+    objective: 'score' as const, startedAt: new Date().toISOString() };
   const send = async (type: string, payload: any = {}, origin = 'http://127.0.0.1:5173', source: any = parent) => {
     for (const fn of listeners.get('message') ?? []) await fn({ origin, source, data: { ta: 1, channel: 'test-channel', type, payload } });
   };
@@ -56,7 +56,7 @@ test('reference cartridge: published Registry entry -> handshake -> real run -> 
   execute('for(let i=0;i<120000 && G8.screen==="fly";i++) update(1/60)');
   const result = messages.find(m => m.type === 'ta:run_complete')?.payload;
   assert.ok(result, 'native terminal flight emitted a structured result');
-  assert.equal(result.primaryMetric, execute('SIM.results(G8.run).days'));
+  assert.equal(result.primaryMetric, execute('G8.res.score'));
   assert.equal(result.secondaryMetrics.peak, execute('SIM.results(G8.run).peak'));
   assert.equal(validateRunResultShape(config, result).valid, true);
   await send('ta:restart');

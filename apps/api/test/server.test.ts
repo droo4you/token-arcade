@@ -24,7 +24,7 @@ test("funded raid administration requires admin and claims require player authen
 
 test("Free Play summaries support guests and accounts without awarding competitive progress", async () => {
   const now = new Date().toISOString();
-  const result = { runId: "summary-guest", gameId: "skip-to-10k", gameVersion: "1.0.0", mode: "free", objective: "distance", primaryMetric: 123,
+  const result = { runId: "summary-guest", gameId: "skip-to-10k", gameVersion: "1.1.0", mode: "free", objective: "score", primaryMetric: 123,
     result: "completed", startedAt: now, finishedAt: now, secondaryMetrics: { earnedGwei: 50, rocksOwned: 3 }, proof: { ignored: true } };
   const body = { guestId: "12345678-1234-1234-1234-123456789012", result };
   assert.equal((await api("/api/free-play/summaries", { method: "POST", body })).status, 200);
@@ -58,7 +58,7 @@ test("Free Play summaries support guests and accounts without awarding competiti
 
 test("Free Play lifecycle is idempotent, bounded, and reconciles out-of-order exits", async () => {
   const now = new Date().toISOString();
-  const run = { runId: "lifecycle-run", gameId: "skip-to-10k", gameVersion: "1.0.0", mode: "free", objective: "distance", startedAt: now };
+  const run = { runId: "lifecycle-run", gameId: "skip-to-10k", gameVersion: "1.1.0", mode: "free", objective: "score", startedAt: now };
   const body = { guestId: "abcdef12-1234-1234-1234-123456789012", run };
   const send = (patch: object, auth?: string) => api("/api/free-play/events", { method: "POST", auth, body: { ...body, ...patch } });
   assert.equal((await send({ type: "exited", reason: "navigation" })).status, 200);

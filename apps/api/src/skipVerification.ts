@@ -6,16 +6,18 @@ import { createSeededReplayVerifier } from "./seededReplay.ts";
 /** Skip to 10K: deterministic 120 Hz sim.js. Passport Play = issued seed + locked standard loadout. */
 const source = readFileSync(new URL("../../../cartridges/skip-to-10k/src/sim.js", import.meta.url), "utf8");
 const script = new Script(`var module={exports:{}};${source}\n;globalThis.__sim=module.exports;`, { filename: "skip-to-10k-sim.js" });
+const v2Source = readFileSync(new URL("../../../cartridges/skip-to-10k/releases/1.1.0/src/sim.js", import.meta.url), "utf8");
+const v2Script = new Script(`var module={exports:{}};${v2Source}\n;globalThis.__sim=module.exports;`, { filename: "skip-to-10k-1.1.0.js" });
 type Run = { seed: number; phase: string; t: number; alt: number };
 type Sim = {
   DT: number; STANDARD_LOADOUT: object; issuedSeed(v: string): number;
-  newRun(up: object, seed: number): Run; throwRock(run: Run, angle: number, power: number, x: number): void;
+  newRun(up: object, seed: number, balanceV2?: boolean): Run; throwRock(run: Run, angle: number, power: number, x: number): void;
   step(run: Run, input: { tilt: number; skip: boolean; bounce: boolean; rc: boolean }): void;
   results(run: Run): Record<string, number>;
 };
-export function loadSkipSim(): Sim {
+export function loadSkipSim(version = "1.0.0"): Sim {
   const context = createContext({ Math, Date, Object, String });
-  script.runInContext(context, { timeout: 1_000 });
+  (version === "1.1.0" ? v2Script : script).runInContext(context, { timeout: 1_000 });
   return (context as unknown as { __sim: Sim }).__sim;
 }
 const seedSim = loadSkipSim();

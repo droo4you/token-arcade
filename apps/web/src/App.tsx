@@ -240,7 +240,7 @@ function metricText(value: number, objective: string) { return objective === "co
 
 function Leaderboard({ entries, objective = "score" }: { entries: LeaderboardEntry[]; objective?: string }) {
   if (!entries.length) return <div className="empty-list"><Trophy size={28} /><strong>No verified runs yet</strong><span>The first accepted result will appear here.</span></div>;
-  return <div className="leaderboard"><div className="leaderboard-head"><span>Place</span><span>Player</span><span>{objective.replaceAll("_", " ")}</span></div>{entries.map((entry, index) => <div className="leaderboard-row" key={entry.runId}><span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span><span>{entry.displayName}</span><strong>{entry.secondaryMetrics?.apples !== undefined && <small>{entry.secondaryMetrics.apples} apples · </small>}{metricText(entry.primaryMetric, objective)}</strong></div>)}</div>;
+  return <div className="leaderboard"><div className="leaderboard-head"><span>Place</span><span>Player</span><span>{objective.replaceAll("_", " ")}</span></div>{entries.map((entry, index) => <div className="leaderboard-row" key={entry.runId}><span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span><span>{entry.displayName}</span><strong>{entry.secondaryMetrics?.apples !== undefined && <small>{entry.secondaryMetrics.apples} apples · </small>}{metricText(entry.primaryMetric, objective)}{entry.secondaryMetrics?.gwei !== undefined && <small> · {entry.secondaryMetrics.gwei} gwei</small>}</strong></div>)}</div>;
 }
 
 function MinicoinEvidence({ record, playable }: { record: GameRecord; playable: boolean }) {
@@ -269,6 +269,8 @@ function MinicoinEvidence({ record, playable }: { record: GameRecord; playable: 
 }
 
 function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid[] }) {
+  const skipBoards = game?.record?.manifest.adapterId === "skip-to-10k-v2";
+  const [board, setBoard] = useState("zero");
   const auth = useArcadeAuth();
   const now = useNow();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -276,9 +278,9 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
   useEffect(() => {
     if (game?.record?.status !== "published") { setEntries([]); setError(""); return; }
     const controller = new AbortController();
-    api<LeaderboardResponse>(`/api/leaderboards/${encodeURIComponent(game.id)}?mode=ranked`, auth.getToken, { signal: controller.signal }).then((data) => setEntries(data.entries)).catch((reason) => { if (!(reason instanceof DOMException && reason.name === "AbortError")) setError(messageFor(reason)); });
+    api<LeaderboardResponse>(`/api/leaderboards/${encodeURIComponent(game.id)}?mode=ranked${skipBoards ? `&board=${board}` : ""}`, auth.getToken, { signal: controller.signal }).then((data) => setEntries(data.entries)).catch((reason) => { if (!(reason instanceof DOMException && reason.name === "AbortError")) setError(messageFor(reason)); });
     return () => controller.abort();
-  }, [game?.id, game?.record?.status]);
+  }, [game?.id, game?.record?.status, board, skipBoards]);
   if (!game) return <NotFound />;
   const openRaid = raids.find((raid) => raid.gameId === game.id && isRaidOpen(raid, now));
   const competitive = game.playable && game.record?.status === "published" && game.record.manifest.supportedModes.includes("ranked");
@@ -291,9 +293,10 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
         <h1>{game.name}</h1><p className="detail-lead">{game.description}</p><GuideLink topic="cabinets">How cabinets work</GuideLink>
          {game.record?.economy && <div className="cabinet-economy"><StatusBadge tone="wait">{game.record.minicoin ? "Full MiniCoin economy pending" : "MiniCoin Economy — Coming Soon"}</StatusBadge><p>{game.record.economy.reason}</p></div>}
          {game.record?.minicoin && <MinicoinEvidence record={game.record} playable={game.playable} />}
+        {skipBoards && <label>Passport board <select value={board} onChange={event => setBoard(event.target.value)}>{["open", "zero", "mid", "max"].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select><p>{board === "open" ? "Use your browser-saved upgrades and rocks." : "Fixed upgrades. Rock bonuses are locked."}</p></label>}
         <div className="detail-mode-list">
           <div><span className="mode-icon mode-free"><Play size={20} fill="currentColor" /></span><div><strong>Free Play</strong><small>{game.record?.manifest.playGuide?.free ?? "Play for fun. No account required."}</small></div>{game.playable ? <Link href={playHref(game.id)} className="mini-action">Play Free <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Awaiting adapter</span>}</div>
-          <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>Passport Play</strong><small>{game.record?.manifest.playGuide?.ranked ?? "Verified score and a place on the board."}</small></div>{competitive ? <Link href={playHref(game.id, "ranked")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
+          <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>Passport Play</strong><small>{game.record?.manifest.playGuide?.ranked ?? "Verified score and a place on the board."}</small></div>{competitive ? <Link href={playHref(game.id, "ranked") + (skipBoards ? `&board=${board}` : "")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
           <div><span className="mode-icon mode-raid"><Sparkles size={21} /></span><div><strong>Community Raid</strong><small>{game.record?.manifest.playGuide?.raid ?? "Same challenge, shared standings."}</small></div>{openRaid ? <Link href={`/raids/${encodeURIComponent(openRaid.id)}`} className="mini-action">See raid <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">No open raid</span>}</div>
         </div>
         {!game.playable && <div className="pending-note"><LockKeyhole size={20} /><span>{game.name} needs a reviewed browser cartridge before play opens here.</span></div>}
@@ -301,7 +304,7 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
     </div>
     <div className="detail-below">
       <section className="detail-info"><h2>About this cabinet</h2><p>{game.fixture ? "Warmup Cabinet checks the cartridge host, Free Play, server-issued runs, and score verification. It is a test fixture for this arcade, not one of the four launch games." : game.playable ? "This cartridge is installed and ready for browser play. Competitive modes appear when its verifier and rules are published." : "The arcade is reserving this cabinet for its incoming game. Game play and competitive modes will open after the actual game is imported and verified."}</p><div className="info-pairs"><div><span>Made by</span><strong>{game.record?.manifest.developer ?? (game.fixture ? "Token Arcade" : "External game team")}</strong></div><div><span>Community</span><strong>{game.community}</strong></div><div><span>Version</span><strong>{game.record?.manifest.version ?? "Awaiting import"}</strong></div></div>{game.record?.community && <details className="financial-details"><summary>Community asset <ChevronDown size={16} /></summary><p>{game.record.community.name} ({game.record.community.type.toUpperCase()})</p><code>{game.record.community.address}</code></details>}{game.record?.communityConcept && <details className="financial-details"><summary>Community association <ChevronDown size={16} /></summary><p>{game.record.communityConcept.name} · {game.record.communityConcept.type.toUpperCase()}</p><p>{game.record.communityConcept.description}</p>{game.record.communityConcept.address && <code>{game.record.communityConcept.address}</code>}<p>Association does not imply an official partnership.</p></details>}{game.record?.manifest.playGuide?.scoring && <><h3>Scoring</h3><p>{game.record.manifest.playGuide.scoring}</p><h3>Tie-breaks</h3><p>{game.record.manifest.playGuide.tieBreak}</p></>}{game.record?.manifest.verifier && <p className="verification-note">{game.record.manifest.verifier.description}</p>}</section>
-      <section className="detail-board"><div className="board-heading"><div><h2>Passport Play leaderboard</h2><p>Verified runs belong to this cabinet.</p></div><Trophy size={26} /></div>{error ? <ErrorNote error={error} /> : <Leaderboard entries={entries} objective={game.record?.manifest.supportedObjectives[0] ?? "score"} />}</section>
+      <section className="detail-board"><div className="board-heading"><div><h2>Passport Play leaderboard</h2><p>{skipBoards ? `${board.toUpperCase()} board · distance × peak-price multiplier · ties by gwei` : "Verified runs belong to this cabinet."}</p></div><Trophy size={26} /></div>{error ? <ErrorNote error={error} /> : <Leaderboard entries={entries} objective={game.record?.manifest.supportedObjectives[0] ?? "score"} />}</section>
     </div>
   </main>;
 }
@@ -334,6 +337,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   const params = new URLSearchParams(window.location.search);
   const mode = params.get("mode") === "ranked" ? "ranked" : params.get("mode") === "raid" ? "raid" : "free";
   const raidId = params.get("raidId") ?? undefined;
+  const board = params.get("board") ?? "zero";
   const [attempt, setAttempt] = useState(0);
   const [config, setConfig] = useState<GameRunConfig | null>(null);
   const [result, setResult] = useState<GameRunResult | null>(null);
@@ -354,10 +358,10 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
       setConfig({ runId: crypto.randomUUID(), gameId: game.id, gameVersion: game.record?.manifest.version ?? "1.0.0", mode: "free", objective: game.record?.manifest.supportedObjectives[0] ?? "score", seed: crypto.randomUUID(), startedAt: now });
     } else {
       setLoading(true);
-      api<RunResponse>("/api/runs", token.current, { method: "POST", body: { gameId: game.id, mode, raidId } }).then((response) => { if (active) setConfig(response.run); }).catch((reason) => { if (active) setError(messageFor(reason)); }).finally(() => { if (active) setLoading(false); });
+      api<RunResponse>("/api/runs", token.current, { method: "POST", body: { gameId: game.id, mode, raidId, ...(game.record?.manifest.adapterId === "skip-to-10k-v2" ? { board } : {}) } }).then((response) => { if (active) setConfig(response.run); }).catch((reason) => { if (active) setError(messageFor(reason)); }).finally(() => { if (active) setLoading(false); });
     }
     return () => { active = false; completionGeneration.current += 1; };
-  }, [game?.id, attempt, mode, raidId, auth.ready, auth.identityKey]);
+  }, [game?.id, attempt, mode, raidId, board, auth.ready, auth.identityKey]);
   if (!game) return <NotFound />;
   if (!game.playable) return <main className="page-width centered-state"><LockKeyhole size={42} /><h1>{game.name} is on its way.</h1><p>The browser cartridge has not arrived in this workspace. We’ll open its cabinet after import and review.</p><ActionLink href={gameHref(game.id)}>Back to game details</ActionLink></main>;
   if (mode !== "free" && (game.record?.status !== "published" || !game.record.manifest.supportedModes.includes(mode))) return <main className="page-width centered-state"><LockKeyhole size={42} /><h1>This mode is not available yet.</h1><p>Free Play is ready while this game’s competitive rules are reviewed.</p><ActionLink href={playHref(game.id)}>Play Free</ActionLink></main>;
@@ -387,6 +391,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
     {error && <ErrorNote error={error} />}
     {mode !== "free" && result?.result === "completed" && !verified && !loading && <button className="action action-light" onClick={() => void complete(result)}>Retry result submission</button>}
     {mode === "raid" && raidId && <Link className="back-link" href={`/raids/${encodeURIComponent(raidId)}`}>Return to raid standings</Link>}
+    {config?.rules?.format === "skip-four-v1" && <p>Loadout: {String(config.rules.board).toUpperCase()}. {mode === "raid" ? "Complete Zero, Mid and Max; all three scores form your raid total." : "This run competes on its own board."}</p>}
     {config && (!result || mode === "free") && <CartridgeView key={config.runId} config={config} manifest={game.record!.manifest} onComplete={complete} />}
     {result && <div className="result-panel"><div className="result-medal"><Trophy size={31} /></div><div>
       <span>{result.result === "failed" ? "RUN FINISHED" : mode === "free" ? "LOCAL RESULT" : loading ? "VERIFYING RESULT" : verified ? "VERIFIED RESULT" : "RESULT NOT VERIFIED"}</span>
@@ -447,6 +452,7 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
   }, [id, auth.identityKey]);
   if (!data) return <main className="page-width list-page"><div className="loading-slab">Opening raid lobby…</div>{error && <ErrorNote error={error} />}</main>;
   const { raid, leaderboard } = data;
+  const skipRaid = raid.rules?.format === "skip-four-v1";
   const ownEntry = leaderboard.find(entry => entry.playerId === data.playerId);
   const game = getGame(raid.gameId, records);
   const running = now >= Date.parse(raid.startsAt) && now < Date.parse(raid.endsAt);
@@ -465,14 +471,15 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
     {error && <ErrorNote error={`Standings could not refresh. Showing the last received results. ${error}`} />}
     {raid.finalResult && <section className="result-panel" aria-live="polite"><Trophy size={31} /><div><span>FINAL RESULT</span><h2>{leaderboard[0] ? `${leaderboard[0].displayName} wins!` : "No qualifying runs"}</h2><p>{leaderboard[0] ? `Winning result: ${metricText(leaderboard[0].primaryMetric, raid.objective)}. Final standings are saved below.` : "This raid ended without an accepted result."} {raid.funding ? "The testnet reward is settled after final standings are verified." : "This community challenge has no prize."}</p>{raid.funding && data.playerId === leaderboard[0]?.playerId && <RaidPrizeClaim raid={raid} />}</div></section>}
     <div className="raid-hero">
-      <div><StatusBadge tone={isRaidOpen(raid, now) ? "good" : "wait"}>Raid {raidDisplayStatus(raid, now)}</StatusBadge><h1>{raid.name}</h1><p>{data.communityTotal ? "Three minutes per attempt. Every verified solve adds to the community total." : "Same course. Same rules. Put your best run on the board."}</p>
+      <div><StatusBadge tone={isRaidOpen(raid, now) ? "good" : "wait"}>Raid {raidDisplayStatus(raid, now)}</StatusBadge><h1>{raid.name}</h1><p>{skipRaid ? "Three skips, one shared seed: Zero, Mid and Max. Your total counts." : data.communityTotal ? "Three minutes per attempt. Every verified solve adds to the community total." : "Same course. Same rules. Put your best run on the board."}</p>
         <div className="raid-quickfacts"><div><Clock3 size={19} /><span>{countdown}</span></div><div><Ticket size={19} /><span>{entryLabel}</span></div><div><Trophy size={19} /><span>{prizeLabel}</span></div></div>
         <div className="raid-hero-actions">{playable ? <ActionLink href={playHref(raid.gameId, "raid", raid.id)}>Start raid attempt</ActionLink> : <span className="raid-unavailable">{unavailable}</span>}</div>
       </div><div className="raid-hero-glyph">✳</div>
     </div>
     <div className="raid-content">
       <section className="rules-panel"><h2>The rules</h2>
-        <p>Each issued attempt counts, including abandoned runs. Finish and submit before the closing time. {data.communityTotal ? "Your best attempt ranks by coins solved, then fewer guesses, then acceptance time and run ID. Every verified attempt contributes to the community total." : "Your best verified attempt counts; equal results are ordered by acceptance time, then run ID."}</p>
+        <p>Each issued attempt counts, including abandoned runs. Finish and submit before the closing time. {skipRaid ? "Complete all three loadouts to enter standings. Their scores are added; ties go to total gwei. Abandoned attempts still use their slot. Community totals are display-only." : data.communityTotal ? "Your best attempt ranks by coins solved, then fewer guesses, then acceptance time and run ID. Every verified attempt contributes to the community total." : "Your best verified attempt counts; equal results are ordered by acceptance time, then run ID."}</p>
+        {data.skipGoal && <div className="rule-row"><span>Community goal · display only</span><strong>{data.skipGoal.distance.toLocaleString()} days travelled · {data.skipGoal.broke10k} players broke 10K</strong></div>}
         {data.communityTotal && <div className="rule-row"><span>Community total</span><strong>{data.communityTotal.coinsSolved.toLocaleString()} coins solved · {data.communityTotal.runs} runs · {data.communityTotal.participants} players</strong></div>}
         <div className="rule-row"><span>Game</span><strong>{game?.name ?? raid.gameId}</strong></div>
         <div className="rule-row"><span>Objective</span><strong>{raid.objective.replaceAll("_", " ")}</strong></div>
@@ -600,10 +607,10 @@ function PassportPage({ health, records }: { health: Health | null; records: Gam
         <section className="passport-stats"><div className="stat"><span>Games played</span><strong>{passport.gamesPlayed}</strong></div><div className="stat"><span>Passport Play runs</span><strong>{passport.rankedRuns}</strong></div><div className="stat"><span>Raids entered</span><strong>{passport.raidsEntered}</strong></div><div className="stat"><span>Wins</span><strong>{passport.wins}</strong></div></section>
          <section className="passport-history"><h2>Best scores</h2>{Object.entries(passport.bestScores).length ? <div>{Object.entries(passport.bestScores).map(([key, score]) => {
            const separator = key.lastIndexOf(":");
-           const gameId = separator < 0 ? key : key.slice(0, separator);
+           const [gameId, gameVersion] = (separator < 0 ? key : key.slice(0, separator)).split("@");
            const objective = separator < 0 ? "score" : key.slice(separator + 1);
            const gameName = records.find((record) => record.manifest.id === gameId)?.manifest.name ?? getGame(gameId, [])?.name ?? gameId;
-           return <div className="history-row" key={key}><span>{gameName} · {objective.replaceAll("_", " ")}</span><strong>{score.toLocaleString()}</strong></div>;
+           return <div className="history-row" key={key}><span>{gameName}{gameVersion ? ` v${gameVersion}` : ""} · {objective.replaceAll("_", " ")}</span><strong>{score.toLocaleString()}</strong></div>;
          })}</div> : <div className="empty-list"><Gamepad2 size={27} /><strong>No verified scores yet</strong><span>{rankedGame ? "Finish a Passport Play run to add your first one." : "Your verified scores will appear when Passport Play opens."}</span></div>}{rankedGame && <ActionLink href={playHref(rankedGame.id, "ranked")}>Try Passport Play</ActionLink>}</section>
         <section className="passport-wallet"><h2>Wallets & communities</h2><div className="rule-row"><span>Arcade wallet</span><strong>{auth.demoRole ? "Demo identity · no wallet" : passport.arcadeWallet ? shortAddress(passport.arcadeWallet) : walletSync?.ready === false ? "Wallet sync unavailable" : "Waiting for Privy wallet"}</strong></div>{!auth.demoRole && passport.arcadeWallet && <WalletSigningCheck key={`${auth.identityKey}:${passport.arcadeWallet}`} wallet={passport.arcadeWallet} />}{!auth.demoRole && !passport.arcadeWallet && <>{walletSync?.ready === false && <p role="status">{walletSync.reason}</p>}{!auth.hasEmbeddedWallet && <button className="text-button" disabled={creatingArcadeWallet} onClick={() => void createArcadeWallet()}>{creatingArcadeWallet ? "Creating arcade wallet…" : "Create arcade wallet"}</button>}<button className="text-button" onClick={() => setPassportLoad((value) => value + 1)}>Refresh wallet</button></>}<div className="rule-row"><span>Ownership wallets</span><strong>{passport.ownershipWallets.length}</strong></div>{passport.ownershipWallets.map((address) => <div className="linked-wallet" key={address}><code>{shortAddress(address)}</code><button disabled={walletBusy} onClick={() => void unlinkWallet(address)}>Unlink</button></div>)}<button className="wallet-link-button" disabled={walletBusy} onClick={() => void linkWallet()}>{walletBusy ? "Waiting for wallet…" : "Link ownership wallet"}<ArrowUpRight size={16} /></button><p>Sign a message to associate an external wallet. No asset transfer is requested. Holder eligibility needs a configured Community Asset and Monad RPC.</p><div className="rule-row"><span>Communities</span><strong>{passport.communities.length ? passport.communities.join(", ") : "None yet"}</strong></div><button className="text-button" onClick={() => void auth.logout()}>Sign out</button></section>
       </div>}

@@ -22,7 +22,7 @@ test("Skrumpey version URLs serve matching frozen rules and reject unsupported g
     const newPage = await (await fetch(`${origin}/skrumpey-slide/v/1.1.0/`)).text();
     assert.ok(newPage.includes("TA.register({version:SIM.RULES_VERSION"));
     assert.ok(newPage.includes("rules:SIM.RULES_VERSION"));
-    assert.equal((await fetch(`${origin}/skip-to-10k/v/1.1.0/`)).status, 404);
+    assert.equal((await fetch(`${origin}/skip-to-10k/v/1.1.0/`)).status, 200);
     const latestSim = await (await fetch(`${origin}/skrumpey-slide/v/1.2.0/sim.js`)).text();
     assert.ok(latestSim.includes("RULES_VERSION='1.2.0'"));
     assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.2.0/`)).status, 200);

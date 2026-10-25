@@ -63,7 +63,7 @@ export async function api<T>(
 export type GamesResponse = { games: GameRecord[] };
 export type GameResponse = { game: GameRecord };
 export type RaidsResponse = { raids: Raid[] };
-export type RaidResponse = { raid: Raid; leaderboard: LeaderboardEntry[]; playerId?: string; attemptsUsed?: number; attemptsRemaining?: number; communityTotal?: { coinsSolved: number; runs: number; participants: number } };
+export type RaidResponse = { raid: Raid; leaderboard: LeaderboardEntry[]; playerId?: string; attemptsUsed?: number; attemptsRemaining?: number; skipGoal?: { distance: number; broke10k: number }; communityTotal?: { coinsSolved: number; runs: number; participants: number } };
 export type LeaderboardResponse = { entries: LeaderboardEntry[] };
 export type PassportResponse = { passport: Passport; walletSync?: { ready: boolean; reason?: string } };
 export type RunResponse = { run: GameRunConfig };
