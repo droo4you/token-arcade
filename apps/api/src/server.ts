@@ -14,7 +14,7 @@ import { DirectWalletOwnershipResolver } from "./ownership.ts";
 import { AdapterRegistry, normalizeRunRules } from "./verifiers.ts";
 import { MinicoinDeployer, MinicoinError, type MinicoinSettings } from "./minicoin.ts";
 import { createCoindleHandler } from "./coindle.ts";
-import { createCoindleRapid, RapidError, isRapidRules, RAPID_RULES, RAPID_RUN_TIMEOUT_MS, type PriceTiers } from "./coindleRapid.ts";
+import { createCoindleRapid, RapidError, isRapidRules, RAPID_RULES, RAPID_V2_RULES, RAPID_V2_FORMAT, RAPID_RAID_RULES, RAPID_RUN_TIMEOUT_MS, type PriceTiers } from "./coindleRapid.ts";
 import { TestnetMinicoinService } from "./testnet-minicoin.ts";
 import { FundedRaids, FundedRaidError } from "./fundedRaids.ts";
 import { AutomaticPayouts } from "./automaticPayouts.ts";
@@ -229,7 +229,8 @@ function raidBlockers(raid: Raid, store: ArcadeStore, adapters: AdapterRegistry)
     const conceptId = game.communityConcept?.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     if (!game.community && conceptId && raid.communityId !== conceptId) blockers.push("Raid community does not match the Cabinet association");
     if (!game.community && !conceptId && raid.gameId !== WARMUP_GAME_ID) blockers.push("Game has no associated community");
-    if (game.manifest.adapterId === "coindle" && (!isRapidRules(raid.rules) || raid.objective !== "coins_solved")) blockers.push("Coindle raids must use reviewed Rapid Fire rules: coins_solved, 180 seconds and 6 guesses per coin");
+    if (game.manifest.adapterId === "coindle" && (!isRapidRules(raid.rules) || raid.rules?.format !== RAPID_RULES.format || raid.objective !== "coins_solved")) blockers.push("Coindle raids must use reviewed Rapid Fire rules: coins_solved, 180 seconds and 6 guesses per coin");
+    if (game.manifest.adapterId === "coindle-v2" && (!isRapidRules(raid.rules) || raid.rules?.format !== RAPID_V2_FORMAT || raid.rules?.selection !== "hidden-pool-40-v1" || raid.objective !== "coins_solved" || raid.maxAttempts !== 3)) blockers.push("Coindle Rapid Fire raids require a hidden coin pool, 180 seconds, 6 guesses per coin and best of 3 attempts");
     if (game.manifest.adapterId === "two-places") {
       const levels = typeof raid.rules?.levelSet === "string" && /^\d{1,2}(,\d{1,2}){2}$/.test(raid.rules.levelSet) ? raid.rules.levelSet.split(",").map(Number) : [];
       if (levels.length !== 3 || new Set(levels).size !== 3 || levels.some((level) => level < 0 || level >= 20)) blockers.push("Two Places raids require three distinct authored levels in rules.levelSet");
@@ -312,9 +313,10 @@ function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid"
       return aTime - bTime || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
     }
     if (a.result.objective === "coins_solved") {
-      // Rapid Fire: most coins solved, then fewest total guesses.
+      // Keep legacy boards unchanged; v2 adds fewer skips after fewer guesses.
       return b.result.primaryMetric - a.result.primaryMetric
         || (a.result.secondaryMetrics?.guesses ?? Infinity) - (b.result.secondaryMetrics?.guesses ?? Infinity)
+        || (rules?.format === RAPID_V2_FORMAT ? (a.result.secondaryMetrics?.skips ?? Infinity) - (b.result.secondaryMetrics?.skips ?? Infinity) : 0)
         || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
     }
     const lowerIsBetter = a.result.objective === "completion_time" || a.result.objective === "guesses";
@@ -438,6 +440,9 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   });
   if (!adapters.get("coindle")) {
     adapters.register({ adapterId: "coindle", gameId: "coindle", freePlaySmokeTest: true, verifier: rapid.verifier, rankedRules: RAPID_RULES, runTimeoutMs: RAPID_RUN_TIMEOUT_MS });
+  }
+  if (!adapters.get("coindle-v2")) {
+    adapters.register({ adapterId: "coindle-v2", gameId: "coindle", freePlaySmokeTest: true, verifier: rapid.verifier, rankedRules: RAPID_V2_RULES, runTimeoutMs: RAPID_RUN_TIMEOUT_MS });
   }
   /** Community Raid total: every verified run in the raid counts, not just each player's best. */
   const raidTotal = (raid: Raid) => {
@@ -828,7 +833,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const config: GameRunConfig = {
           runId: randomUUID(), gameId, gameVersion: game.manifest.version, mode,
           objective: raid?.objective ?? game.manifest.supportedObjectives[0],
-          seed: raid?.seed ?? randomBytes(16).toString("hex"),
+          seed: game.manifest.adapterId === "coindle-v2" ? randomBytes(16).toString("hex") : raid?.seed ?? randomBytes(16).toString("hex"),
           ...(raid ? { raidId: raid.id, maxAttempts: raid.maxAttempts } : {}),
           ...(issuedRules ? { rules: issuedRules } : {}),
           startedAt: new Date(now).toISOString(), expiresAt: new Date(Math.min(now + (adapter.runTimeoutMs ?? 120_000), raid ? Date.parse(raid.endsAt) : Infinity)).toISOString(),
@@ -1003,7 +1008,8 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (method === "POST" && path === "/api/admin/raids") {
           const body = await readJson(request);
           const raid = validateRaidInput(body);
-          const defaults = adapters.get(store.getGame(raid.gameId)?.manifest.adapterId ?? "")?.rankedRules;
+          const adapterId = store.getGame(raid.gameId)?.manifest.adapterId ?? "";
+          const defaults = adapterId === "coindle-v2" ? RAPID_RAID_RULES : adapters.get(adapterId)?.rankedRules;
           if (defaults || raid.rules) raid.rules = normalizeRunRules({ ...defaults, ...raid.rules });
           const blockers = raidBlockers(raid, store, adapters);
           if (!store.getGame(raid.gameId)) fail(404, "NOT_FOUND", "Game not found");
