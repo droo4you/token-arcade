@@ -13,8 +13,8 @@
   const free = () => !embedded || config?.mode === 'free';
   function save() { try { localStorage.setItem(KEY, JSON.stringify(progress)); storageOK = true; } catch { storageOK = false; } paintProgress(); }
   function paintProgress() {
-    $('saved').textContent = storageOK ? `Browser best: ${progress.bestMood.toLocaleString()} Mood · ${P.balance(progress)} Good Vibes` : 'Browser saving is unavailable. You can still play.';
-    $('save-warning').textContent = storageOK ? 'Saved in this browser. Account saving is coming soon.' : 'Saving is unavailable in this browser session.';
+    $('saved').textContent = storageOK ? `Best: ${progress.bestMood.toLocaleString()} Mood · ${P.balance(progress)} Good Vibes` : 'Browser saving is unavailable. You can still play.';
+    $('save-warning').textContent = storageOK ? (bridge?.accountProgress ? 'Progress syncs to your account.' : 'Saved in this browser. Sign in to sync progress.') : 'Saving is unavailable in this browser session.';
   }
   function panel(id) { for (const name of ['menu', 'over', 'closet', 'paused']) $(name).hidden = name !== id; }
   function closet() {
@@ -168,7 +168,7 @@
   if(embedded){
     $('play').disabled=true;
     bridge.register({version:M.VERSION,capabilities:{pause:true,touch:true},
-      mount(value){config=value;if(value.mode!=='free'&&(!value.seed||value.rules?.viewportWidth!==390||value.rules?.viewportHeight!==844))throw new Error('Mood Swings needs an issued playfield and seed.');$('play').disabled=false;},
+      mount(value){config=value;try{progress=P.normalize(JSON.parse(localStorage.getItem(KEY)));}catch{}paintProgress();if(value.mode!=='free'&&(!value.seed||value.rules?.viewportWidth!==390||value.rules?.viewportHeight!==844))throw new Error('Mood Swings needs an issued playfield and seed.');$('play').disabled=false;},
       start(){panel('menu');}, restart(){if(free()){active=false;start();}}, pause(){paused=true;},resume(){paused=false;debt=0;},audio(value){muted=value;},
       destroy(){destroyed=true;active=false;cancelAnimationFrame(frame);listeners.forEach(fn=>fn());void audio?.close();}
     });
