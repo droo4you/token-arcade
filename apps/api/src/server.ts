@@ -20,6 +20,9 @@ import { FundedRaids, FundedRaidError } from "./fundedRaids.ts";
 import { AutomaticPayouts } from "./automaticPayouts.ts";
 import { freePlayReport } from "./freePlayAnalytics.ts";
 
+import { initializeProgress, readProgress, syncProgress } from "./freePlayProgress.ts";
+import { progressKeys } from "../../../packages/sdk/src/progress.ts";
+
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses", "coins_solved"]);
 const MODES = new Set(["free", "ranked", "raid"]);
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
@@ -397,6 +400,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
     localDemoAdminDisabled: process.env.LOCAL_DEMO_ADMIN_DISABLED === "true" || localMinicoinRehearsalRequested,
   });
   const store = options.store ?? new ArcadeStore(process.env.ARCADE_DB_PATH || undefined, auth.localDemoMode);
+  initializeProgress(store);
   const adapters = options.adapters ?? new AdapterRegistry();
   const fundedRaids = new FundedRaids(store);
   const payouts = new AutomaticPayouts(store, fundedRaids);
@@ -638,6 +642,19 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const objective = mode === "raid" ? raid!.objective : game.manifest.supportedObjectives[0];
         const rules = mode === "raid" ? raid?.rules : adapters.get(game.manifest.adapterId)?.rankedRules;
         return respond(response, 200, { gameId, mode, objective, ...(raidId ? { raidId } : {}), ...(raid ? raidTotal(raid) : {}), entries: (raid && publicRaid(raid).finalResult?.entries) ?? leaderboard(store, gameId, mode, raidId, objective, mode === "ranked" ? game.manifest.version : undefined, rules) });
+      }
+
+      if (/^\/api\/me\/progress\/[^/]+$/.test(path) && (method === "GET" || method === "POST")) {
+        const identity = await auth.authenticate(request), passport = store.getOrCreatePassport(identity.id);
+        const gameId = decodeURIComponent(path.split("/")[4]), keys = progressKeys(gameId);
+        if (!keys.length || !store.getGame(gameId)) fail(404, "NOT_FOUND", "This game has no account-save integration");
+        if (method === "GET") return respond(response, 200, { scope: passport.playerId, keys, state: readProgress(store, passport.playerId, gameId) });
+        const body = await readJson(request);
+        if (body.scope !== passport.playerId) fail(409, "ACCOUNT_CHANGED", "Account changed before progress was saved");
+        try {
+          const state = syncProgress(store, passport.playerId, gameId, body as Parameters<typeof syncProgress>[3]);
+          return respond(response, 200, { state });
+        } catch (error) { if (error instanceof TypeError) fail(400, "INVALID_PROGRESS", error.message); throw error; }
       }
 
       if (path === "/api/me" && (method === "GET" || method === "PATCH")) {

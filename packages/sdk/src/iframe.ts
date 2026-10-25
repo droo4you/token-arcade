@@ -1,5 +1,6 @@
 import type { FreePlayLifecycleEvent, GameManifest, GameRunConfig, GameRunResult, TokenArcadeGame } from "./index.ts";
 import { validateRunResultShape } from "./validate.ts";
+import type { ProgressConnection, ProgressRead, ProgressOperation } from "./progress.ts";
 
 /** The existing lifecycle contract, transported to a reviewed, separate-origin build. */
 export class IframeCartridge implements TokenArcadeGame {
@@ -14,9 +15,11 @@ export class IframeCartridge implements TokenArcadeGame {
   private readonly onState?: (state: "paused" | "running", reason?: string) => void;
   private readonly onError?: (message: string) => void;
   private readonly onFreePlay?: (event: FreePlayLifecycleEvent) => void;
-  constructor(manifest: GameManifest, onState?: (state: "paused" | "running", reason?: string) => void, onError?: (message: string) => void, onFreePlay?: (event: FreePlayLifecycleEvent) => void) {
+  private readonly progress?: ProgressConnection;
+  constructor(manifest: GameManifest, onState?: (state: "paused" | "running", reason?: string) => void, onError?: (message: string) => void, onFreePlay?: (event: FreePlayLifecycleEvent) => void, progress?: ProgressConnection) {
     this.manifest = manifest; this.onState = onState; this.onError = onError;
     this.onFreePlay = onFreePlay;
+    this.progress = progress;
   }
 
   async mount(container: HTMLElement, config: GameRunConfig): Promise<void> {
@@ -58,6 +61,16 @@ export class IframeCartridge implements TokenArcadeGame {
     }
     await new Promise<void>((resolve, reject) => {
       let settled = false;
+      const channel = this.channel;
+      const current = () => this.frame === frame && this.channel === channel;
+      let progressStage = "idle", progressTimer: ReturnType<typeof setTimeout> | undefined;
+      const saving = new Set<string>();
+      const fallback = () => {
+        if (!current() || progressStage === "done") return;
+        progressStage = "done"; clearTimeout(progressTimer);
+        this.progress?.status("Browser save only. Account sync is unavailable; pending saves will retry when you reopen the game.");
+        this.send("ta:mount", this.config);
+      };
       const fail = (message: string) => {
         if (!settled) { settled = true; reject(new Error(message)); }
         else { this.destroy("error"); this.onError?.(message); }
@@ -67,7 +80,42 @@ export class IframeCartridge implements TokenArcadeGame {
         if (event.origin !== entry.origin || event.source !== frame.contentWindow) return;
         const data = event.data;
         if (!data || data.ta !== 1 || data.channel !== this.channel) return;
-        if (data.type === "ta:hello") this.send("ta:mount", this.config);
+        if (data.type === "ta:hello" && progressStage === "idle") {
+          if (!this.progress || !data.payload?.progress) { progressStage = "done"; this.send("ta:mount", this.config); }
+          else {
+            progressStage = "opening"; this.progress.status("Loading account progress…");
+            progressTimer = setTimeout(fallback, 8000);
+            void this.progress.open().then(options => {
+              if (!current() || progressStage !== "opening") return;
+              progressStage = "reading";
+              this.send("ta:progress_read", { ...options, gameId: this.manifest.id });
+            }).catch(fallback);
+          }
+        }
+        if (data.type === "ta:progress_snapshot" && this.progress && progressStage === "reading") {
+          progressStage = "preparing";
+          void this.progress.prepare(data.payload as ProgressRead).then(state => {
+            if (!current() || progressStage !== "preparing") return;
+            progressStage = "applying"; this.send("ta:progress_apply", state);
+          }).catch(fallback);
+        }
+        if (data.type === "ta:progress_ready" && progressStage === "applying") {
+          progressStage = "done"; clearTimeout(progressTimer);
+          this.progress?.status("Saved to your account. Guest progress stays in this browser.");
+          this.send("ta:mount", this.config);
+        }
+        if (data.type === "ta:progress_unavailable") {
+          if (progressStage !== "done") fallback();
+          else this.progress?.status("Account sync is unavailable. Keep this browser save and reopen the game to retry.");
+        }
+        if (data.type === "ta:progress_save" && this.progress && progressStage === "done" && typeof data.payload?.id === "string" && !saving.has(data.payload.id)) {
+          const id = data.payload.id;
+          saving.add(id); this.progress.status("Saving progress…");
+          void this.progress.save(data.payload as ProgressOperation).then(() => {
+            if (!current()) return;
+            this.send("ta:progress_ack", { id }); this.progress?.status("Saved to your account.");
+          }).catch(() => { if (current()) this.progress?.status("Saved in this browser. Account sync will retry."); }).finally(() => saving.delete(id));
+        }
         if (data.type === "ta:ready" && !settled) { settled = true; clearTimeout(timer); resolve(); }
         if (data.type === "ta:run_started" && this.config?.mode === "free" && typeof data.payload?.runId === "string" && Number.isFinite(Date.parse(data.payload?.startedAt))) {
           if (data.payload.runId.length > 100) return;
@@ -100,6 +148,7 @@ export class IframeCartridge implements TokenArcadeGame {
       document.addEventListener("visibilitychange", visibility);
       this.cleanup = () => {
         clearTimeout(timer);
+        clearTimeout(progressTimer);
         resize?.disconnect(); wrapper?.remove();
         window.removeEventListener("message", message);
         window.removeEventListener("pagehide", pagehide);
