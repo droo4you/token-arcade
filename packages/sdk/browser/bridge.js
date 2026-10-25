@@ -53,7 +53,7 @@
   const onVisibility = () => { if (document.hidden) pause('hidden'); };
   window.TokenArcade = {
     embedded, get active() { return active; }, get config() { return config; }, get paused() { return paused; },
-    register(value) { if (!embedded) return false; adapter = value; addEventListener('message', onMessage); addEventListener('blur', onBlur); document.addEventListener('visibilitychange', onVisibility); send('ta:hello', { sdk: '1', gameVersion: '1.0.0' }); return true; },
+    register(value) { if (!embedded) return false; adapter = value; addEventListener('message', onMessage); addEventListener('blur', onBlur); document.addEventListener('visibilitychange', onVisibility); send('ta:hello', { sdk: '1', gameVersion: adapter.version || '1.0.0' }); return true; },
     beginRun, pause, resume,
     complete(result) {
       if (!active || !running || completed || destroyed) return;

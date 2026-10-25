@@ -44,7 +44,7 @@ export function createCartridgeServer() {
       let file;
       if (url.pathname === '/sdk/bridge.js') file = resolve('packages/sdk/browser/bridge.js');
       else {
-        const match = /^\/([a-z0-9-]+)\/v\/(1\.0\.0|1\.1\.0|1\.2\.0)\/(.*)$/.exec(decodeURIComponent(url.pathname));
+        const match = /^\/([a-z0-9-]+)\/v\/(1\.0\.0|1\.1\.0|1\.2\.0|1\.3\.0)\/(.*)$/.exec(decodeURIComponent(url.pathname));
         if (!match || !/^[a-z0-9-]+$/.test(match[1])) { res.writeHead(404); res.end('Cartridge not found'); return; }
         if (match[2] !== '1.0.0' && match[1] !== 'skrumpey-slide') { res.writeHead(404); res.end('Cartridge version not found'); return; }
         const requested = match[3] || (match[1] === 'coindle' ? 'index.html' : 'arcade.html');
