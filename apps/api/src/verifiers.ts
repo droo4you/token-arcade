@@ -4,6 +4,7 @@ import { createEmonadVerifier, createTwoPlacesVerifier } from "./gameVerificatio
 import { createSkrumpeyVerifier } from "./skrumpeyVerification.ts";
 import { createMoodVerifier } from "./moodVerification.ts";
 import { createSkipVerifier, SKIP_LOADOUT } from "./skipVerification.ts";
+import { createSkipBoardsVerifier, skipBoardRules } from "./skipBoards.ts";
 
 /** Reviewed simulation verifiers are keyed by reusable adapter; sessions own Cabinet identity. */
 export interface AdapterReadiness {
@@ -44,6 +45,7 @@ export class AdapterRegistry {
     this.register({ adapterId: "two-places", gameId: "two-places", freePlaySmokeTest: true, verifier: createTwoPlacesVerifier(), rankedRules: { level: 0 }, runTimeoutMs: 600_000 });
     this.register({ adapterId: "skrumpey-slide", gameId: "skrumpey-slide", freePlaySmokeTest: true, verifier: createSkrumpeyVerifier(), runTimeoutMs: 900_000 });
     this.register({ adapterId: "skip-to-10k", gameId: "skip-to-10k", freePlaySmokeTest: true, verifier: createSkipVerifier(), rankedRules: { loadout: SKIP_LOADOUT }, runTimeoutMs: 1_200_000 });
+    this.register({ adapterId: "skip-to-10k-v2", gameId: "skip-to-10k", freePlaySmokeTest: true, verifier: createSkipBoardsVerifier(), rankedRules: skipBoardRules(), runTimeoutMs: 1_200_000 });
   }
 
   register(readiness: AdapterReadiness): void {
