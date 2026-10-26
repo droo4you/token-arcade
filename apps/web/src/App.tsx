@@ -1,6 +1,7 @@
 import { accountProgress } from "./accountProgress.ts";
 import { progressKeys } from "../../../packages/sdk/src/progress.ts";
 import { nextAttemptHref } from "./playNavigation.ts";
+import { useTwoPlacesUnlocks } from "./useTwoPlacesUnlocks.ts";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import { formatEther } from "viem";
 import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, Gamepad2, LockKeyhole, Menu, Moon, Play, Plus, RotateCcw, Settings2, ShieldCheck, Sparkles, Sun, Ticket, Trophy, UserRound, X } from "lucide-react";
@@ -278,6 +279,7 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
   const now = useNow();
   const twoBoards = game?.record?.manifest.adapterId === "two-places-v2";
   const [level, setLevel] = useState(0);
+  const unlocks = useTwoPlacesUnlocks(twoBoards);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -299,8 +301,9 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
         <h1>{game.name}</h1><p className="detail-lead">{game.description}</p><GuideLink topic="cabinets">How cabinets work</GuideLink>
          {game.record?.economy && <div className="cabinet-economy"><StatusBadge tone="wait">{game.record.minicoin ? "Full MiniCoin economy pending" : "MiniCoin Economy — Coming Soon"}</StatusBadge><p>{game.record.economy.reason}</p></div>}
          {game.record?.minicoin && <MinicoinEvidence record={game.record} playable={game.playable} />}
-        {twoBoards && <label>Speedrun level <select value={level} onChange={event => setLevel(Number(event.target.value))}>{Array.from({ length: 20 }, (_, i) => <option key={i} value={i}>Level {i + 1}</option>)}</select></label>}
+        {twoBoards && <label>Speedrun level <select value={level} onChange={event => setLevel(Number(event.target.value))}>{Array.from({ length: 20 }, (_, i) => <option key={i} value={i} disabled={i >= unlocks.count}>Level {i + 1}{i >= unlocks.count ? " — Locked" : ""}</option>)}</select></label>}
         {skipBoards && <label>Passport board <select value={board} onChange={event => setBoard(event.target.value)}>{["open", "zero", "mid", "max"].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select><p>{board === "open" ? "Use your saved upgrades and rocks, synced to your account when signed in." : "Fixed upgrades. Rock bonuses are locked."}</p></label>}
+        {twoBoards && <><p>{unlocks.loading ? "Loading your unlocked levels…" : "Beat the preceding levels in Free Play to unlock more Passport speedruns. Sign in and open Free Play to sync your progress."}</p>{unlocks.error && <><ErrorNote error={unlocks.error} /><button className="action action-light" onClick={unlocks.refresh}>Reload unlocks</button></>}</>}
         <div className="detail-mode-list">
           <div><span className="mode-icon mode-free"><Play size={20} fill="currentColor" /></span><div><strong>Free Play</strong><small>{game.record?.manifest.playGuide?.free ?? "Play for fun. No account required."}</small></div>{game.playable ? <Link href={playHref(game.id)} className="mini-action">Play Free <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Awaiting adapter</span>}</div>
           <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>Passport Play</strong><small>{game.record?.manifest.playGuide?.ranked ?? "Verified score and a place on the board."}</small></div>{competitive ? <Link href={playHref(game.id, "ranked") + (skipBoards ? `&board=${board}` : twoBoards ? `&level=${level}` : "")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
@@ -354,6 +357,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   const board = params.get("board") ?? "zero";
   const twoBoards = game?.record?.manifest.adapterId === "two-places-v2";
   const skipBoards = game?.record?.manifest.adapterId === "skip-to-10k-v2";
+  const unlocks = useTwoPlacesUnlocks(twoBoards && mode === "ranked");
   const [readyToStart, setReadyToStart] = useState(mode !== "ranked" || !(twoBoards || skipBoards));
   const newAttempt = () => navigate(nextAttemptHref(window.location.pathname, window.location.search, crypto.randomUUID()));
   const [config, setConfig] = useState<GameRunConfig | null>(null);
@@ -407,8 +411,9 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   };
   return <main className="page-width player-page"><div className="player-top"><Link href={gameHref(game.id)} className="back-link"><ArrowLeft size={17} /> Leave cabinet</Link><div className="player-mode"><span className="live-dot" />{mode === "free" ? "Free Play" : mode === "ranked" ? "Passport Play" : "Community Raid"}</div></div><div className="player-heading"><div><span className="section-kicker">{game.fixture ? "INTERNAL TEST CARTRIDGE" : "ARCADE CARTRIDGE"}</span><h1>{game.name}</h1><p>{game.fixture ? "Match the big symbol using the four pads. Twelve rounds. Twenty seconds." : game.description}</p></div>{game.fixture && <div className="player-rule"><Clock3 size={21} /><span>12 rounds<br /><strong>20 seconds</strong></span></div>}</div>
     {mode === "ranked" && !readyToStart && <section className="rules-panel"><h2>{twoBoards ? "Choose your speedrun level" : "Choose your Passport board"}</h2>
-      {twoBoards ? <><label>Level <select value={level} onChange={event => navigate(playHref(game.id, "ranked") + `&level=${event.target.value}`)}>{Array.from({ length: 20 }, (_, i) => <option key={i} value={i}>Level {i + 1}</option>)}</select></label><p>All 20 levels have separate speedrun boards. Fastest time wins; apples break ties. Free Play unlocks do not restrict Passport Play.</p></> : <><label>Board <select value={board} onChange={event => navigate(playHref(game.id, "ranked") + `&board=${event.target.value}`)}>{["open", "zero", "mid", "max"].map(value => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></label><p>{board === "open" ? "Open uses your saved upgrades and rocks, including progress synced from another device." : board === "zero" ? "Zero starts every skill at 0. Rocks are disabled." : board === "mid" ? "Mid fixes every skill at level 3. Rocks are disabled." : "Max fixes every skill at level 5. Rocks are disabled."} Each loadout has its own leaderboard. Score is distance × peak-price multiplier; gwei breaks ties.</p></>}
-      <button className="action action-lime" onClick={() => setReadyToStart(true)}>Start {twoBoards ? `level ${level + 1}` : `${board.toUpperCase()} run`}</button>
+      {twoBoards ? <><label>Level <select value={level} onChange={event => navigate(playHref(game.id, "ranked") + `&level=${event.target.value}`)}>{Array.from({ length: 20 }, (_, i) => <option key={i} value={i} disabled={i >= unlocks.count}>Level {i + 1}{i >= unlocks.count ? " — Locked" : ""}</option>)}</select></label><p>Unlock levels in order in Free Play to speedrun them here. Your account unlocks carry across devices. Fastest time wins; apples break ties.</p></> : <><label>Board <select value={board} onChange={event => navigate(playHref(game.id, "ranked") + `&board=${event.target.value}`)}>{["open", "zero", "mid", "max"].map(value => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></label><p>{board === "open" ? "Open uses your saved upgrades and rocks, including progress synced from another device." : board === "zero" ? "Zero starts every skill at 0. Rocks are disabled." : board === "mid" ? "Mid fixes every skill at level 3. Rocks are disabled." : "Max fixes every skill at level 5. Rocks are disabled."} Each loadout has its own leaderboard. Score is distance × peak-price multiplier; gwei breaks ties.</p></>}
+      {twoBoards && <><p>{unlocks.loading ? "Loading your unlocked levels…" : (unlocks.count === 1 ? "Level 1 unlocked." : `Levels 1–${unlocks.count} unlocked.`)} <Link href={playHref(game.id)}>Continue in Free Play</Link></p>{unlocks.error && <><ErrorNote error={unlocks.error} /><button className="action action-light" onClick={unlocks.refresh}>Reload unlocks</button></>}</>}
+      <button className="action action-lime" disabled={twoBoards && (unlocks.loading || !!unlocks.error || level >= unlocks.count)} onClick={() => setReadyToStart(true)}>Start {twoBoards ? `level ${level + 1}` : `${board.toUpperCase()} run`}</button>
     </section>}
     {config?.rules?.format === "two-levels-v1" && <p>{mode === "raid" ? "Follow the shared level order. Finish your run to submit completed levels; apples and time break ties." : `Speedrun: level ${Number(config.rules.level) + 1}. Fastest time wins; apples break a tie.`}</p>}
     {loading && !result && <div className="loading-slab">Issuing your {mode === "raid" ? "raid attempt" : "run"}…</div>}
