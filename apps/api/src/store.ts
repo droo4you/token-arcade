@@ -135,7 +135,8 @@ export class ArcadeStore {
             new URL(entry.url).origin === entry.origin && new URL(entry.url).pathname === `/${prior.manifest.id}/v/1.0.0/`) {
           const liveRun = (this.db.prepare("SELECT json FROM run_sessions WHERE game_id = ? AND consumed_at IS NULL").all(prior.manifest.id) as JsonRow[])
             .some(row => { const expiry = Date.parse((JSON.parse(row.json) as GameRunConfig).expiresAt ?? ""); return !Number.isFinite(expiry) || expiry > Date.now(); });
-          const liveRaid = this.listRaids().some(raid => raid.gameId === prior.manifest.id && raid.status !== "settled" && raid.status !== "cancelled");
+          const liveRaid = this.listRaids().some(raid => raid.gameId === prior.manifest.id && raid.status !== "settled" && raid.status !== "cancelled" &&
+            !(raid.status === "closed" && raid.finalResult && !raid.funding && !raid.entry && raid.reward.type === "none"));
           if (!liveRun && !liveRaid) {
             this.saveGame({ ...prior, manifest: { ...prior.manifest, ...game.manifest,
               entry: { kind: "iframe", origin: entry.origin, url: new URL(`/${game.manifest.id}/v/${game.manifest.version}/`, entry.origin).href } },

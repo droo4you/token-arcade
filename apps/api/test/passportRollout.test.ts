@@ -24,7 +24,7 @@ for (const id of ["skip-to-10k", "two-places"]) test(`${id} rollout drains sessi
     const raid: Raid = { id: "old-raid", gameId: id, name: "Old raid", communityId: "test", objective: "score", seed: "old", maxAttempts: 3,
       startsAt: new Date(Date.now()-200000).toISOString(), endsAt: new Date(Date.now()-100000).toISOString(), reward: { type: "none" }, feeSplitBps: { prize: 0, community: 0, treasury: 10000 }, status: "open" };
     store.saveRaid(raid); restart(); assert.deepEqual(store.getGame(id), legacy, "even an ended raid must finalize first");
-    store.saveRaid({ ...raid, status: "cancelled" }); restart();
+    store.saveRaid({ ...raid, status: "closed", finalResult: { finalizedAt: new Date().toISOString(), entries: [] } }); restart();
     const upgraded = store.getGame(id)!;
     assert.equal(upgraded.manifest.version, "1.1.0"); assert.equal(upgraded.manifest.adapterId, `${id}-v2`);
     assert.equal(upgraded.manifest.entry?.url, `https://cart.example/${id}/v/1.1.0/`);

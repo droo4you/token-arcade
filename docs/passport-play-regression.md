@@ -4,7 +4,7 @@ Reported during cross-device review: Skip progression synced, but Passport loado
 
 ## Findings and changes
 
-The hosted API still returned Skip and Two Places 1.0.0 manifests, so the newer selectors and rules were never enabled there. Startup now upgrades only canonical, untouched platform legacy imports to their reviewed 1.1.0 releases, preserving the cartridge origin, status, economy, Passport data and historical results. Active/unexpired sessions, sessions without a valid deadline, and any unsettled/uncancelled raid defer migration until a later restart. Edited cabinets are not overwritten. Historical results remain stored and separate from current boards.
+The hosted API still returned Skip and Two Places 1.0.0 manifests, so the newer selectors and rules were never enabled there. Startup now upgrades only canonical, untouched platform legacy imports to their reviewed 1.1.0 releases, preserving the cartridge origin, status, economy, Passport data and historical results. Active/unexpired sessions, sessions without a valid deadline, and any unfinished raid defer migration (finalized free raids are complete; funded raids must settle or cancel) until a later restart. Edited cabinets are not overwritten. Historical results remain stored and separate from current boards.
 
 Passport Play now has an explicit setup screen: Two Places offers all 20 speedruns; Skip explains Open (saved loadout and rocks), Zero (0), Mid (3) and Max (5), with rocks disabled on fixed boards. Free Play unlocks do not restrict speedrun selection.
 
