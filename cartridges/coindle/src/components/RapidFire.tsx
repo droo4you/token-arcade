@@ -14,7 +14,7 @@ export default function RapidFire({ runId, raid, onBegin, onComplete }: {
   runId: string; raid: boolean;
   /** Opens the bridge run; returns false if the host refused. */
   onBegin: () => boolean;
-  onComplete: (solved: number, guesses: number) => void;
+  onComplete: (solved: number, guesses: number, skips: number) => void;
 }) {
   const [phase, setPhase] = useState<Phase>("intro");
   const [state, setState] = useState<RapidState | null>(null);
@@ -34,7 +34,7 @@ export default function RapidFire({ runId, raid, onBegin, onComplete }: {
       const final = early ? await rapidApi.finish(runId) : (await rapidApi.state(runId)).state ?? await rapidApi.finish(runId);
       setState(final); setPhase("done");
       submitted.current = true;
-      onComplete(final.solved, final.totalGuesses);
+      onComplete(final.solved, final.totalGuesses, final.skips);
     } catch (error) { setMessage((error as Error).message); setPhase("error"); }
   }, [runId, onComplete]);
 
@@ -90,12 +90,12 @@ export default function RapidFire({ runId, raid, onBegin, onComplete }: {
     <section data-testid="rapid-intro" className="mx-auto w-full max-w-md rounded-2xl p-6 text-center" style={card}>
       <p className="text-xs font-bold tracking-widest" style={{ color: "var(--accent)" }}>{label.toUpperCase()}</p>
       <h2 className="mt-2 text-3xl font-black">Rapid Fire</h2>
-      <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>Solve as many coins as you can in <b>3 minutes</b>. Score = coins solved; ties go to fewer total guesses.</p>
+      <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>Solve as many coins as you can in <b>3 minutes</b>. Score = coins solved; ties go to fewer total guesses, then fewer skips.</p>
       <ul className="mt-4 space-y-1 text-left text-sm" style={{ color: "var(--text-muted)" }}>
         <li>• 6 guesses per coin, then it's revealed and you move on</li>
         <li>• Skip any coin (counts as unsolved)</li>
         <li>• The clock runs on the server and starts when you press Start</li>
-        {raid && <li>• Every coin you solve adds to the community total</li>}
+        {raid && <><li>• Best of 3 attempts; each run draws a different order from this raid’s hidden coin pool</li><li>• Every verified solve adds to the display-only community goal</li></>}
       </ul>
       <button data-testid="rapid-start" disabled={busy} onClick={() => void start()} className="mt-6 w-full rounded-xl py-3 text-lg font-bold text-white" style={{ background: "var(--accent)" }}>Start · 3:00</button>
     </section>
@@ -110,7 +110,7 @@ export default function RapidFire({ runId, raid, onBegin, onComplete }: {
     <section data-testid="rapid-end" className="mx-auto w-full max-w-md rounded-2xl p-6 text-center" style={card}>
       <p className="text-xs font-bold tracking-widest" style={{ color: "var(--accent)" }}>TIME!</p>
       <p className="mt-2 text-6xl font-black" data-testid="rapid-final">{state?.solved ?? "…"}</p>
-      <p className="text-sm" style={{ color: "var(--text-muted)" }}>coins solved · {state?.totalGuesses ?? "…"} guesses</p>
+      <p className="text-sm" style={{ color: "var(--text-muted)" }}>coins solved · {state?.totalGuesses ?? "…"} guesses · {state?.skips ?? "…"} skips</p>
       <p className="mt-4 text-sm" style={{ color: "var(--text-dim)" }}>{phase === "ending" ? "Closing the window…" : "Sent to the arcade for verification. Your rank appears below."}</p>
     </section>
   );

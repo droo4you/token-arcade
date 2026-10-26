@@ -105,6 +105,39 @@ export class ArcadeStore {
       ...launchCabinets(process.env.CARTRIDGE_ORIGIN),
     ]) {
       const prior = this.getGame(game.manifest.id);
+      // Reviewed Mood Swings rules upgrade. Keep v1 intact until every issued run
+      // and nonfinal raid has finished. A later API restart retries this migration.
+      if (prior?.manifest.id === "emonad-cabinet" && prior.manifest.version === "1.0.0" &&
+          prior.manifest.adapterId === "buy-bounce" && prior.review?.approvedBy === "platform:legacy-import" && prior.manifest.entry?.kind === "iframe") {
+        const liveRun = (this.db.prepare("SELECT json FROM run_sessions WHERE game_id = ? AND consumed_at IS NULL").all(prior.manifest.id) as JsonRow[])
+          .some(row => Date.parse((JSON.parse(row.json) as GameRunConfig).expiresAt ?? "") > Date.now());
+        const liveRaid = this.listRaids().some(raid => raid.gameId === prior.manifest.id &&
+          raid.status !== "settled" && raid.status !== "cancelled" &&
+          (Date.parse(raid.endsAt) > Date.now() || (raid.funding && !raid.finalResult)));
+        if (!liveRun && !liveRaid) {
+          const origin = prior.manifest.entry.origin;
+          this.saveGame({ ...prior, manifest: { ...prior.manifest, ...game.manifest,
+            entry: { kind: "iframe", origin, url: new URL("/emonad-cabinet/v/2.0.0/", origin).href } },
+            economy: prior.economy?.status === "enabled" ? prior.economy : game.economy, legacyImportRevision: 5 });
+        }
+        continue;
+      }
+        // Coindle v2 changes ranking and raid selection. Existing cabinets keep
+        // their reviewed version until an operator drains runs/raids and updates
+        // both the versioned entry and adapter through the normal review flow.
+        if (prior?.manifest.id === "coindle" && prior.manifest.version === "1.0.0") continue;
+        // Do not change live Skip rules or its artifact URL during startup.
+        // An operator upgrades the cabinet after draining existing runs/raids.
+        if (prior?.manifest.id === "skip-to-10k" && prior.manifest.version === "1.0.0") {
+          if (prior.review?.approvedBy === "platform:legacy-import" && (prior.legacyImportRevision ?? 0) < 3) {
+            this.saveGame({ ...prior, legacyImportRevision: 3, manifest: { ...prior.manifest,
+              supportedModes: ["free", "ranked", "raid"], supportedObjectives: ["distance"],
+              verifier: { kind: "replay", description: "Passport Play uses the standard loadout and issued seed; the server replays the throw and every 120 Hz input." } } });
+          }
+          continue;
+        }
+      // Retain published v1 rules and history until an explicit reviewed version upgrade.
+      if (prior?.manifest.id === "two-places" && prior.manifest.version === "1.0.0") continue;
       // One narrow correction for v1 imports created during integration. Admin
       // edits clear this review marker; future starts never overwrite them.
       if (prior && (game.legacyImportRevision ?? 0) >= 2 && prior.legacyImportRevision === undefined &&
@@ -256,13 +289,14 @@ export class ArcadeStore {
     } catch (error) { this.db.exec("ROLLBACK"); throw error; }
   }
 
-  createSession(session: RunSession, maxAttempts?: number): boolean {
+  createSession(session: RunSession, maxAttempts?: number, assignAttempt?: (attempt: number) => void): boolean {
     this.db.exec("BEGIN IMMEDIATE");
     try {
       if (session.config.raidId && maxAttempts !== undefined) {
         const row = this.db.prepare("SELECT COUNT(*) AS count FROM run_sessions WHERE raid_id = ? AND player_id = ?")
           .get(session.config.raidId, session.playerId) as CountRow;
         if (row.count >= maxAttempts) { this.db.exec("ROLLBACK"); return false; }
+          assignAttempt?.(row.count);
       }
       this.db.prepare("INSERT INTO run_sessions (id,player_id,game_id,mode,raid_id,json) VALUES (?,?,?,?,?,?)")
         .run(session.config.runId, session.playerId, session.config.gameId, session.config.mode, session.config.raidId ?? null, JSON.stringify(session.config));

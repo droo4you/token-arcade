@@ -24,7 +24,7 @@ test("funded raid administration requires admin and claims require player authen
 
 test("Free Play summaries support guests and accounts without awarding competitive progress", async () => {
   const now = new Date().toISOString();
-  const result = { runId: "summary-guest", gameId: "skip-to-10k", gameVersion: "1.0.0", mode: "free", objective: "distance", primaryMetric: 123,
+  const result = { runId: "summary-guest", gameId: "skip-to-10k", gameVersion: "1.1.0", mode: "free", objective: "score", primaryMetric: 123,
     result: "completed", startedAt: now, finishedAt: now, secondaryMetrics: { earnedGwei: 50, rocksOwned: 3 }, proof: { ignored: true } };
   const body = { guestId: "12345678-1234-1234-1234-123456789012", result };
   assert.equal((await api("/api/free-play/summaries", { method: "POST", body })).status, 200);
@@ -58,7 +58,7 @@ test("Free Play summaries support guests and accounts without awarding competiti
 
 test("Free Play lifecycle is idempotent, bounded, and reconciles out-of-order exits", async () => {
   const now = new Date().toISOString();
-  const run = { runId: "lifecycle-run", gameId: "skip-to-10k", gameVersion: "1.0.0", mode: "free", objective: "distance", startedAt: now };
+  const run = { runId: "lifecycle-run", gameId: "skip-to-10k", gameVersion: "1.1.0", mode: "free", objective: "score", startedAt: now };
   const body = { guestId: "abcdef12-1234-1234-1234-123456789012", run };
   const send = (patch: object, auth?: string) => api("/api/free-play/events", { method: "POST", auth, body: { ...body, ...patch } });
   assert.equal((await send({ type: "exited", reason: "navigation" })).status, 200);
@@ -590,6 +590,8 @@ test("shared Skeleton verifier keeps independent Cabinet scores and lets issued 
 
 test("Two Places standings prioritize apples before time and require three authored raid levels", async () => {
   const isolatedStore = new ArcadeStore(":memory:", false);
+  const legacy = isolatedStore.getGame("two-places")!;
+  isolatedStore.saveGame({ ...legacy, manifest: { ...legacy.manifest, version: "1.0.0", adapterId: "two-places", supportedObjectives: ["completion_time", "stars"] } });
   const adapters = new AdapterRegistry();
   adapters.register({ adapterId: "two-places", gameId: "two-places", freePlaySmokeTest: true, rankedRules: { level: 0 }, verifier: { gameId: "two-places", async verify() { return { valid: true }; } } });
   const isolatedServer = createArcadeServer({ store: isolatedStore, adapters, authSettings: { localDemoMode: true }, staticRoot: "nonexistent-build" });
@@ -650,7 +652,7 @@ test("legacy import migration preserves cabinet state and history and only runs 
 });
 
 test("eMONAD raids inherit fixed viewport rules and unchanged paused imports can resume", async () => {
-  const input = { name: "eMONAD viewport test", gameId: "emonad-cabinet", communityId: "emonad", objective: "score", startsAt: new Date(Date.now() - 1000).toISOString(), endsAt: new Date(Date.now() + 60_000).toISOString(), maxAttempts: 2, reward: { type: "none" } };
+  const input = { name: "eMONAD viewport test", gameId: "emonad-cabinet", communityId: "emonad", objective: "score", startsAt: new Date(Date.now() - 1000).toISOString(), endsAt: new Date(Date.now() + 60_000).toISOString(), maxAttempts: 3, reward: { type: "none" } };
   const created = await api("/api/admin/raids", { method: "POST", auth: "admin", body: input });
   assert.equal(created.body.raid.status, "open");
   assert.deepEqual(created.body.raid.rules, { viewportHeight: 844, viewportWidth: 390 });
