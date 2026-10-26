@@ -33,7 +33,7 @@ function requestedTwoRules(level: unknown = 0) {
 }
 
 import { initializeProgress, readProgress, syncProgress } from "./freePlayProgress.ts";
-import { progressKeys } from "../../../packages/sdk/src/progress.ts";
+import { progressKeys, twoPlacesUnlockedCount } from "../../../packages/sdk/src/progress.ts";
 
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses", "coins_solved"]);
 const MODES = new Set(["free", "ranked", "raid"]);
@@ -890,6 +890,10 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           if (blockers.length) fail(409, "RAID_NOT_READY", "Raid cannot issue runs", blockers);
         }
         const issuedRules = mode === "raid" ? raid?.rules : game.manifest.adapterId === "skip-to-10k-v2" ? requestedSkipRules(body.board ?? "zero") : game.manifest.adapterId === "two-places-v2" ? requestedTwoRules(body.level ?? 0) : adapter.rankedRules;
+        if (mode === "ranked" && game.manifest.adapterId === "two-places-v2" &&
+            Number(issuedRules?.level) >= twoPlacesUnlockedCount(readProgress(store, passport.playerId, gameId))) {
+          fail(403, "LEVEL_LOCKED", "Unlock this level in Free Play first. Open Free Play while signed in to sync your progress.");
+        }
         if (raid?.funding) fundedRaids.snapshotWallet(raid, passport);
         const config: GameRunConfig = {
           runId: randomUUID(), gameId, gameVersion: game.manifest.version, mode,

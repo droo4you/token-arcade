@@ -60,3 +60,17 @@ test("Coindle keeps an existing v1 cabinet and its hosted entry until a reviewed
   store.close();
   rmSync(file); rmdirSync(dir);
 });
+
+test("Two Places reviewed guide adopts campaign unlocks without changing rules or version", () => {
+  const dir = mkdtempSync(join(tmpdir(), "two-unlock-guide-")), file = join(dir, "a.sqlite");
+  let store = new ArcadeStore(file, false);
+  try {
+    const prior = store.getGame("two-places")!;
+    store.saveGame({ ...prior, legacyImportRevision: 2, manifest: { ...prior.manifest, playGuide: { ...prior.manifest.playGuide!, ranked: "Choose any of the 20 levels." } } });
+    store.close(); store = new ArcadeStore(file, false);
+    const upgraded = store.getGame("two-places")!;
+    assert.match(upgraded.manifest.playGuide?.ranked ?? "", /unlocked levels/);
+    assert.equal(upgraded.manifest.version, prior.manifest.version);
+    assert.deepEqual(upgraded.manifest.entry, prior.manifest.entry);
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});

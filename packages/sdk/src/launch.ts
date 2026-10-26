@@ -21,7 +21,7 @@ export function launchCabinets(origin = "http://127.0.0.1:8788"): GameRecord[] {
       presentation: { genre: item.genre, palette: item.palette, glyph: item.glyph },
       ...(item.id === "two-places" ? { playGuide: {
         free: "Unlock levels in order, continue your adventure or replay any unlocked level. Sign in to sync progress across devices.",
-        ranked: "Choose any of the 20 levels. Each level has its own speedrun board.",
+        ranked: "Speedrun your unlocked levels. Beat preceding levels in Free Play to unlock more; each level has its own board.",
         raid: "One shared shuffled level order. Beat as many levels as you can, then finish your run. Active play is capped at 8m 20s.",
         scoring: "Speedruns rank by fastest time, then apples. Raids rank by levels beaten, then apples, then time. Only cleared levels contribute apples.",
         tieBreak: "The raid community goal is total verified levels beaten; it does not determine rewards.",
@@ -37,7 +37,7 @@ export function launchCabinets(origin = "http://127.0.0.1:8788"): GameRecord[] {
       ...(item.id === "emonad-cabinet" || item.id === "two-places" || item.id === "skip-to-10k" ? { verifier: { kind: "replay" as const, description: item.id === "emonad-cabinet" ? "Server replays the issued seed and recorded paddle inputs in the pinned 390×844 simulation." : item.id === "skip-to-10k" ? "Four boards use issued seeds and server replay; score is distance times peak-price multiplier, with gwei as tie-break." : "Server replays the selected level for speedruns and the shared shuffled level order for raids." } } : {}),
       ...(item.id === "coindle" ? { verifier: { kind: "server_authoritative" as const, description: "Rapid Fire: the server picks every coin, judges every guess and times the 3-minute window; answers are revealed only after a solve, skip or miss." } } : {}),
     },
-    status: "published", createdAt, publishedAt: createdAt, legacyImportRevision: item.id === "emonad-cabinet" ? 5 : item.id === "coindle" ? 4 : item.id === "skip-to-10k" ? 3 : 2,
+    status: "published", createdAt, publishedAt: createdAt, legacyImportRevision: item.id === "emonad-cabinet" ? 5 : item.id === "coindle" ? 4 : item.id === "skip-to-10k" || item.id === "two-places" ? 3 : 2,
     review: { approvedAt: createdAt, approvedBy: "platform:legacy-import" },
     communityConcept: item.community,
     economy: { status: item.id === "coindle" || item.id === "emonad-cabinet" ? "coming_soon" : "pending", reason: item.id === "coindle" || item.id === "emonad-cabinet" ? "MiniCoin Economy — Coming Soon" : "The dedicated protocol pass must verify community assets, strategy and liquidity before enabling an economy." },

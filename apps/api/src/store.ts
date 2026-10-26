@@ -160,7 +160,7 @@ export class ArcadeStore {
         // verifier declaration; keep the stored entry origin and everything else.
         // Revision 3 carries reviewed public display copy. Revision 4 renames the eMONAD cabinet to "Mood Swings". The cabinet id is unchanged.
         this.saveGame({ ...prior, manifest: { ...prior.manifest, name: game.manifest.name, description: game.manifest.description, supportedModes: game.manifest.supportedModes,
-          supportedObjectives: game.manifest.supportedObjectives, ...(game.manifest.verifier ? { verifier: game.manifest.verifier } : {}) },
+          supportedObjectives: game.manifest.supportedObjectives, ...(game.manifest.id === "two-places" ? { playGuide: game.manifest.playGuide } : {}), ...(game.manifest.verifier ? { verifier: game.manifest.verifier } : {}) },
           legacyImportRevision: game.legacyImportRevision });
       } else this.db.prepare("INSERT OR IGNORE INTO games (id,json) VALUES (?,?)").run(game.manifest.id, JSON.stringify(game));
     }
