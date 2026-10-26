@@ -13,12 +13,14 @@ const context2d = new Proxy({}, { get: (_target, key) => key === 'createLinearGr
   ? () => ({ addColorStop: noop }) : noop, set: () => true });
 const element = () => ({ style: { setProperty: noop }, classList: { contains: () => false, toggle: noop },
   getContext: () => context2d, addEventListener: noop, setAttribute: noop, append: noop, appendChild: noop, remove: noop,
-  focus: noop, querySelectorAll: () => [], querySelector: () => element(),
+  replaceChildren: noop, focus: noop, querySelectorAll: () => [], querySelector: () => element(),
   getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 540 }) });
 
-for (const [version, mode] of [['1.0.0', 'ranked'], ['1.1.0', 'ranked'], ['1.1.0', 'free'], ['1.1.0', 'raid']]) test(`Two Places ${version} ${mode} sends a native level clear and input proof through the bridge`, async () => {
+for (const [version, mode] of [['1.0.0', 'ranked'], ['1.1.0', 'ranked'], ['1.0.0', 'free'], ['1.1.0', 'free'], ['1.1.0', 'raid']]) test(`Two Places ${version} ${mode} sends a native level clear and input proof through the bridge`, async () => {
   const release = version === '1.0.0' ? cabinet : path.join(cabinet, 'releases/1.1.0');
   const messages = [];
+  const elements = new Map();
+  const byId = id => { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); };
   const saved = new Map();
   const listeners = new Map();
   const add = (type, fn) => { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(fn); };
@@ -31,7 +33,7 @@ for (const [version, mode] of [['1.0.0', 'ranked'], ['1.1.0', 'ranked'], ['1.1.0
     location: { search: '?ta=1&ta_host=http%3A%2F%2F127.0.0.1%3A5173&ta_channel=bridge-smoke' },
     crypto: { randomUUID: () => 'next-local-run' },
     localStorage: { getItem: key => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) }, navigator: { getGamepads: () => [] },
-    document: { getElementById: element, createElement: element, body: element(), documentElement: element(),
+    document: { getElementById: byId, createElement: element, body: element(), documentElement: element(),
       addEventListener: add, removeEventListener: remove },
     matchMedia: () => ({ matches: false }), addEventListener: add, removeEventListener: remove,
     requestAnimationFrame: noop, cancelAnimationFrame: noop, setInterval: noop, clearInterval: noop,
@@ -57,6 +59,11 @@ for (const [version, mode] of [['1.0.0', 'ranked'], ['1.1.0', 'ranked'], ['1.1.0
   await send('ta:mount', config);
   assert.equal(messages.at(-1)?.type, 'ta:ready');
   await send('ta:start');
+  if (mode === 'free') {
+    assert.equal(x.game.screen, 'title', 'Free Play opens its menu');
+    assert.equal(byId('free-menu').hidden, false);
+    byId('free-continue').onclick();
+  }
   assert.equal(x.game.screen, 'play');
   assert.equal(messages.at(-1)?.type, 'ta:run_started');
   const track = JSON.parse(fs.readFileSync(path.join(root, 'apps/api/test/fixtures/twoPlacesLevel1.json'), 'utf8')).tracks[0];
@@ -92,6 +99,12 @@ for (const [version, mode] of [['1.0.0', 'ranked'], ['1.1.0', 'ranked'], ['1.1.0
     for (let i = 0; i < 45; i++) x.update();
     x.Input.pressed = { confirm: true }; x.update();
     assert.equal(x.game.levelIndex, 1, 'Free Play continues into the next unlocked level');
+    byId('free-menu-open').onclick();
+    assert.equal(x.game.screen, 'title');
+    byId('free-choose').onclick(); assert.equal(byId('free-levels').hidden, false);
+    vm.runInContext('freeLevel(2)', ctx); assert.equal(x.game.screen, 'title', 'locked levels cannot start');
+    vm.runInContext('freeLevel(0)', ctx); assert.equal(x.game.levelIndex, 0, 'earlier unlocked levels can be replayed');
+    assert.equal(byId('free-menu').hidden, true);
   }
   await send('ta:destroy');
   assert.equal(sandbox.TokenArcade.active, false);

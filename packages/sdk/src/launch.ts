@@ -20,7 +20,7 @@ export function launchCabinets(origin = "http://127.0.0.1:8788"): GameRecord[] {
       entry: { kind: "iframe", origin: new URL(origin).origin, url: new URL(`/${item.id}/v/${item.id === "emonad-cabinet" ? "2.0.0" : "1.1.0"}/`, origin).href },
       presentation: { genre: item.genre, palette: item.palette, glyph: item.glyph },
       ...(item.id === "two-places" ? { playGuide: {
-        free: "Start at level 1 and unlock the full game. Progress saves in this browser.",
+        free: "Unlock levels in order, continue your adventure or replay any unlocked level. Sign in to sync progress across devices.",
         ranked: "Choose any of the 20 levels. Each level has its own speedrun board.",
         raid: "One shared shuffled level order. Beat as many levels as you can, then finish your run. Active play is capped at 8m 20s.",
         scoring: "Speedruns rank by fastest time, then apples. Raids rank by levels beaten, then apples, then time. Only cleared levels contribute apples.",
@@ -28,7 +28,7 @@ export function launchCabinets(origin = "http://127.0.0.1:8788"): GameRecord[] {
       } } : {}),
       controls: { touch: true, orientation: item.orientation },
       ...(item.id === "skip-to-10k" ? { playGuide: {
-        free: "Start with zero upgrades. Earn gwei, upgrade skills and collect helpful rocks. Your progress saves in this browser.",
+        free: "Earn gwei, upgrade skills and collect helpful rocks. Sign in to sync progress across devices.",
         ranked: "Choose Open with your saved loadout, or fixed Zero, Mid and Max boards with rocks locked.",
         raid: "One shared seed, three runs: Zero, Mid and Max. Complete all three to rank by their total.",
         scoring: "Distance through Ethereum history × peak-price multiplier: 1× below $5K, 2× at $5K, 3× at $10K and 4× at $30K.",

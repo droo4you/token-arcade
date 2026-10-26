@@ -82,6 +82,33 @@ function arcadeFinish(cleared = false) {
     proof: { v: 2, seed: config.seed, tracks: run.tracks.filter(t => t.length).map(TWO_RULES.encode) } });
 }
 
+function freeLevel(i) {
+  if (window.TokenArcade?.config?.mode !== 'free' || i < 0 || i >= Math.min(save.unlocked, LEVELS.length)) return;
+  document.getElementById('free-menu').hidden = true;
+  Input.keys.clear(); Input.downs.clear(); TouchPad.held.clear();
+  startLevel(i); canvas.focus();
+}
+function freeMenu() {
+  if (window.TokenArcade?.config?.mode !== 'free') return;
+  window.TokenArcade.resume();
+  arcadeRun = null; game.screen = 'title'; game.showControls = false;
+  Input.keys.clear(); Input.downs.clear(); TouchPad.held.clear();
+  const menu = document.getElementById('free-menu'), grid = document.getElementById('free-levels');
+  menu.hidden = false; grid.hidden = true;
+  const next = Math.max(0, Math.min(save.unlocked, LEVELS.length) - 1);
+  const resume = document.getElementById('free-continue');
+  resume.textContent = 'CONTINUE - LEVEL ' + (next + 1);
+  resume.onclick = () => freeLevel(next);
+  document.getElementById('free-choose').onclick = () => { grid.hidden = !grid.hidden; };
+  grid.replaceChildren();
+  LEVELS.forEach((level, i) => {
+    const button = document.createElement('button');
+    button.textContent = String(i + 1); button.disabled = i >= save.unlocked;
+    button.setAttribute('aria-label', 'LEVEL ' + (i + 1) + (button.disabled ? ' LOCKED' : ' ' + level.name));
+    button.onclick = () => freeLevel(i); grid.appendChild(button);
+  });
+}
+
 function startLevel(i, keepTime = false) {
   if (ARCADE && window.TokenArcade?.active && window.TokenArcade.config.mode === 'free' && (!arcadeRun || !keepTime)) {
     if (!arcadeBegin(window.TokenArcade.config, [i])) return;
@@ -118,6 +145,7 @@ function update() {
     if (I.confirm || I.pause || I.act) { game.showControls = false; Audio8.sfx('menu'); }
     return;
   }
+  if (ARCADE && window.TokenArcade?.config?.mode === 'free' && !document.getElementById('free-menu').hidden) return;
   switch (game.screen) {
     case 'title': {
       menuNav(TITLE_MENU.length);
@@ -146,7 +174,7 @@ function update() {
     }
     case 'play': {
       const w = game.world;
-      if (I.pause && ARCADE) { window.TokenArcade.pause('user'); break; }
+      if (I.pause && ARCADE) { if (window.TokenArcade.config.mode === 'free') freeMenu(); else window.TokenArcade.pause('user'); break; }
       if (I.pause) { game.screen = 'pause'; game.menuIndex = 0; Audio8.sfx('menu'); break; }
       if (ARCADE && arcadeRun) { arcadeCapture(); if (!arcadeRun) break; }
       else if (ARCADE && window.TokenArcade.config.mode !== 'free') break;
@@ -324,6 +352,7 @@ function drawEnd() {
 
 function draw() {
   ctx.imageSmoothingEnabled = false;
+  if (ARCADE && window.TokenArcade?.config?.mode === 'free' && !document.getElementById('free-menu').hidden) return;
   switch (game.screen) {
     case 'title': drawTitle(); break;
     case 'select': drawSelect(); break;
@@ -407,11 +436,14 @@ window.TokenArcade?.register({
     const finish = document.getElementById('finish-raid');
     if (finish) { finish.hidden = config.mode !== 'raid'; finish.onclick = () => arcadeFinish(); }
     game.screen = 'title'; game.world = null;
+    const menu = document.getElementById('free-menu-open');
+    menu.hidden = config.mode !== 'free'; menu.onclick = freeMenu;
+    document.getElementById('free-menu').hidden = true;
   },
   start() {
     const config = window.TokenArcade.config;
     const levels = arcadeLevels(config);
-    if (config.mode === 'free') startLevel(levels[0]);
+    if (config.mode === 'free') freeMenu();
     else if (arcadeBegin(config, levels)) startLevel(levels[0]);
   },
   pause() { Input.keys.clear(); Input.downs.clear(); TouchPad.held.clear(); Audio8.ctx?.suspend(); },

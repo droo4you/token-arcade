@@ -101,7 +101,7 @@ test("Two Places HTTP boards separate all levels, apply time/apples order, and r
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); store.close(); }
 });
 
-test("Two Places restart preserves the published legacy cartridge and its old board rules", () => {
+test("Two Places restart preserves a legacy record with a noncanonical entry", () => {
   const dir = mkdtempSync(join(tmpdir(), "two-legacy-")), file = join(dir, "db.sqlite");
   let store = new ArcadeStore(file, false);
   try {

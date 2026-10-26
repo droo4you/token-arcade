@@ -1,5 +1,6 @@
 import { accountProgress } from "./accountProgress.ts";
 import { progressKeys } from "../../../packages/sdk/src/progress.ts";
+import { nextAttemptHref } from "./playNavigation.ts";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import { formatEther } from "viem";
 import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, Gamepad2, LockKeyhole, Menu, Moon, Play, Plus, RotateCcw, Settings2, ShieldCheck, Sparkles, Sun, Ticket, Trophy, UserRound, X } from "lucide-react";
@@ -299,7 +300,7 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
          {game.record?.economy && <div className="cabinet-economy"><StatusBadge tone="wait">{game.record.minicoin ? "Full MiniCoin economy pending" : "MiniCoin Economy — Coming Soon"}</StatusBadge><p>{game.record.economy.reason}</p></div>}
          {game.record?.minicoin && <MinicoinEvidence record={game.record} playable={game.playable} />}
         {twoBoards && <label>Speedrun level <select value={level} onChange={event => setLevel(Number(event.target.value))}>{Array.from({ length: 20 }, (_, i) => <option key={i} value={i}>Level {i + 1}</option>)}</select></label>}
-        {skipBoards && <label>Passport board <select value={board} onChange={event => setBoard(event.target.value)}>{["open", "zero", "mid", "max"].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select><p>{board === "open" ? "Use your browser-saved upgrades and rocks." : "Fixed upgrades. Rock bonuses are locked."}</p></label>}
+        {skipBoards && <label>Passport board <select value={board} onChange={event => setBoard(event.target.value)}>{["open", "zero", "mid", "max"].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select><p>{board === "open" ? "Use your saved upgrades and rocks, synced to your account when signed in." : "Fixed upgrades. Rock bonuses are locked."}</p></label>}
         <div className="detail-mode-list">
           <div><span className="mode-icon mode-free"><Play size={20} fill="currentColor" /></span><div><strong>Free Play</strong><small>{game.record?.manifest.playGuide?.free ?? "Play for fun. No account required."}</small></div>{game.playable ? <Link href={playHref(game.id)} className="mini-action">Play Free <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Awaiting adapter</span>}</div>
           <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>Passport Play</strong><small>{game.record?.manifest.playGuide?.ranked ?? "Verified score and a place on the board."}</small></div>{competitive ? <Link href={playHref(game.id, "ranked") + (skipBoards ? `&board=${board}` : twoBoards ? `&level=${level}` : "")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
@@ -337,7 +338,7 @@ function CartridgeView({ config, manifest, onComplete }: { config: GameRunConfig
     if (container.current) {
       const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => setPaused(state === "paused"), setError, event => { void recordFreePlayLifecycle(event, token.current); }, progress);
       if (!cartridge) setError("The reviewed browser cartridge is not installed for this game.");
-      else cartridgeHost.mount(cartridge, container.current, config, (result) => callback.current(result)).then(() => cartridgeHost.start()).catch((reason) => setError(messageFor(reason)));
+      else cartridgeHost.mount(cartridge, container.current, config, (result) => { if (active) callback.current(result); }).then(() => { if (active) cartridgeHost.start(); }).catch((reason) => { if (active) setError(messageFor(reason)); });
     }
     return () => { active = false; cartridgeHost.destroy(); host.current = null; };
   }, [config.runId, manifest.adapterId, auth.identityKey]);
@@ -351,7 +352,10 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   const level = Number(params.get("level") ?? 0);
   const raidId = params.get("raidId") ?? undefined;
   const board = params.get("board") ?? "zero";
-  const [attempt, setAttempt] = useState(0);
+  const twoBoards = game?.record?.manifest.adapterId === "two-places-v2";
+  const skipBoards = game?.record?.manifest.adapterId === "skip-to-10k-v2";
+  const [readyToStart, setReadyToStart] = useState(mode !== "ranked" || !(twoBoards || skipBoards));
+  const newAttempt = () => navigate(nextAttemptHref(window.location.pathname, window.location.search, crypto.randomUUID()));
   const [config, setConfig] = useState<GameRunConfig | null>(null);
   const [result, setResult] = useState<GameRunResult | null>(null);
   const [verified, setVerified] = useState(false);
@@ -363,18 +367,20 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   token.current = auth.getToken;
   useEffect(() => {
     completionGeneration.current += 1;
-    if (!game?.playable || (mode !== "free" && (!auth.ready || !auth.identityKey))) return;
+    if (!readyToStart || !game?.playable || (mode !== "free" && (!auth.ready || !auth.identityKey))) return;
     let active = true;
+    const controller = new AbortController();
+    const deadline = mode === "free" ? undefined : setTimeout(() => controller.abort(), 20000);
     setConfig(null); setResult(null); setVerified(false); setError("");
     if (mode === "free") {
       const now = new Date().toISOString();
       setConfig({ runId: crypto.randomUUID(), gameId: game.id, gameVersion: game.record?.manifest.version ?? "1.0.0", mode: "free", objective: game.record?.manifest.supportedObjectives[0] ?? "score", seed: crypto.randomUUID(), startedAt: now });
     } else {
       setLoading(true);
-      api<RunResponse>("/api/runs", token.current, { method: "POST", body: { gameId: game.id, mode, raidId, level, ...(game.record?.manifest.adapterId === "skip-to-10k-v2" ? { board } : {}) } }).then((response) => { if (active) setConfig(response.run); }).catch((reason) => { if (active) setError(messageFor(reason)); }).finally(() => { if (active) setLoading(false); });
+      api<RunResponse>("/api/runs", token.current, { signal: controller.signal, method: "POST", body: { gameId: game.id, mode, raidId, level, ...(skipBoards ? { board } : {}) } }).then((response) => { if (active) setConfig(response.run); }).catch((reason) => { if (active) setError(controller.signal.aborted ? "The run took too long to open. Try again or return to the cabinet." : messageFor(reason)); }).finally(() => { clearTimeout(deadline); if (active) setLoading(false); });
     }
-    return () => { active = false; completionGeneration.current += 1; };
-  }, [game?.id, attempt, mode, raidId, board, level, auth.ready, auth.identityKey]);
+    return () => { active = false; clearTimeout(deadline); controller.abort(); completionGeneration.current += 1; };
+  }, [game?.id, readyToStart, mode, raidId, board, level, skipBoards, auth.ready, auth.identityKey]);
   if (!game) return <NotFound />;
   if (!game.playable) return <main className="page-width centered-state"><LockKeyhole size={42} /><h1>{game.name} is on its way.</h1><p>The browser cartridge has not arrived in this workspace. We’ll open its cabinet after import and review.</p><ActionLink href={gameHref(game.id)}>Back to game details</ActionLink></main>;
   if (mode !== "free" && (game.record?.status !== "published" || !game.record.manifest.supportedModes.includes(mode))) return <main className="page-width centered-state"><LockKeyhole size={42} /><h1>This mode is not available yet.</h1><p>Free Play is ready while this game’s competitive rules are reviewed.</p><ActionLink href={playHref(game.id)}>Play Free</ActionLink></main>;
@@ -400,9 +406,14 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
     finally { if (completionGeneration.current === generation) setLoading(false); }
   };
   return <main className="page-width player-page"><div className="player-top"><Link href={gameHref(game.id)} className="back-link"><ArrowLeft size={17} /> Leave cabinet</Link><div className="player-mode"><span className="live-dot" />{mode === "free" ? "Free Play" : mode === "ranked" ? "Passport Play" : "Community Raid"}</div></div><div className="player-heading"><div><span className="section-kicker">{game.fixture ? "INTERNAL TEST CARTRIDGE" : "ARCADE CARTRIDGE"}</span><h1>{game.name}</h1><p>{game.fixture ? "Match the big symbol using the four pads. Twelve rounds. Twenty seconds." : game.description}</p></div>{game.fixture && <div className="player-rule"><Clock3 size={21} /><span>12 rounds<br /><strong>20 seconds</strong></span></div>}</div>
+    {mode === "ranked" && !readyToStart && <section className="rules-panel"><h2>{twoBoards ? "Choose your speedrun level" : "Choose your Passport board"}</h2>
+      {twoBoards ? <><label>Level <select value={level} onChange={event => navigate(playHref(game.id, "ranked") + `&level=${event.target.value}`)}>{Array.from({ length: 20 }, (_, i) => <option key={i} value={i}>Level {i + 1}</option>)}</select></label><p>All 20 levels have separate speedrun boards. Fastest time wins; apples break ties. Free Play unlocks do not restrict Passport Play.</p></> : <><label>Board <select value={board} onChange={event => navigate(playHref(game.id, "ranked") + `&board=${event.target.value}`)}>{["open", "zero", "mid", "max"].map(value => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></label><p>{board === "open" ? "Open uses your saved upgrades and rocks, including progress synced from another device." : board === "zero" ? "Zero starts every skill at 0. Rocks are disabled." : board === "mid" ? "Mid fixes every skill at level 3. Rocks are disabled." : "Max fixes every skill at level 5. Rocks are disabled."} Each loadout has its own leaderboard. Score is distance × peak-price multiplier; gwei breaks ties.</p></>}
+      <button className="action action-lime" onClick={() => setReadyToStart(true)}>Start {twoBoards ? `level ${level + 1}` : `${board.toUpperCase()} run`}</button>
+    </section>}
     {config?.rules?.format === "two-levels-v1" && <p>{mode === "raid" ? "Follow the shared level order. Finish your run to submit completed levels; apples and time break ties." : `Speedrun: level ${Number(config.rules.level) + 1}. Fastest time wins; apples break a tie.`}</p>}
     {loading && !result && <div className="loading-slab">Issuing your {mode === "raid" ? "raid attempt" : "run"}…</div>}
     {error && <ErrorNote error={error} />}
+    {error && !config && !loading && <button className="action action-lime" onClick={newAttempt}>Try opening the run again</button>}
     {mode !== "free" && result?.result === "completed" && !verified && !loading && <button className="action action-light" onClick={() => void complete(result)}>Retry result submission</button>}
     {mode === "raid" && raidId && <Link className="back-link" href={`/raids/${encodeURIComponent(raidId)}`}>Return to raid standings</Link>}
     {config?.rules?.format === "skip-four-v1" && <p>Loadout: {String(config.rules.board).toUpperCase()}. {mode === "raid" ? "Complete Zero, Mid and Max; all three scores form your raid total." : "This run competes on its own board."}</p>}
@@ -412,7 +423,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
        <h2>{metricText(result.primaryMetric, result.objective)}</h2><span className="result-metric">{result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? "Peak Mood" : result.objective.replaceAll("_", " ")}</span>{verified && rank !== null && <span className="result-rank" data-testid="result-rank">Rank #{rank} on the {mode === "raid" ? "raid" : "Passport Play"} board</span>}
       <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "Run summaries help us improve game balance. Progress saves in this browser and syncs to your account when signed in. Competitive scores require Passport Play or Community Raid." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
       {result.secondaryMetrics && <dl className="result-details">{Object.entries(result.secondaryMetrics).filter(([key]) => !["ticks", "elapsedMs"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1")}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl>}
-    </div><button className="action action-lime" disabled={loading} onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
+    </div><button className="action action-lime" disabled={loading} onClick={newAttempt}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
     {game.record?.manifest.controls?.orientation === "landscape" && <p className="orientation-note">On a phone, turn sideways for the full playfield.</p>}
     <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. We collect run starts, exits and summaries for game balance, linked to your Passport when signed in or a random browser ID when playing as a guest." : "Competitive results follow the cabinet’s issued rules and verifier before they reach its leaderboard."}</p></div>
   </main>;
