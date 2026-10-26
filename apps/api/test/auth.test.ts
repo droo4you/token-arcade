@@ -1,3 +1,4 @@
+import { twoRules } from "../src/twoPlacesBoards.ts";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, randomUUID, sign, type KeyObject } from "node:crypto";
 import { mkdtempSync, readFileSync, rmdirSync, unlinkSync } from "node:fs";
@@ -77,7 +78,7 @@ test("signed Privy bearer gates Passport and verified Cabinet scores across sign
     assert.equal(issued.status, 201);
     const config = issued.body.run as GameRunConfig;
     const proof = JSON.parse(readFileSync(new URL("./fixtures/twoPlacesLevel1.json", import.meta.url), "utf8")) as { v: number; tracks: number[][] };
-    const ticks = proof.tracks[0].length - 1;
+    const ticks = proof.tracks[0].length;
     const primaryMetric = Math.round(ticks * 1_000 / 60);
     const durationMs = ticks * 1_000 / 60;
     // Rewind only this isolated test session so its native replay can finish
@@ -87,8 +88,8 @@ test("signed Privy bearer gates Passport and verified Cabinet scores across sign
     const result: GameRunResult = {
       gameId: config.gameId, gameVersion: config.gameVersion, runId: config.runId,
       mode: config.mode, objective: config.objective, seed: config.seed,
-      primaryMetric, secondaryMetrics: { ticks, apples: 2, deaths: 0, levelsCompleted: 1 },
-      proof, result: "completed", startedAt: config.startedAt, finishedAt: new Date().toISOString(),
+      primaryMetric, secondaryMetrics: { ticks, elapsedMs: primaryMetric, apples: 2, deaths: 0, levelsCompleted: 1 },
+      proof: { v: 2, seed: config.seed, tracks: proof.tracks.map(twoRules.encode) }, result: "completed", startedAt: config.startedAt, finishedAt: new Date().toISOString(),
     };
     const otherPlayer = token("did:privy:other-player", appId, privateKey);
     assert.equal((await request(origin, `/api/runs/${config.runId}/complete`, otherPlayer, result)).status, 404);
@@ -98,7 +99,7 @@ test("signed Privy bearer gates Passport and verified Cabinet scores across sign
     assert.equal(accepted.status, 200);
     assert.equal(accepted.body.verified, true);
     assert.equal(accepted.body.passport.playerId, passportId);
-    assert.equal(accepted.body.passport.bestScores["two-places:completion_time"], primaryMetric);
+    assert.equal(accepted.body.passport.bestScores["two-places@1.1.0:completion_time_level_1"], primaryMetric);
     assert.equal(accepted.body.passport.rankedRuns, 1);
     assert.equal((await request(origin, `/api/runs/${config.runId}/complete`, signed, result)).body.error.code, "RUN_CONSUMED");
     const board = await request(origin, "/api/leaderboards/two-places");
@@ -119,7 +120,7 @@ test("signed Privy bearer gates Passport and verified Cabinet scores across sign
     assert.equal(second.body.passport.playerId, passportId);
     assert.equal(second.body.passport.arcadeWallet, wallet);
     assert.equal(second.body.passport.rankedRuns, 1);
-    assert.equal(second.body.passport.bestScores["two-places:completion_time"], primaryMetric);
+    assert.equal(second.body.passport.bestScores["two-places@1.1.0:completion_time_level_1"], primaryMetric);
     assert.equal((await request(origin, "/api/leaderboards/two-places")).body.entries[0].playerId, passportId);
   } finally {
     if (server?.listening) await close(server);

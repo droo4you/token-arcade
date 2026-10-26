@@ -1,3 +1,4 @@
+import { twoRules } from "../src/twoPlacesBoards.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
@@ -28,7 +29,7 @@ test("real cartridge replays pass issued HTTP sessions and update isolated Cabin
       assert.equal(issued.status, 201, JSON.stringify(issued.body));
       const config = issued.body.run as GameRunConfig;
       assert.equal(config.gameId, gameId);
-      assert.equal(config.gameVersion, gameId === "emonad-cabinet" ? "2.0.0" : "1.0.0");
+      assert.equal(config.gameVersion, gameId === "emonad-cabinet" ? "2.0.0" : "1.1.0");
       assert.ok(config.seed, "the API issues the simulation seed");
       let proof: unknown;
       let primaryMetric: number;
@@ -43,12 +44,12 @@ test("real cartridge replays pass issued HTTP sessions and update isolated Cabin
         ({ primaryMetric, secondaryMetrics } = moodSim.metrics(run.state));
         durationMs = run.state.steps * 1000 / 120;
       } else {
-        assert.deepEqual(config.rules, { level: 0 });
+        assert.deepEqual(config.rules, { format: twoRules.FORMAT, level: 0 });
         const recorded = JSON.parse(readFileSync(new URL("./fixtures/twoPlacesLevel1.json", import.meta.url), "utf8")) as { v: number; tracks: number[][] };
-        const ticks = recorded.tracks[0].length - 1;
-        proof = recorded;
+        const ticks = recorded.tracks[0].length;
+        proof = { v: 2, seed: config.seed, tracks: recorded.tracks.map(twoRules.encode) };
         primaryMetric = Math.round(ticks * 1_000 / 60);
-        secondaryMetrics = { ticks, apples: 2, deaths: 0, levelsCompleted: 1 };
+        secondaryMetrics = { ticks, elapsedMs: primaryMetric, apples: 2, deaths: 0, levelsCompleted: 1 };
         durationMs = ticks * 1_000 / 60;
       }
       // Advance only this isolated fixture's issued start time into the past.
@@ -71,7 +72,7 @@ test("real cartridge replays pass issued HTTP sessions and update isolated Cabin
       assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
       assert.equal(accepted.body.verified, true);
       assert.equal(accepted.body.passport.rankedRuns, ++acceptedRuns);
-      assert.equal(accepted.body.passport.bestScores[`${gameId}${gameId === "emonad-cabinet" ? "@2.0.0" : ""}:${config.objective}`], primaryMetric);
+      assert.equal(accepted.body.passport.bestScores[gameId === "two-places" ? "two-places@1.1.0:completion_time_level_1" : `${gameId}${gameId === "emonad-cabinet" ? "@2.0.0" : ""}:${config.objective}`], primaryMetric);
       assert.ok(store.getSession(config.runId)?.consumedAt);
 
       const standings = await request(`/api/leaderboards/${gameId}`);

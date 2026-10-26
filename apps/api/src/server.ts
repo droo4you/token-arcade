@@ -26,6 +26,12 @@ function requestedSkipRules(board: unknown) {
   return normalizeRunRules(skipBoardRules(board));
 }
 
+import { twoRules, twoLevelRules, twoRaidRules } from "./twoPlacesBoards.ts";
+function requestedTwoRules(level: unknown = 0) {
+  if (!Number.isSafeInteger(level) || Number(level) < 0 || Number(level) >= twoRules.LEVEL_COUNT) fail(400, "INVALID_LEVEL", "Choose a level from 1 to 20");
+  return normalizeRunRules(twoLevelRules(level));
+}
+
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses", "coins_solved"]);
 const MODES = new Set(["free", "ranked", "raid"]);
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
@@ -237,6 +243,7 @@ function raidBlockers(raid: Raid, store: ArcadeStore, adapters: AdapterRegistry)
     if (!game.community && !conceptId && raid.gameId !== WARMUP_GAME_ID) blockers.push("Game has no associated community");
     if (game.manifest.adapterId === "coindle" && (!isRapidRules(raid.rules) || raid.rules?.format !== RAPID_RULES.format || raid.objective !== "coins_solved")) blockers.push("Coindle raids must use reviewed Rapid Fire rules: coins_solved, 180 seconds and 6 guesses per coin");
     if (game.manifest.adapterId === "coindle-v2" && (!isRapidRules(raid.rules) || raid.rules?.format !== RAPID_V2_FORMAT || raid.rules?.selection !== "hidden-pool-40-v1" || raid.objective !== "coins_solved" || raid.maxAttempts !== 3)) blockers.push("Coindle Rapid Fire raids require a hidden coin pool, 180 seconds, 6 guesses per coin and best of 3 attempts");
+    if (game.manifest.adapterId === "two-places-v2" && (raid.objective !== "score" || JSON.stringify(raid.rules) !== JSON.stringify(normalizeRunRules(twoRaidRules(raid.seed))))) blockers.push("Two Places raids require the shared shuffled level order and levels-beaten score");
     if (game.manifest.adapterId === "two-places") {
       const levels = typeof raid.rules?.levelSet === "string" && /^\d{1,2}(,\d{1,2}){2}$/.test(raid.rules.levelSet) ? raid.rules.levelSet.split(",").map(Number) : [];
       if (levels.length !== 3 || new Set(levels).size !== 3 || levels.some((level) => level < 0 || level >= 20)) blockers.push("Two Places raids require three distinct authored levels in rules.levelSet");
@@ -322,6 +329,12 @@ function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid"
     if (skipV2) return b.result.primaryMetric - a.result.primaryMetric
       || (b.result.secondaryMetrics?.gwei ?? 0) - (a.result.secondaryMetrics?.gwei ?? 0)
       || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
+    if (rules?.format === twoRules.FORMAT) {
+      const score = mode === "raid" ? b.result.primaryMetric - a.result.primaryMetric : a.result.primaryMetric - b.result.primaryMetric;
+      return score || (b.result.secondaryMetrics?.apples ?? 0) - (a.result.secondaryMetrics?.apples ?? 0)
+        || (mode === "raid" ? (a.result.secondaryMetrics?.elapsedMs ?? 0) - (b.result.secondaryMetrics?.elapsedMs ?? 0) : 0)
+        || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
+    }
     if (twoPlaces) {
       const apples = (b.result.secondaryMetrics?.apples ?? 0) - (a.result.secondaryMetrics?.apples ?? 0);
       if (apples) return apples;
@@ -357,7 +370,8 @@ function updatePassport(store: ArcadeStore, passport: Passport, result: GameRunR
   const wasFirstGame = !store.hasAcceptedGame(passport.playerId, result.gameId);
   const wasFirstRaid = raid ? !store.hasAcceptedRaid(passport.playerId, raid.id) : false;
   const bestScores = { ...passport.bestScores };
-  const key = result.rules?.format === skipRules.FORMAT ? `${result.gameId}@${result.gameVersion}:${result.objective}_${result.rules.board}` : result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? `${result.gameId}@${result.gameVersion}:${result.objective}` : `${result.gameId}:${result.objective}`;
+  const key = result.rules?.format === twoRules.FORMAT
+    ? `${result.gameId}@${result.gameVersion}:${result.objective}${result.mode === "ranked" ? `_level_${Number(result.rules.level) + 1}` : "_raid"}` : result.rules?.format === skipRules.FORMAT ? `${result.gameId}@${result.gameVersion}:${result.objective}_${result.rules.board}` : result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? `${result.gameId}@${result.gameVersion}:${result.objective}` : `${result.gameId}:${result.objective}`;
   const prior = bestScores[key];
   const lowerIsBetter = result.objective === "completion_time" || result.objective === "guesses";
   if (prior === undefined || (lowerIsBetter ? result.primaryMetric < prior : result.primaryMetric > prior)) bestScores[key] = result.primaryMetric;
@@ -471,6 +485,10 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id).filter(item => item.result.gameVersion === "1.1.0" && item.result.rules?.format === skipRules.FORMAT);
       return { skipGoal: { distance: runs.reduce((n, r) => n + (r.result.secondaryMetrics?.distance ?? 0), 0),
         broke10k: new Set(runs.filter(r => (r.result.secondaryMetrics?.peak ?? 0) >= 10000).map(r => r.playerId)).size } };
+    }
+    if (raid.rules?.format === twoRules.FORMAT) {
+      const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id).filter(item => item.result.gameVersion === "1.1.0" && item.result.rules?.format === twoRules.FORMAT);
+      return { twoPlacesGoal: { levels: runs.reduce((n, r) => n + r.result.primaryMetric, 0), participants: new Set(runs.map(r => r.playerId)).size } };
     }
     if (raid.objective !== "coins_solved") return {};
     const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id);
@@ -667,7 +685,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const raid = raidId ? store.getRaid(raidId) : undefined;
         if (mode === "raid" && (!raid || raid.gameId !== gameId || raid.status === "draft")) fail(400, "INVALID_RAID", "A matching raidId is required");
         const objective = mode === "raid" ? raid!.objective : game.manifest.supportedObjectives[0];
-        const rules = mode === "raid" ? raid?.rules : game.manifest.adapterId === "skip-to-10k-v2" ? requestedSkipRules(url.searchParams.get("board") ?? "zero") : adapters.get(game.manifest.adapterId)?.rankedRules;
+        const rules = mode === "raid" ? raid?.rules : game.manifest.adapterId === "skip-to-10k-v2" ? requestedSkipRules(url.searchParams.get("board") ?? "zero") : game.manifest.adapterId === "two-places-v2" ? requestedTwoRules(Number(url.searchParams.get("level") ?? 0)) : adapters.get(game.manifest.adapterId)?.rankedRules;
         return respond(response, 200, { gameId, mode, objective, ...(raidId ? { raidId } : {}), ...(raid ? raidTotal(raid) : {}), entries: (raid && publicRaid(raid).finalResult?.entries) ?? leaderboard(store, gameId, mode, raidId, objective, mode === "ranked" ? game.manifest.version : undefined, rules) });
       }
 
@@ -854,7 +872,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const blockers = raidBlockers(raid, store, adapters);
           if (blockers.length) fail(409, "RAID_NOT_READY", "Raid cannot issue runs", blockers);
         }
-        const issuedRules = mode === "raid" ? raid?.rules : game.manifest.adapterId === "skip-to-10k-v2" ? requestedSkipRules(body.board ?? "zero") : adapter.rankedRules;
+        const issuedRules = mode === "raid" ? raid?.rules : game.manifest.adapterId === "skip-to-10k-v2" ? requestedSkipRules(body.board ?? "zero") : game.manifest.adapterId === "two-places-v2" ? requestedTwoRules(body.level ?? 0) : adapter.rankedRules;
         if (raid?.funding) fundedRaids.snapshotWallet(raid, passport);
         const config: GameRunConfig = {
           runId: randomUUID(), gameId, gameVersion: game.manifest.version, mode,
@@ -889,7 +907,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (session.consumedAt) fail(409, "RUN_CONSUMED", "Run result was already accepted");
         if (Date.now() > Date.parse(session.config.expiresAt ?? "")) fail(409, "RUN_EXPIRED", "Run session expired");
         // A bounded 905-second Skip replay contains up to 108,600 input chars.
-        const body = await readJson(request, session.config.rules?.format === skipRules.FORMAT ? 131_072 : 65_536);
+        const body = await readJson(request, (session.config.rules?.format === skipRules.FORMAT || session.config.rules?.format === twoRules.FORMAT) ? 131_072 : 65_536);
         if (Date.now() >= Date.parse(session.config.expiresAt ?? "")) fail(409, "RUN_EXPIRED", "Run submission must arrive before its deadline");
         const checked = validateRunResultShape(session.config, isRecord(body.result) ? body.result : body);
         if (!checked.valid) fail(400, "INVALID_RESULT", checked.reason);
@@ -900,7 +918,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (game?.status !== "published" && game?.status !== "paused") fail(409, "GAME_UNAVAILABLE", "Game is no longer available for completing issued runs");
         if (game?.manifest.version !== session.config.gameVersion) fail(409, "GAME_VERSION_CHANGED", "Game version changed during this run");
         const verifier = game && adapters.get(game.manifest.adapterId)?.verifier;
-        const currentRules = game!.manifest.adapterId === "skip-to-10k-v2" ? requestedSkipRules(session.config.rules?.board) : adapters.get(game!.manifest.adapterId)?.rankedRules;
+        const currentRules = game!.manifest.adapterId === "skip-to-10k-v2" ? requestedSkipRules(session.config.rules?.board) : game!.manifest.adapterId === "two-places-v2" ? requestedTwoRules(session.config.rules?.level) : adapters.get(game!.manifest.adapterId)?.rankedRules;
         if (result.mode === "ranked" && JSON.stringify(session.config.rules ?? {}) !== JSON.stringify(currentRules ?? {})) {
           fail(409, "RULES_CHANGED", "Passport Play rules changed during this run");
         }
@@ -1041,6 +1059,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const adapterId = store.getGame(raid.gameId)?.manifest.adapterId ?? "";
           const defaults = adapterId === "skip-to-10k-v2" ? SKIP_RAID_RULES : adapterId === "coindle-v2" ? RAPID_RAID_RULES : adapters.get(adapterId)?.rankedRules;
           if (defaults || raid.rules) raid.rules = normalizeRunRules({ ...defaults, ...raid.rules });
+          if (store.getGame(raid.gameId)?.manifest.adapterId === "two-places-v2") raid.rules = normalizeRunRules(twoRaidRules(raid.seed));
           const blockers = raidBlockers(raid, store, adapters);
           if (!store.getGame(raid.gameId)) fail(404, "NOT_FOUND", "Game not found");
           if (!blockers.length) raid.status = currentRaid({ ...raid, status: "open" }).status;
