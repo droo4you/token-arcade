@@ -240,7 +240,7 @@ function metricText(value: number, objective: string) { return objective === "co
 
 function Leaderboard({ entries, objective = "score" }: { entries: LeaderboardEntry[]; objective?: string }) {
   if (!entries.length) return <div className="empty-list"><Trophy size={28} /><strong>No verified runs yet</strong><span>The first accepted result will appear here.</span></div>;
-  return <div className="leaderboard"><div className="leaderboard-head"><span>Place</span><span>Player</span><span>{objective.replaceAll("_", " ")}</span></div>{entries.map((entry, index) => <div className="leaderboard-row" key={entry.runId}><span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span><span>{entry.displayName}</span><strong>{entry.secondaryMetrics?.apples !== undefined && <small>{entry.secondaryMetrics.apples} apples · </small>}{metricText(entry.primaryMetric, objective)}</strong></div>)}</div>;
+  return <div className="leaderboard"><div className="leaderboard-head"><span>Place</span><span>Player</span><span>{objective.replaceAll("_", " ")}</span></div>{entries.map((entry, index) => <div className="leaderboard-row" key={entry.runId}><span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span><span>{entry.displayName}</span><strong>{entry.secondaryMetrics?.goodVibes !== undefined && <small>{entry.secondaryMetrics.goodVibes} Good Vibes · </small>}{entry.secondaryMetrics?.apples !== undefined && <small>{entry.secondaryMetrics.apples} apples · </small>}{metricText(entry.primaryMetric, objective)}{objective === "coins_solved" && <small> · {entry.secondaryMetrics?.guesses ?? 0} guesses{entry.secondaryMetrics?.skips !== undefined ? ` · ${entry.secondaryMetrics.skips} skips` : ""}</small>}{entry.secondaryMetrics?.gwei !== undefined && <small> · {entry.secondaryMetrics.gwei} gwei</small>}</strong></div>)}</div>;
 }
 
 function MinicoinEvidence({ record, playable }: { record: GameRecord; playable: boolean }) {
@@ -269,6 +269,8 @@ function MinicoinEvidence({ record, playable }: { record: GameRecord; playable: 
 }
 
 function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid[] }) {
+  const skipBoards = game?.record?.manifest.adapterId === "skip-to-10k-v2";
+  const [board, setBoard] = useState("zero");
   const auth = useArcadeAuth();
   const now = useNow();
   const twoBoards = game?.record?.manifest.adapterId === "two-places-v2";
@@ -279,9 +281,9 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
     if (game?.record?.status !== "published") { setEntries([]); setError(""); return; }
     setEntries([]); setError("");
     const controller = new AbortController();
-    api<LeaderboardResponse>(`/api/leaderboards/${encodeURIComponent(game.id)}?mode=ranked${twoBoards ? `&level=${level}` : ""}`, auth.getToken, { signal: controller.signal }).then((data) => setEntries(data.entries)).catch((reason) => { if (!(reason instanceof DOMException && reason.name === "AbortError")) setError(messageFor(reason)); });
+    api<LeaderboardResponse>(`/api/leaderboards/${encodeURIComponent(game.id)}?mode=ranked${skipBoards ? `&board=${board}` : twoBoards ? `&level=${level}` : ""}`, auth.getToken, { signal: controller.signal }).then((data) => setEntries(data.entries)).catch((reason) => { if (!(reason instanceof DOMException && reason.name === "AbortError")) setError(messageFor(reason)); });
     return () => controller.abort();
-  }, [game?.id, game?.record?.status, level, twoBoards]);
+  }, [game?.id, game?.record?.status, board, skipBoards, level, twoBoards]);
   if (!game) return <NotFound />;
   const openRaid = raids.find((raid) => raid.gameId === game.id && isRaidOpen(raid, now));
   const competitive = game.playable && game.record?.status === "published" && game.record.manifest.supportedModes.includes("ranked");
@@ -295,9 +297,10 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
          {game.record?.economy && <div className="cabinet-economy"><StatusBadge tone="wait">{game.record.minicoin ? "Full MiniCoin economy pending" : "MiniCoin Economy — Coming Soon"}</StatusBadge><p>{game.record.economy.reason}</p></div>}
          {game.record?.minicoin && <MinicoinEvidence record={game.record} playable={game.playable} />}
         {twoBoards && <label>Speedrun level <select value={level} onChange={event => setLevel(Number(event.target.value))}>{Array.from({ length: 20 }, (_, i) => <option key={i} value={i}>Level {i + 1}</option>)}</select></label>}
+        {skipBoards && <label>Passport board <select value={board} onChange={event => setBoard(event.target.value)}>{["open", "zero", "mid", "max"].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select><p>{board === "open" ? "Use your browser-saved upgrades and rocks." : "Fixed upgrades. Rock bonuses are locked."}</p></label>}
         <div className="detail-mode-list">
           <div><span className="mode-icon mode-free"><Play size={20} fill="currentColor" /></span><div><strong>Free Play</strong><small>{game.record?.manifest.playGuide?.free ?? "Play for fun. No account required."}</small></div>{game.playable ? <Link href={playHref(game.id)} className="mini-action">Play Free <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Awaiting adapter</span>}</div>
-          <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>Passport Play</strong><small>{game.record?.manifest.playGuide?.ranked ?? "Verified score and a place on the board."}</small></div>{competitive ? <Link href={playHref(game.id, "ranked") + (twoBoards ? `&level=${level}` : "")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
+          <div><span className="mode-icon mode-ranked"><Trophy size={21} /></span><div><strong>Passport Play</strong><small>{game.record?.manifest.playGuide?.ranked ?? "Verified score and a place on the board."}</small></div>{competitive ? <Link href={playHref(game.id, "ranked") + (skipBoards ? `&board=${board}` : twoBoards ? `&level=${level}` : "")} className="mini-action">Start run <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">Coming with verifier</span>}</div>
           <div><span className="mode-icon mode-raid"><Sparkles size={21} /></span><div><strong>Community Raid</strong><small>{game.record?.manifest.playGuide?.raid ?? "Same challenge, shared standings."}</small></div>{openRaid ? <Link href={`/raids/${encodeURIComponent(openRaid.id)}`} className="mini-action">See raid <ArrowUpRight size={17} /></Link> : <span className="mode-unavailable">No open raid</span>}</div>
         </div>
         {!game.playable && <div className="pending-note"><LockKeyhole size={20} /><span>{game.name} needs a reviewed browser cartridge before play opens here.</span></div>}
@@ -305,7 +308,7 @@ function GameDetail({ game, raids }: { game: ArcadeGame | undefined; raids: Raid
     </div>
     <div className="detail-below">
       <section className="detail-info"><h2>About this cabinet</h2><p>{game.fixture ? "Warmup Cabinet checks the cartridge host, Free Play, server-issued runs, and score verification. It is a test fixture for this arcade, not one of the four launch games." : game.playable ? "This cartridge is installed and ready for browser play. Competitive modes appear when its verifier and rules are published." : "The arcade is reserving this cabinet for its incoming game. Game play and competitive modes will open after the actual game is imported and verified."}</p><div className="info-pairs"><div><span>Made by</span><strong>{game.record?.manifest.developer ?? (game.fixture ? "Token Arcade" : "External game team")}</strong></div><div><span>Community</span><strong>{game.community}</strong></div><div><span>Version</span><strong>{game.record?.manifest.version ?? "Awaiting import"}</strong></div></div>{game.record?.community && <details className="financial-details"><summary>Community asset <ChevronDown size={16} /></summary><p>{game.record.community.name} ({game.record.community.type.toUpperCase()})</p><code>{game.record.community.address}</code></details>}{game.record?.communityConcept && <details className="financial-details"><summary>Community association <ChevronDown size={16} /></summary><p>{game.record.communityConcept.name} · {game.record.communityConcept.type.toUpperCase()}</p><p>{game.record.communityConcept.description}</p>{game.record.communityConcept.address && <code>{game.record.communityConcept.address}</code>}<p>Association does not imply an official partnership.</p></details>}{game.record?.manifest.playGuide?.scoring && <><h3>Scoring</h3><p>{game.record.manifest.playGuide.scoring}</p><h3>Tie-breaks</h3><p>{game.record.manifest.playGuide.tieBreak}</p></>}{game.record?.manifest.verifier && <p className="verification-note">{game.record.manifest.verifier.description}</p>}</section>
-      <section className="detail-board"><div className="board-heading"><div><h2>Passport Play leaderboard</h2><p>{twoBoards ? `Level ${level + 1}: fastest time, then apples.` : "Verified runs belong to this cabinet."}</p></div><Trophy size={26} /></div>{error ? <ErrorNote error={error} /> : <Leaderboard entries={entries} objective={game.record?.manifest.supportedObjectives[0] ?? "score"} />}</section>
+      <section className="detail-board"><div className="board-heading"><div><h2>Passport Play leaderboard</h2><p>{skipBoards ? `${board.toUpperCase()} board · distance × peak-price multiplier · ties by gwei` : twoBoards ? `Level ${level + 1}: fastest time, then apples.` : "Verified runs belong to this cabinet."}</p></div><Trophy size={26} /></div>{error ? <ErrorNote error={error} /> : <Leaderboard entries={entries} objective={game.record?.manifest.supportedObjectives[0] ?? "score"} />}</section>
     </div>
   </main>;
 }
@@ -339,6 +342,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   const mode = params.get("mode") === "ranked" ? "ranked" : params.get("mode") === "raid" ? "raid" : "free";
   const level = Number(params.get("level") ?? 0);
   const raidId = params.get("raidId") ?? undefined;
+  const board = params.get("board") ?? "zero";
   const [attempt, setAttempt] = useState(0);
   const [config, setConfig] = useState<GameRunConfig | null>(null);
   const [result, setResult] = useState<GameRunResult | null>(null);
@@ -359,10 +363,10 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
       setConfig({ runId: crypto.randomUUID(), gameId: game.id, gameVersion: game.record?.manifest.version ?? "1.0.0", mode: "free", objective: game.record?.manifest.supportedObjectives[0] ?? "score", seed: crypto.randomUUID(), startedAt: now });
     } else {
       setLoading(true);
-      api<RunResponse>("/api/runs", token.current, { method: "POST", body: { gameId: game.id, mode, raidId, ...(game.record?.manifest.adapterId === "two-places-v2" ? { level } : {}) } }).then((response) => { if (active) setConfig(response.run); }).catch((reason) => { if (active) setError(messageFor(reason)); }).finally(() => { if (active) setLoading(false); });
+      api<RunResponse>("/api/runs", token.current, { method: "POST", body: { gameId: game.id, mode, raidId, level, ...(game.record?.manifest.adapterId === "skip-to-10k-v2" ? { board } : {}) } }).then((response) => { if (active) setConfig(response.run); }).catch((reason) => { if (active) setError(messageFor(reason)); }).finally(() => { if (active) setLoading(false); });
     }
     return () => { active = false; completionGeneration.current += 1; };
-  }, [game?.id, attempt, mode, raidId, level, auth.ready, auth.identityKey]);
+  }, [game?.id, attempt, mode, raidId, board, level, auth.ready, auth.identityKey]);
   if (!game) return <NotFound />;
   if (!game.playable) return <main className="page-width centered-state"><LockKeyhole size={42} /><h1>{game.name} is on its way.</h1><p>The browser cartridge has not arrived in this workspace. We’ll open its cabinet after import and review.</p><ActionLink href={gameHref(game.id)}>Back to game details</ActionLink></main>;
   if (mode !== "free" && (game.record?.status !== "published" || !game.record.manifest.supportedModes.includes(mode))) return <main className="page-width centered-state"><LockKeyhole size={42} /><h1>This mode is not available yet.</h1><p>Free Play is ready while this game’s competitive rules are reviewed.</p><ActionLink href={playHref(game.id)}>Play Free</ActionLink></main>;
@@ -393,10 +397,11 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
     {error && <ErrorNote error={error} />}
     {mode !== "free" && result?.result === "completed" && !verified && !loading && <button className="action action-light" onClick={() => void complete(result)}>Retry result submission</button>}
     {mode === "raid" && raidId && <Link className="back-link" href={`/raids/${encodeURIComponent(raidId)}`}>Return to raid standings</Link>}
+    {config?.rules?.format === "skip-four-v1" && <p>Loadout: {String(config.rules.board).toUpperCase()}. {mode === "raid" ? "Complete Zero, Mid and Max; all three scores form your raid total." : "This run competes on its own board."}</p>}
     {config && (!result || mode === "free") && <CartridgeView key={config.runId} config={config} manifest={game.record!.manifest} onComplete={complete} />}
     {result && <div className="result-panel"><div className="result-medal"><Trophy size={31} /></div><div>
       <span>{result.result === "failed" ? "RUN FINISHED" : mode === "free" ? "LOCAL RESULT" : loading ? "VERIFYING RESULT" : verified ? "VERIFIED RESULT" : "RESULT NOT VERIFIED"}</span>
-       <h2>{metricText(result.primaryMetric, result.objective)}</h2><span className="result-metric">{result.objective.replaceAll("_", " ")}</span>{verified && rank !== null && <span className="result-rank" data-testid="result-rank">Rank #{rank} on the {mode === "raid" ? "raid" : "Passport Play"} board</span>}
+       <h2>{metricText(result.primaryMetric, result.objective)}</h2><span className="result-metric">{result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? "Peak Mood" : result.objective.replaceAll("_", " ")}</span>{verified && rank !== null && <span className="result-rank" data-testid="result-rank">Rank #{rank} on the {mode === "raid" ? "raid" : "Passport Play"} board</span>}
       <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "Run summaries help us improve game balance. Progress saves on this device; competitive scores require Passport Play or Community Raid." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
       {result.secondaryMetrics && <dl className="result-details">{Object.entries(result.secondaryMetrics).filter(([key]) => !["ticks", "elapsedMs"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1")}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl>}
     </div><button className="action action-lime" disabled={loading} onClick={() => setAttempt((value) => value + 1)}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
@@ -453,6 +458,8 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
   }, [id, auth.identityKey]);
   if (!data) return <main className="page-width list-page"><div className="loading-slab">Opening raid lobby…</div>{error && <ErrorNote error={error} />}</main>;
   const { raid, leaderboard } = data;
+  const coindlePoolRaid = raid.rules?.format === "rapid-fire-v2";
+  const skipRaid = raid.rules?.format === "skip-four-v1";
   const ownEntry = leaderboard.find(entry => entry.playerId === data.playerId);
   const game = getGame(raid.gameId, records);
   const running = now >= Date.parse(raid.startsAt) && now < Date.parse(raid.endsAt);
@@ -471,16 +478,18 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
     {error && <ErrorNote error={`Standings could not refresh. Showing the last received results. ${error}`} />}
     {raid.finalResult && <section className="result-panel" aria-live="polite"><Trophy size={31} /><div><span>FINAL RESULT</span><h2>{leaderboard[0] ? `${leaderboard[0].displayName} wins!` : "No qualifying runs"}</h2><p>{leaderboard[0] ? `Winning result: ${metricText(leaderboard[0].primaryMetric, raid.objective)}. Final standings are saved below.` : "This raid ended without an accepted result."} {raid.funding ? "The testnet reward is settled after final standings are verified." : "This community challenge has no prize."}</p>{raid.funding && data.playerId === leaderboard[0]?.playerId && <RaidPrizeClaim raid={raid} />}</div></section>}
     <div className="raid-hero">
-      <div><StatusBadge tone={isRaidOpen(raid, now) ? "good" : "wait"}>Raid {raidDisplayStatus(raid, now)}</StatusBadge><h1>{raid.name}</h1><p>{data.twoPlacesGoal ? "A shared shuffled level order. Rank by levels beaten, then apples, then time." : data.communityTotal ? "Three minutes per attempt. Every verified solve adds to the community total." : "Same course. Same rules. Put your best run on the board."}</p>
+      <div><StatusBadge tone={isRaidOpen(raid, now) ? "good" : "wait"}>Raid {raidDisplayStatus(raid, now)}</StatusBadge><h1>{raid.name}</h1><p>{data.twoPlacesGoal ? "A shared shuffled level order. Rank by levels beaten, then apples, then time." : skipRaid ? "Three skips, one shared seed: Zero, Mid and Max. Your total counts." : data.moodGoal ? "Three attempts. One shared sky. Your best peak Mood wins." : data.communityTotal ? (coindlePoolRaid ? "Best of three. Each run draws randomly from this raid’s hidden coin pool." : "Three minutes per attempt. Every verified solve adds to the community total.") : "Same course. Same rules. Put your best run on the board."}</p>
         <div className="raid-quickfacts"><div><Clock3 size={19} /><span>{countdown}</span></div><div><Ticket size={19} /><span>{entryLabel}</span></div><div><Trophy size={19} /><span>{prizeLabel}</span></div></div>
         <div className="raid-hero-actions">{playable ? <ActionLink href={playHref(raid.gameId, "raid", raid.id)}>Start raid attempt</ActionLink> : <span className="raid-unavailable">{unavailable}</span>}</div>
       </div><div className="raid-hero-glyph">✳</div>
     </div>
     <div className="raid-content">
       <section className="rules-panel"><h2>The rules</h2>
-        <p>Each issued attempt counts, including abandoned runs. Finish and submit before the closing time. {data.twoPlacesGoal ? "Your best run ranks by levels beaten, then apples from cleared levels, then active time. Use Finish raid run to submit early; the cap is 8m 20s of active play. Submit before the raid closes." : data.communityTotal ? "Your best attempt ranks by coins solved, then fewer guesses, then acceptance time and run ID. Every verified attempt contributes to the community total." : "Your best verified attempt counts; equal results are ordered by acceptance time, then run ID."}</p>
+        <p>Each issued attempt counts, including abandoned runs. Finish and submit before the closing time. {data.twoPlacesGoal ? "Your best run ranks by levels beaten, then apples from cleared levels, then active time. Use Finish raid run to submit early; the cap is 8m 20s of active play. Submit before the raid closes." : skipRaid ? "Complete all three loadouts to enter standings. Their scores are added; ties go to total gwei. Abandoned attempts still use their slot. Community totals are display-only." : data.moodGoal ? "Your best attempt ranks by peak Mood, then most Good Vibes, then acceptance time and run ID. The shared Good Vibes goal does not affect rank or rewards." : data.communityTotal ? (coindlePoolRaid ? "Your best of three ranks by coins solved, then fewer guesses, then fewer skips. Every verified attempt contributes to the community goal, which does not affect ranks or prizes." : "Your best attempt ranks by coins solved, then fewer guesses, then acceptance time and run ID. Every verified attempt contributes to the community total.") : "Your best verified attempt counts; equal results are ordered by acceptance time, then run ID."}</p>
+        {data.moodGoal && <div className="rule-row"><span>Community goal · display only</span><strong>{data.moodGoal.goodVibes.toLocaleString()} Good Vibes · {data.moodGoal.participants} players</strong></div>}
+        {data.communityTotal && <div className="rule-row"><span>Community goal · display only</span><strong>{data.communityTotal.coinsSolved.toLocaleString()} coins solved · {data.communityTotal.runs} runs · {data.communityTotal.participants} players</strong></div>}
+        {data.skipGoal && <div className="rule-row"><span>Community goal · display only</span><strong>{data.skipGoal.distance.toLocaleString()} days travelled · {data.skipGoal.broke10k} players broke 10K</strong></div>}
         {data.twoPlacesGoal && <div className="rule-row"><span>Community goal (display only)</span><strong>{data.twoPlacesGoal.levels} levels beaten · {data.twoPlacesGoal.participants} players</strong></div>}
-        {data.communityTotal && <div className="rule-row"><span>Community total</span><strong>{data.communityTotal.coinsSolved.toLocaleString()} coins solved · {data.communityTotal.runs} runs · {data.communityTotal.participants} players</strong></div>}
         <div className="rule-row"><span>Game</span><strong>{game?.name ?? raid.gameId}</strong></div>
         <div className="rule-row"><span>Objective</span><strong>{raid.objective.replaceAll("_", " ")}</strong></div>
         <div className="rule-row"><span>Attempts</span><strong>{attemptsLeft !== undefined ? `${attemptsLeft} remaining of ${raid.maxAttempts}` : `${raid.maxAttempts} per player`}</strong></div>
@@ -607,7 +616,8 @@ function PassportPage({ health, records }: { health: Health | null; records: Gam
         <section className="passport-stats"><div className="stat"><span>Games played</span><strong>{passport.gamesPlayed}</strong></div><div className="stat"><span>Passport Play runs</span><strong>{passport.rankedRuns}</strong></div><div className="stat"><span>Raids entered</span><strong>{passport.raidsEntered}</strong></div><div className="stat"><span>Wins</span><strong>{passport.wins}</strong></div></section>
          <section className="passport-history"><h2>Best scores</h2>{Object.entries(passport.bestScores).length ? <div>{Object.entries(passport.bestScores).map(([key, score]) => {
            const separator = key.lastIndexOf(":");
-           const [gameId, version] = (separator < 0 ? key : key.slice(0, separator)).split("@");
+           const versionedId = separator < 0 ? key : key.slice(0, separator);
+           const [gameId, version] = versionedId.split("@");
            const objective = separator < 0 ? "score" : key.slice(separator + 1);
            const gameName = records.find((record) => record.manifest.id === gameId)?.manifest.name ?? getGame(gameId, [])?.name ?? gameId;
            return <div className="history-row" key={key}><span>{gameName}{version ? ` v${version}` : ""} · {objective.replaceAll("_", " ")}</span><strong>{score.toLocaleString()}</strong></div>;
@@ -677,7 +687,7 @@ function FounderDemo({ records, health, loading, registryError, refresh }: { rec
   const cabinetSupportsPassportPlay = Boolean(arcadeGame?.playable && selected?.manifest.supportedModes.includes("ranked"));
   const canPassportPlay = realSignIn && cabinetSupportsPassportPlay;
   const objective = selected?.manifest.supportedObjectives[0] ?? "score";
-  const score = selected ? visiblePassport?.bestScores[`${selected.manifest.id}:${objective}`] : undefined;
+  const score = selected ? visiblePassport?.bestScores[`${selected.manifest.id}${selected.manifest.adapterId === "mood-swings" ? `@${selected.manifest.version}` : ""}:${objective}`] : undefined;
   const hasScore = realSignIn && typeof score === "number";
   const rehearsalReady = Boolean(health?.settlement.minicoin?.rehearsalReady);
   const selectedEconomyPending = selected?.economy?.status !== "enabled" || selected?.communityConcept?.verification === "unverified";

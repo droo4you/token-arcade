@@ -5,7 +5,7 @@ import { COINS } from "./coins";
 /** Server-authoritative Rapid Fire client. The issued runId is the only credential. */
 export type RapidState = {
   runId: string; startedAt?: number; endsAt?: number; ended: boolean; remainingMs: number;
-  puzzle: number; guessesThisCoin: number; maxGuessesPerCoin: number; solved: number; totalGuesses: number;
+  puzzle: number; guessesThisCoin: number; maxGuessesPerCoin: number; solved: number; totalGuesses: number; skips: number;
   priceHint?: boolean;
 };
 type Feedback = Omit<GuessResult, "coin"> & { ticker: string };

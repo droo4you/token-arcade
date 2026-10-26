@@ -3,8 +3,8 @@ import { fileURLToPath } from "node:url";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
-export default defineConfig({
-  root: fileURLToPath(new URL("./arcade", import.meta.url)),
+export default defineConfig(({ mode }) => ({
+  root: fileURLToPath(new URL(mode === "legacy" ? "./releases/1.0.0" : "./arcade", import.meta.url)),
   base: "./",
   resolve: {
     alias: {
@@ -13,7 +13,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   build: {
-    outDir: fileURLToPath(new URL("./arcade-dist", import.meta.url)),
+    outDir: fileURLToPath(new URL(mode === "legacy" ? "./arcade-dist/1.0.0" : "./arcade-dist/1.1.0", import.meta.url)),
     emptyOutDir: true,
   },
   server: {
@@ -21,4 +21,4 @@ export default defineConfig({
     port: 5181,
     proxy: { "/api/coindle": "http://127.0.0.1:8787" },
   },
-});
+}));

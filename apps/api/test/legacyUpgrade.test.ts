@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ArcadeStore } from "../src/store.ts";
@@ -13,7 +13,7 @@ test("existing Skip to 10K legacy import gains Passport Play on restart, keeping
     const prior = store.getGame("skip-to-10k")!;
     // Simulate the record a pre-upgrade deploy wrote (Free Play only, revision 2, a hosted origin).
     const { verifier: _v, ...manifest } = prior.manifest;
-    store.saveGame({ ...prior, manifest: { ...manifest, supportedModes: ["free"], entry: { kind: "iframe", origin: "https://cart.example", url: "https://cart.example/skip-to-10k/v/1.0.0/" } }, legacyImportRevision: 2 });
+    store.saveGame({ ...prior, manifest: { ...manifest, version: "1.0.0", adapterId: "skip-to-10k", skeletonId: "skip-to-10k", supportedModes: ["free"], entry: { kind: "iframe", origin: "https://cart.example", url: "https://cart.example/skip-to-10k/v/1.0.0/" } }, legacyImportRevision: 2 });
     store.close();
     store = new ArcadeStore(path, false);
     const upgraded = store.getGame("skip-to-10k")!;
@@ -39,6 +39,22 @@ test("untouched emonad-cabinet legacy import is renamed to Mood Swings, id uncha
   assert.equal(g.manifest.id, "emonad-cabinet");
   assert.equal(g.manifest.name, "Mood Swings");
   assert.equal(g.manifest.description, "Keep Emonad's mood up. Paired community: eMONAD.");
-  assert.equal(g.legacyImportRevision, 4);
+  assert.equal(g.legacyImportRevision, 5);
   store.close();
+});
+
+test("Coindle keeps an existing v1 cabinet and its hosted entry until a reviewed version upgrade", () => {
+  const dir = mkdtempSync(join(tmpdir(), "coindle-version-"));
+  const file = join(dir, "a.sqlite");
+  let store = new ArcadeStore(file, false);
+  const fresh = store.getGame("coindle")!;
+  assert.equal(fresh.manifest.version, "1.1.0");
+  const legacy = { ...fresh, legacyImportRevision: 3, manifest: { ...fresh.manifest,
+    version: "1.0.0", adapterId: "coindle", skeletonId: "coindle",
+    entry: { kind: "iframe" as const, origin: "https://cart.example", url: "https://cart.example/coindle/v/1.0.0/" } } };
+  store.saveGame(legacy);
+  store.close(); store = new ArcadeStore(file, false);
+  assert.deepEqual(store.getGame("coindle"), legacy);
+  store.close();
+  rmSync(file); rmdirSync(dir);
 });

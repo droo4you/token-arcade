@@ -11,9 +11,13 @@ import { areColorsAdjacent, FDV_BUCKET_ORDER, getCoinTypeFamily, MAX_GUESSES } f
  */
 export const RAPID_FORMAT = "rapid-fire-v1";
 export const RAPID_RULES: GameRules = { format: RAPID_FORMAT, windowSeconds: 180, maxGuessesPerCoin: MAX_GUESSES, priceHint: "shape-90d-v1" };
+export const RAPID_V2_FORMAT = "rapid-fire-v2";
+export const RAPID_V2_RULES: GameRules = { ...RAPID_RULES, format: RAPID_V2_FORMAT };
+export const RAID_POOL_SIZE = 40;
+export const RAPID_RAID_RULES: GameRules = { ...RAPID_V2_RULES, selection: "hidden-pool-40-v1" };
 /** Time from session issue to pressing start, plus the window and submit slack. */
 export const RAPID_RUN_TIMEOUT_MS = 600_000;
-export const isRapidRules = (rules?: GameRules) => rules?.format === RAPID_FORMAT
+export const isRapidRules = (rules?: GameRules) => (rules?.format === RAPID_FORMAT || rules?.format === RAPID_V2_FORMAT)
   && rules.windowSeconds === 180 && rules.maxGuessesPerCoin === MAX_GUESSES
   && (rules.priceHint === undefined || rules.priceHint === "shape-90d-v1");
 
@@ -25,7 +29,7 @@ type Ledger = {
   runId: string; windowMs: number; maxGuesses: number;
   startedAt?: number; endsAt?: number; finishedAt?: number;
   current?: { answer: string; guesses: string[] };
-  used: string[]; solved: number; totalGuesses: number;
+  used: string[]; solved: number; totalGuesses: number; skips?: number; raidPoolId?: string;
   log: { answer: string; guesses: number; solved: boolean }[];
 };
 export class RapidError extends Error {
@@ -74,6 +78,17 @@ export function createCoindleRapid(options: Options) {
   const now = options.now ?? Date.now;
   const pick = options.pick ?? ((count: number) => randomInt(count));
   db.exec("CREATE TABLE IF NOT EXISTS coindle_rapid (run_id TEXT PRIMARY KEY, json TEXT NOT NULL)");
+  // Private server state, never part of the public raid or issued run configuration.
+  db.exec("CREATE TABLE IF NOT EXISTS coindle_raid_pools (raid_id TEXT PRIMARY KEY, json TEXT NOT NULL)");
+  function raidPool(raidId: string): string[] {
+    const row = db.prepare("SELECT json FROM coindle_raid_pools WHERE raid_id = ?").get(raidId) as { json: string } | undefined;
+    if (row) return JSON.parse(row.json) as string[];
+    if (liveCoins.length < RAID_POOL_SIZE) throw new RapidError(503, "POOL_UNAVAILABLE", "Not enough active coins for a raid");
+    const available = liveCoins.map(coin => coin.ticker), pool: string[] = [];
+    while (pool.length < RAID_POOL_SIZE) pool.push(available.splice(pick(available.length), 1)[0]);
+    db.prepare("INSERT OR IGNORE INTO coindle_raid_pools (raid_id,json) VALUES (?,?)").run(raidId, JSON.stringify(pool));
+    return JSON.parse((db.prepare("SELECT json FROM coindle_raid_pools WHERE raid_id = ?").get(raidId) as { json: string }).json);
+  }
   const load = (runId: string) => {
     const row = db.prepare("SELECT json FROM coindle_rapid WHERE run_id = ?").get(runId) as { json: string } | undefined;
     return row ? JSON.parse(row.json) as Ledger : undefined;
@@ -81,9 +96,10 @@ export function createCoindleRapid(options: Options) {
   const save = (ledger: Ledger) => db.prepare("INSERT INTO coindle_rapid (run_id,json) VALUES (?,?) ON CONFLICT(run_id) DO UPDATE SET json = excluded.json").run(ledger.runId, JSON.stringify(ledger));
   const ended = (ledger: Ledger) => ledger.finishedAt !== undefined || (ledger.endsAt !== undefined && now() >= ledger.endsAt);
   function nextAnswer(ledger: Ledger) {
-    const pool = liveCoins.filter((coin) => !ledger.used.includes(coin.ticker));
+    const candidates = ledger.raidPoolId ? raidPool(ledger.raidPoolId) : liveCoins.map(coin => coin.ticker);
+    const pool = candidates.filter(ticker => !ledger.used.includes(ticker));
     if (!pool.length) { ledger.current = undefined; ledger.finishedAt = now(); return; }
-    const answer = pool[pick(pool.length)].ticker;
+    const answer = pool[pick(pool.length)];
     ledger.used.push(answer);
     ledger.current = { answer, guesses: [] };
   }
@@ -98,6 +114,9 @@ export function createCoindleRapid(options: Options) {
     const found = options.getSession(runId);
     if (!found || found.config.gameId !== "coindle" || (found.config.mode !== "ranked" && found.config.mode !== "raid")) throw new RapidError(404, "NOT_FOUND", "Rapid Fire run not found");
     if (!isRapidRules(found.config.rules)) throw new RapidError(409, "RULES_MISMATCH", "Run was not issued with reviewed Rapid Fire rules");
+    const v2 = found.config.rules?.format === RAPID_V2_FORMAT;
+    if (found.config.gameVersion !== (v2 ? "1.1.0" : "1.0.0")) throw new RapidError(409, "RULES_MISMATCH", "Rapid Fire version does not match its rules");
+    if (v2 && found.config.mode === "raid" && (!found.config.raidId || found.config.maxAttempts !== 3 || found.config.rules?.selection !== "hidden-pool-40-v1")) throw new RapidError(409, "RULES_MISMATCH", "Raid needs its private pool and three-attempt rules");
     if (found.consumedAt) throw new RapidError(409, "RUN_CONSUMED", "Run result was already accepted");
     return found;
   }
@@ -105,7 +124,7 @@ export function createCoindleRapid(options: Options) {
     runId: ledger.runId, startedAt: ledger.startedAt, endsAt: ledger.endsAt, ended: ended(ledger),
     remainingMs: ledger.endsAt === undefined ? ledger.windowMs : ended(ledger) ? 0 : ledger.endsAt - now(),
     puzzle: ledger.log.length + 1, guessesThisCoin: ledger.current?.guesses.length ?? 0, maxGuessesPerCoin: ledger.maxGuesses,
-    solved: ledger.solved, totalGuesses: ledger.totalGuesses,
+    solved: ledger.solved, totalGuesses: ledger.totalGuesses, skips: ledger.skips ?? 0,
     priceHint: options.getSession(ledger.runId)?.config.rules?.priceHint === "shape-90d-v1",
   });
   function active(runId: string) {
@@ -124,7 +143,8 @@ export function createCoindleRapid(options: Options) {
         const windowMs = Number(found.config.rules?.windowSeconds ?? 180) * 1000;
         const maxGuesses = Number(found.config.rules?.maxGuessesPerCoin ?? MAX_GUESSES);
         if (found.config.expiresAt && now() + windowMs > Date.parse(found.config.expiresAt)) throw new RapidError(409, "RUN_EXPIRED", "Not enough session time left for a full window");
-        ledger = { runId, windowMs, maxGuesses, startedAt: now(), endsAt: now() + windowMs, used: [], solved: 0, totalGuesses: 0, log: [] };
+        ledger = { runId, windowMs, maxGuesses, startedAt: now(), endsAt: now() + windowMs, used: [], solved: 0, totalGuesses: 0, skips: 0, log: [],
+          ...(found.config.mode === "raid" && found.config.rules?.format === RAPID_V2_FORMAT ? { raidPoolId: found.config.raidId } : {}) };
         nextAnswer(ledger); save(ledger);
       }
       return view(ledger);
@@ -170,6 +190,7 @@ export function createCoindleRapid(options: Options) {
     },
     skip(runId: string) {
       const ledger = active(runId);
+      ledger.skips = (ledger.skips ?? 0) + 1;
       const revealed = close(ledger, false);
       save(ledger);
       return { revealed, nextPuzzle: true, ...view(ledger) };
@@ -184,12 +205,13 @@ export function createCoindleRapid(options: Options) {
     verifier: {
       gameId: "coindle",
       async verify(config: GameRunConfig, result: GameRunResult) {
-        if (config.rules?.format !== RAPID_FORMAT || result.rules?.format !== RAPID_FORMAT) return { valid: false, reason: "Run was not issued with Rapid Fire rules" };
+        if (!isRapidRules(config.rules) || config.rules?.format !== result.rules?.format || config.gameVersion !== (config.rules?.format === RAPID_V2_FORMAT ? "1.1.0" : "1.0.0")) return { valid: false, reason: "Run was not issued with Rapid Fire rules" };
         if (result.objective !== "coins_solved") return { valid: false, reason: "Rapid Fire ranks coins solved" };
         const ledger = load(config.runId);
         if (ledger?.startedAt === undefined) return { valid: false, reason: "No server ledger for this run" };
         if (!ended(ledger)) return { valid: false, reason: "Rapid Fire window is still open" };
-        if (result.primaryMetric !== ledger.solved || result.secondaryMetrics?.guesses !== ledger.totalGuesses) {
+        if (result.primaryMetric !== ledger.solved || result.secondaryMetrics?.guesses !== ledger.totalGuesses ||
+            (config.rules?.format === RAPID_V2_FORMAT && result.secondaryMetrics?.skips !== (ledger.skips ?? 0))) {
           return { valid: false, reason: "Claimed result does not match the server ledger" };
         }
         return { valid: true };
