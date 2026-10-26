@@ -39,7 +39,7 @@ test("untouched emonad-cabinet legacy import is renamed to Mood Swings, id uncha
   assert.equal(g.manifest.id, "emonad-cabinet");
   assert.equal(g.manifest.name, "Mood Swings");
   assert.equal(g.manifest.description, "Keep Emonad's mood up. Paired community: eMONAD.");
-  assert.equal(g.legacyImportRevision, 4);
+  assert.equal(g.legacyImportRevision, 5);
   store.close();
 });
 
