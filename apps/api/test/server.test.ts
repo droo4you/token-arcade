@@ -650,7 +650,7 @@ test("legacy import migration preserves cabinet state and history and only runs 
 });
 
 test("eMONAD raids inherit fixed viewport rules and unchanged paused imports can resume", async () => {
-  const input = { name: "eMONAD viewport test", gameId: "emonad-cabinet", communityId: "emonad", objective: "score", startsAt: new Date(Date.now() - 1000).toISOString(), endsAt: new Date(Date.now() + 60_000).toISOString(), maxAttempts: 2, reward: { type: "none" } };
+  const input = { name: "eMONAD viewport test", gameId: "emonad-cabinet", communityId: "emonad", objective: "score", startsAt: new Date(Date.now() - 1000).toISOString(), endsAt: new Date(Date.now() + 60_000).toISOString(), maxAttempts: 3, reward: { type: "none" } };
   const created = await api("/api/admin/raids", { method: "POST", auth: "admin", body: input });
   assert.equal(created.body.raid.status, "open");
   assert.deepEqual(created.body.raid.rules, { viewportHeight: 844, viewportWidth: 390 });

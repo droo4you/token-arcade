@@ -234,7 +234,8 @@ function raidBlockers(raid: Raid, store: ArcadeStore, adapters: AdapterRegistry)
       const levels = typeof raid.rules?.levelSet === "string" && /^\d{1,2}(,\d{1,2}){2}$/.test(raid.rules.levelSet) ? raid.rules.levelSet.split(",").map(Number) : [];
       if (levels.length !== 3 || new Set(levels).size !== 3 || levels.some((level) => level < 0 || level >= 20)) blockers.push("Two Places raids require three distinct authored levels in rules.levelSet");
     }
-    if (game.manifest.adapterId === "buy-bounce" && (raid.rules?.viewportWidth !== 390 || raid.rules?.viewportHeight !== 844)) blockers.push("eMONAD raids require the reviewed 390×844 viewport rules");
+    if (["buy-bounce", "mood-swings"].includes(game.manifest.adapterId) && (raid.rules?.viewportWidth !== 390 || raid.rules?.viewportHeight !== 844)) blockers.push("eMONAD raids require the reviewed 390×844 viewport rules");
+    if (game.manifest.adapterId === "mood-swings" && (raid.maxAttempts !== 3 || raid.objective !== "score")) blockers.push("Mood Swings raids require best of three attempts, ranked by peak Mood");
     const adapter = adapters.get(game.manifest.adapterId);
     if (!adapter?.verifier) blockers.push("Game-specific score verifier is not registered");
   }
@@ -304,6 +305,10 @@ function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid"
   const best = new Map<string, AcceptedResult>();
   const twoPlaces = store.getGame(gameId)?.manifest.adapterId === "two-places";
   const compare = (a: AcceptedResult, b: AcceptedResult) => {
+    if (a.result.gameId === "emonad-cabinet" && a.result.gameVersion === "2.0.0" && b.result.gameVersion === "2.0.0") {
+      return b.result.primaryMetric - a.result.primaryMetric || (b.result.secondaryMetrics?.goodVibes ?? 0) - (a.result.secondaryMetrics?.goodVibes ?? 0)
+        || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
+    }
     if (twoPlaces) {
       const apples = (b.result.secondaryMetrics?.apples ?? 0) - (a.result.secondaryMetrics?.apples ?? 0);
       if (apples) return apples;
@@ -338,7 +343,7 @@ function updatePassport(store: ArcadeStore, passport: Passport, result: GameRunR
   const wasFirstGame = !store.hasAcceptedGame(passport.playerId, result.gameId);
   const wasFirstRaid = raid ? !store.hasAcceptedRaid(passport.playerId, raid.id) : false;
   const bestScores = { ...passport.bestScores };
-  const key = `${result.gameId}:${result.objective}`;
+  const key = result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? `${result.gameId}@${result.gameVersion}:${result.objective}` : `${result.gameId}:${result.objective}`;
   const prior = bestScores[key];
   const lowerIsBetter = result.objective === "completion_time" || result.objective === "guesses";
   if (prior === undefined || (lowerIsBetter ? result.primaryMetric < prior : result.primaryMetric > prior)) bestScores[key] = result.primaryMetric;
@@ -441,6 +446,10 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   }
   /** Community Raid total: every verified run in the raid counts, not just each player's best. */
   const raidTotal = (raid: Raid) => {
+    if (raid.gameId === "emonad-cabinet" && raid.gameVersion === "2.0.0") {
+      const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id).filter(item => item.result.gameVersion === "2.0.0");
+      return { moodGoal: { goodVibes: runs.reduce((sum, item) => sum + (item.result.secondaryMetrics?.goodVibes ?? 0), 0), runs: runs.length, participants: new Set(runs.map(item => item.playerId)).size } };
+    }
     if (raid.objective !== "coins_solved") return {};
     const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id);
     return { communityTotal: { coinsSolved: runs.reduce((sum, item) => sum + item.result.primaryMetric, 0), runs: runs.length, participants: new Set(runs.map((item) => item.playerId)).size } };
@@ -1003,6 +1012,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (method === "POST" && path === "/api/admin/raids") {
           const body = await readJson(request);
           const raid = validateRaidInput(body);
+          if (store.getGame(raid.gameId)?.manifest.adapterId === "mood-swings") raid.gameVersion = "2.0.0";
           const defaults = adapters.get(store.getGame(raid.gameId)?.manifest.adapterId ?? "")?.rankedRules;
           if (defaults || raid.rules) raid.rules = normalizeRunRules({ ...defaults, ...raid.rules });
           const blockers = raidBlockers(raid, store, adapters);

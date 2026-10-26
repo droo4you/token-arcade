@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#172b46"><meta name="description" content="Keep Emonad's mood up.">
+  <title>Mood Swings</title><link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main id="stage" aria-label="Mood Swings game">
+  <canvas id="sky" width="390" height="844" aria-label="Slide the paddle beneath Emonad. Drag or use the left and right arrow keys." tabindex="0"></canvas>
+  <div class="hud" id="hud" hidden>
+    <div class="score"><span>Mood</span><strong id="mood">100</strong><span id="tier">Numb</span></div>
+    <div class="run-vibes"><span>Good Vibes</span><strong id="vibes">0</strong><button id="pause" aria-label="Pause game">Ⅱ</button></div>
+    <div class="euphoria"><div><span id="meter-label">Euphoria</span><span id="meter-value">0 / 5</span></div><progress id="meter" max="5" value="0" aria-label="Euphoria meter"></progress></div>
+    <p id="effects"></p>
+  </div>
+  <p id="callout" role="status" aria-live="polite"></p>
+  <p id="grip" hidden>Drag to catch your mood.<br><span>Or use ← and →</span></p>
+  <section id="menu" class="sheet">
+    <div class="intro"><svg class="weather-mark" viewBox="0 0 80 60" aria-hidden="true"><circle cx="48" cy="23" r="14"/><path d="M16 46c-18-10-1-31 13-21 5-26 36-16 32 4 21-3 24 22 6 22H19"/></svg><h1>Mood<br>Swings</h1><p>Keep Emonad’s mood up.</p></div>
+    <p class="how">Slide beneath Emonad to keep bouncing.<br>Collect Good Vibes. Let the clouds part.</p>
+    <button class="primary" id="play">Find your good side</button>
+    <button class="secondary" id="wardrobe">Make it yours</button>
+    <details><summary>A little pep talk</summary><dl id="legend"></dl><p>Peak Mood wins. Good Vibes break ties. A raid gives you three attempts with the same seed; your best run counts.</p></details>
+    <p id="saved" class="fine"></p><p class="fine">MiniCoin coming soon</p>
+  </section>
+  <section id="over" class="sheet result" hidden aria-labelledby="result-title">
+    <p id="result-tier">Numb</p><h2 id="result-title">Every mood<br>has its moment.</h2>
+    <span>Peak Mood</span><strong id="peak">0</strong><p id="result-vibes"></p><p id="result-time"></p>
+    <button class="primary" id="again">Another little upswing</button><button class="secondary" id="home">Back to your sky</button><p id="result-note" class="fine"></p>
+  </section>
+  <section id="closet" class="sheet closet" hidden aria-labelledby="closet-title">
+    <h2 id="closet-title">Make it yours.</h2><p id="balance"></p><p class="fine">A different look. The same bounce.</p><div id="items"></div><button class="primary" id="close-closet">Back to your sky</button><p id="save-warning" class="fine" role="status"></p>
+  </section>
+  <section id="paused" class="sheet" hidden aria-label="Game paused"><h2>Take a breath.</h2><button class="primary" id="resume">Keep going</button></section>
+</main>
+<script src="/sdk/hosts.js"></script><script src="/sdk/bridge.js"></script>
+<script src="./sim.js"></script><script src="./progress.js"></script><script src="./game.js"></script>
+</body></html>
