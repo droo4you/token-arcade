@@ -10,7 +10,7 @@ import { custom, keccak256, stringToHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type { GameRunConfig, GameRunResult } from "../../../packages/sdk/src/index.ts";
 import { ArcadeAuth, type Identity } from "../src/auth.ts";
-import { moodSwingsSeed } from "../src/gameVerification.ts";
+import { moodSim } from "../src/moodVerification.ts";
 import { createArcadeServer } from "../src/server.ts";
 import { ArcadeStore } from "../src/store.ts";
 
@@ -42,13 +42,6 @@ class FixtureAuth extends ArcadeAuth {
   }
 }
 
-const { makeTrial } = createRequire(import.meta.url)("../../../cartridges/emonad-cabinet/tools/harness.js") as {
-  makeTrial(width: number, height: number): {
-    run(seed: number, frames: number, frameMs: number, input: () => number): void;
-    BB: { record(): Record<string, unknown>; state: { ath: number; buys: number; best: number; tickets: number; steps: number; shown: boolean } };
-  };
-};
-
 test("local founder rehearsal associates an experimental Minicoin with a playable eMONAD Cabinet and verified Passport run", async () => {
   const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const founderToken = token(founderId, privateKey);
@@ -73,7 +66,7 @@ test("local founder rehearsal associates an experimental Minicoin with a playabl
     const store = new ArcadeStore(":memory:", true);
     const seeded = store.getGame(gameId)!;
     assert.equal(seeded.status, "published");
-    assert.equal(seeded.economy?.status, "pending");
+    assert.equal(seeded.economy?.status, "coming_soon");
     assert.equal(seeded.communityConcept?.verification, "unverified");
     const server = createArcadeServer({
       store, auth: new FixtureAuth(authSettings), localMinicoinRehearsal: rehearsalEnabled,
@@ -139,7 +132,7 @@ test("local founder rehearsal associates an experimental Minicoin with a playabl
     const publicCabinet = publicGames.body.games.find((game: any) => game.manifest.id === gameId);
     assert.equal(publicCabinet.manifest.id, gameId);
     assert.equal(publicCabinet.status, "published");
-    assert.equal(publicCabinet.economy.status, "pending", "rehearsal must not mark the real economy ready");
+    assert.equal(publicCabinet.economy.status, "coming_soon", "rehearsal must not mark the real economy ready");
     assert.equal(publicCabinet.communityConcept.verification, "unverified", "rehearsal must not verify an asset");
     assert.deepEqual(publicCabinet.minicoin, deployed.body.minicoin);
 
@@ -148,19 +141,17 @@ test("local founder rehearsal associates an experimental Minicoin with a playabl
     const run = issued.body.run as GameRunConfig;
     assert.equal(run.gameId, gameId);
     assert.deepEqual(run.rules, { viewportHeight: 844, viewportWidth: 390 });
-    const trial = makeTrial(390, 844);
-    trial.run(moodSwingsSeed(run.seed!), 6_000, 16, () => 195);
-    const state = trial.BB.state;
-    assert.equal(state.shown, true, "native gameplay reaches its terminal screen");
-    const score = Math.round(state.ath);
-    const secondaryMetrics = { buys: state.buys, bestStreak: state.best, collectibles: state.tickets, ticks: state.steps };
-    const durationMs = state.steps * 1_000 / 120;
+    const trial = moodSim.create(run.seed!);
+    const inputs: number[] = [];
+    while (!trial.state.shown) { inputs.push(195); trial.tick(195); }
+    const { primaryMetric: score, secondaryMetrics } = moodSim.metrics(trial.state);
+    const durationMs = trial.state.steps * 1000 / 120;
     run.startedAt = new Date(Date.now() - Math.ceil(durationMs) - 3_000).toISOString();
     first.store.db.prepare("UPDATE run_sessions SET json = ? WHERE id = ?").run(JSON.stringify(run), run.runId);
     const result: GameRunResult = {
       gameId: run.gameId, gameVersion: run.gameVersion, runId: run.runId,
       mode: run.mode, objective: run.objective, seed: run.seed,
-      primaryMetric: score, secondaryMetrics, proof: trial.BB.record(), result: "completed",
+      primaryMetric: score, secondaryMetrics, proof: { v: 1, seed: run.seed, steps: inputs.length, track: moodSim.encode(inputs) }, result: "completed",
       startedAt: run.startedAt, finishedAt: new Date().toISOString(),
     };
     const accepted = await first.call(`/api/runs/${run.runId}/complete`, "POST", result, playerToken);
@@ -168,11 +159,11 @@ test("local founder rehearsal associates an experimental Minicoin with a playabl
     assert.equal(accepted.body.verified, true);
     assert.equal(accepted.body.result.gameId, gameId);
     const passportId = accepted.body.passport.playerId as string;
-    assert.equal(accepted.body.passport.bestScores[`${gameId}:score`], score);
+    assert.equal(accepted.body.passport.bestScores[`${gameId}@2.0.0:score`], score);
     const passport = await first.call("/api/me", "GET", undefined, playerToken);
     assert.equal(passport.body.passport.playerId, passportId);
     assert.equal(passport.body.passport.rankedRuns, 1);
-    assert.equal(passport.body.passport.bestScores[`${gameId}:score`], score);
+    assert.equal(passport.body.passport.bestScores[`${gameId}@2.0.0:score`], score);
     const standings = await first.call(`/api/leaderboards/${gameId}`, "GET", undefined, playerToken);
     assert.equal(standings.body.gameId, gameId);
     assert.equal(standings.body.entries.length, 1);
@@ -202,7 +193,7 @@ test("local founder rehearsal associates an experimental Minicoin with a playabl
     const publicCabinet = (await recovered.call(`/api/games/${gameId}`, "GET", undefined, playerToken)).body.game;
     assert.equal(publicCabinet.manifest.id, gameId);
     assert.deepEqual(publicCabinet.minicoin, association.body.minicoin);
-    assert.equal(publicCabinet.economy.status, "pending");
+    assert.equal(publicCabinet.economy.status, "coming_soon");
   } finally {
     await new Promise<void>((resolve) => recovered.server.close(() => resolve()));
     recovered.store.close();

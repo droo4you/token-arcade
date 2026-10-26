@@ -1,10 +1,10 @@
-// Skrumpey Slide deterministic sim (rules 1.2.0: two-stage sprints with guaranteed hill recovery). Pure: no DOM, no wall clock. Fixed 60 Hz, seeded RNG, input replay.
+// Skrumpey Slide deterministic sim (rules 1.3.0: DN Frenzy recovery kick). Pure: no DOM, no wall clock. Fixed 60 Hz, seeded RNG, input replay.
 // Terrain = authored chunk templates (control points joined by cosine curves -> zero slope at joints)
 // stitched procedurally per seed, grouped into biomes. Entities (collectibles, power-ups, enemies) are spawned with the chunk.
 (function(root){
 const DT=1/60, PIT=-400;
 const P={g:24,gPress:140,startV:22,minV:13,maxV:80,friction:0.004,perfectAng:0.5,badAng:0.85,perfectBoost:1.14,badKeep:0.8,diveAccel:14,trainMultStep:0.2,trainMultCap:1.5,trainSpacing:3.6,laneW:3.5,laneLen:230,laneSpeed:32,laneStages:[{len:150,speed:36,density:0.55},{len:170,speed:42,density:0.7}],laneEase:0.05,laneDayDrain:0.75,laneRow:20,laneJumpV:10,frenzyNeed:45,frenzyTicks:300,frenzyEvery:10,frenzyMagnet:9,buddyR:4.2,trainGap:9,trainHitKeep:0.9,starSynergy:1.5,rearRange:22,launchPeriod:90,launchMinPull:8,launchAuto:600,launchAngle:0.55,perfectLaunchQ:0.9,jumpV:10,jumpStart:3,jumpMax:5,jumpComboEvery:5,perfectMaxSlope:0.1,terrainStretch:1.15,launchKick:2,launchSlope:0.18,
-  dayTicks:60*60,perfectDaylight:30,airPtsPerSec:20,heightPts:4,distPts:1,
+  frenzyBoost:4,dayTicks:60*60,perfectDaylight:30,airPtsPerSec:20,heightPts:4,distPts:1,
   pr:1.4, starTicks:6*60, beamTicks:9*60, beamEvery:24, beamRange:34, hitKeep:0.6, invulnTicks:70, stompBounce:15,bashSpeed:24,
   pts:{gem:10,stomp:50,beamKill:30,starKill:40,power:100}};
 const BUDDY_TRAITS=[ 'star','star','star','star','beam','beam','beam',null,null,null,null ]; // order = CONFIG.buddies ids [3,20,38,164,690,2067,2912,1764,1924,210,314]
@@ -166,9 +166,12 @@ function step(s,input){if(s.over)return;const bits=input===true?1:input===false?
       else if(e.type==='walker'&&s.ground&&Math.hypot(s.vx,s.vy)>P.bashSpeed){kill(s,e,'bash');}
       else hitPlayer(s);}
   }
-  // DN nut frenzy: fill the meter -> nuts rain (auto nuts + magnet) for a few seconds
+  // DN nut frenzy: one recovery kick on activation, then nuts rain + magnet.
   if(s.frenzyT>0){s.frenzyT--;if(s.frenzyT%P.frenzyEvery===0){s.gems++;s.bonus+=rainPts(TM(s));s.ev.push({t:'rainNut'});}if(s.frenzyT===0)s.ev.push({t:'frenzyEnd'});}
-  else if(s.nutMeter>=P.frenzyNeed){s.nutMeter=0;s.frenzyT=P.frenzyTicks;s.frenzies++;s.ev.push({t:'frenzy'});}
+  else if(s.nutMeter>=P.frenzyNeed){s.nutMeter=0;s.frenzyT=P.frenzyTicks;s.frenzies++;
+    const sp=Math.hypot(s.vx,s.vy);
+    if(sp>0&&sp<P.maxV){const k=Math.min(P.maxV,sp+P.frenzyBoost)/sp;s.vx*=k;s.vy*=k;}
+    s.ev.push({t:'frenzy'});}
   if(beamFire&&hasTrait(s,'beam')){for(let i=s.entLo;i<ents.length;i++){const e=ents[i];if(e.x>s.x)break;const dx=e.x-s.x;
     if(!e.dead&&dx<-2&&dx>-P.rearRange&&(e.type==='walker'||e.type==='flyer'||e.type==='spike')){s.ev.push({t:'beam',rear:true,x:s.x,y:s.y+1.6,tx:e.x,ty:e.y+1});kill(s,e,'beam');break;}}}
   if(beamTarget){s.ev.push({t:'beam',x:s.x,y:s.y+1.6,tx:beamTarget.x,ty:beamTarget.y+1});kill(s,beamTarget,'beam');}
@@ -198,7 +201,7 @@ function botInput(s){if(s.inLane)return botLane(s);if(s.phase==='launch')return 
   else if(s.power!=='star'){const sp=Math.hypot(s.vx,s.vy);for(let i=s.entLo;i<s.W.ents.length;i++){const e=s.W.ents[i];const dx=e.x-s.x;if(dx>sp*0.45)break;
     if(!e.dead&&dx>sp*0.25&&(e.type==='spike'||(e.type==='walker'&&sp<P.bashSpeed))){b=2;break;}}}}
   return b;}
-const RULES_VERSION='1.2.0'; // bump whenever world generation or scoring changes; the server verifies each version with its own frozen sim
+const RULES_VERSION='1.3.0'; // bump whenever physics, world generation or scoring changes; each version has its own frozen sim
 const API={RULES_VERSION,flightPts,nutPts,killPts,powerPts,rainPts,BUDDY_TRAITS,launchMeter,TM,DT,P,PIT,BIOMES,BIOME_LEN,rng,makeWorld,create,step,result,replay,dailySeed,botInput};
 if(typeof module!=='undefined')module.exports=API;else root.SIM=API;
 })(this);

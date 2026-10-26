@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { GameRunConfig } from "../../../packages/sdk/src/index.ts";
 import { createArcadeServer } from "../src/server.ts";
 import { ArcadeStore } from "../src/store.ts";
-import { createCoindleRapid, judge, RAPID_RULES } from "../src/coindleRapid.ts";
+import { createCoindleRapid, judge, RAPID_RULES, RAPID_RAID_RULES } from "../src/coindleRapid.ts";
 import { COINS } from "../../../cartridges/coindle/src/lib/coins.ts";
 
 const live = COINS.filter((coin) => !coin.retired);
@@ -87,6 +87,7 @@ test("Rapid Fire: server picks, judges and times; answers never leak before a so
   let last: Awaited<ReturnType<typeof rapid.guess>> | undefined;
   for (const coin of others) last = await rapid.guess(runId, coin.ticker);
   assert.equal(last!.revealed, second); assert.equal(last!.solved, 1); assert.equal(last!.totalGuesses, 8);
+  assert.equal(last!.skips, 0, "exhausting guesses is distinct from explicitly skipping");
   const skipped = rapid.skip(runId);
   assert.equal(skipped.puzzle, 4);
   tick(180_000);
@@ -143,20 +144,21 @@ async function api(path: string, options: { method?: string; auth?: string; body
 }
 const answerOf = (id: string) => (JSON.parse((store.db.prepare("SELECT json FROM coindle_rapid WHERE run_id = ?").get(id) as { json: string }).json)).current.answer as string;
 
-async function play(player: string, solves: number, wrongFirst: number, raidId?: string) {
+async function play(player: string, solves: number, wrongFirst: number, raidId?: string, skips = 0) {
   const issued = await api("/api/runs", { method: "POST", auth: player, body: { gameId: "coindle", mode: raidId ? "raid" : "ranked", ...(raidId ? { raidId } : {}) } });
   assert.equal(issued.status, 201, JSON.stringify(issued.body));
   const run = issued.body.run as GameRunConfig;
   assert.equal(run.objective, "coins_solved");
-  assert.equal(run.rules?.format, "rapid-fire-v1");
+  assert.equal(run.rules?.format, "rapid-fire-v2");
   assert.equal((await api(`/api/coindle/rapid/${run.runId}/start`, { method: "POST" })).status, 200);
   for (let i = 0; i < solves; i++) {
     if (i === 0) for (const coin of live.filter((c) => c.ticker !== answerOf(run.runId)).slice(0, wrongFirst)) await api(`/api/coindle/rapid/${run.runId}/guess`, { method: "POST", body: { ticker: coin.ticker } });
     const reply = await api(`/api/coindle/rapid/${run.runId}/guess`, { method: "POST", body: { ticker: answerOf(run.runId) } });
     assert.equal(reply.body.correct, true);
   }
+  for (let i = 0; i < skips; i++) assert.equal((await api(`/api/coindle/rapid/${run.runId}/skip`, { method: "POST" })).status, 200);
   const early = { gameId: run.gameId, gameVersion: run.gameVersion, runId: run.runId, mode: run.mode, raidId: run.raidId, seed: run.seed, objective: run.objective,
-    primaryMetric: solves, secondaryMetrics: { guesses: solves + wrongFirst }, result: "completed", startedAt: run.startedAt, finishedAt: new Date().toISOString() };
+    primaryMetric: solves, secondaryMetrics: { guesses: solves + wrongFirst, skips }, result: "completed", startedAt: run.startedAt, finishedAt: new Date().toISOString() };
   assert.equal((await api(`/api/runs/${run.runId}/complete`, { method: "POST", auth: player, body: early })).body.error.code, "UNVERIFIED_RESULT", "window still open");
   const state = (await api(`/api/coindle/rapid/${run.runId}/finish`, { method: "POST" })).body;
   assert.equal(state.ended, true);
@@ -170,11 +172,12 @@ async function play(player: string, solves: number, wrongFirst: number, raidId?:
 
 test("Coindle Passport Play ranks coins solved, then fewer guesses", async () => {
   await play("rf-alice", 3, 2);
-  await play("rf-bob", 3, 0);
+  await play("rf-bob", 3, 0, undefined, 1);
+  await play("rf-dave", 3, 0);
   await play("rf-carol", 2, 0);
   const board = await api("/api/leaderboards/coindle");
   assert.equal(board.body.objective, "coins_solved");
-  assert.deepEqual(board.body.entries.map((e: any) => [e.primaryMetric, e.secondaryMetrics.guesses]), [[3, 3], [3, 5], [2, 2]]);
+  assert.deepEqual(board.body.entries.map((e: any) => [e.primaryMetric, e.secondaryMetrics.guesses, e.secondaryMetrics.skips]), [[3, 3, 0], [3, 3, 1], [3, 5, 0], [2, 2, 0]]);
   assert.equal((await api("/api/coindle/rapid/00000000-0000-0000-0000-000000000000/start", { method: "POST" })).status, 404);
 });
 
@@ -184,17 +187,27 @@ test("Coindle Community Raid totals coins solved by every run in the window and 
     startsAt: new Date(now - 1000).toISOString(), endsAt: new Date(now + 3_600_000).toISOString(), maxAttempts: 3,
     reward: { type: "none" }, feeSplitBps: { prize: 0, community: 0, treasury: 10_000 } };
   const bare = await api("/api/admin/raids", { method: "POST", auth: "admin", body: input });
-  assert.equal(bare.body.raid.rules.format, "rapid-fire-v1", "Coindle raids default to the reviewed Rapid Fire rules");
+  assert.equal(bare.body.raid.rules.format, "rapid-fire-v2", "Coindle raids default to the reviewed Rapid Fire rules");
   const wrong = await api("/api/admin/raids", { method: "POST", auth: "admin", body: { ...input, rules: { format: "daily" } } });
   assert.ok(wrong.body.raid.readiness.blockers.some((b: string) => b.includes("Rapid Fire")));
-  const created = await api("/api/admin/raids", { method: "POST", auth: "admin", body: { ...input, rules: RAPID_RULES } });
+  const created = await api("/api/admin/raids", { method: "POST", auth: "admin", body: { ...input, rules: RAPID_RAID_RULES } });
   assert.equal(created.status, 201, JSON.stringify(created.body));
   const raidId = created.body.raid.id;
   if (created.body.raid.status !== "open") assert.equal((await api(`/api/admin/raids/${raidId}/open`, { method: "POST", auth: "admin" })).status, 200);
-  await play("raid-a", 2, 0, raidId);
-  await play("raid-a", 1, 0, raidId);
+  const first = await play("raid-a", 2, 0, raidId);
+  const second = await play("raid-a", 1, 0, raidId);
+  assert.notEqual(first.seed, second.seed, "Coindle attempts do not share predictable seeds");
+  await play("raid-a", 0, 0, raidId);
+  const fourth = await api("/api/runs", { method: "POST", auth: "raid-a", body: { gameId: "coindle", mode: "raid", raidId } });
+  assert.equal(fourth.body.error.code, "ATTEMPT_LIMIT");
   await play("raid-b", 4, 1, raidId);
   const raid = await api(`/api/raids/${raidId}`);
-  assert.deepEqual(raid.body.communityTotal, { coinsSolved: 7, runs: 3, participants: 2 });
+  assert.deepEqual(raid.body.communityTotal, { coinsSolved: 7, runs: 4, participants: 2 });
   assert.equal(raid.body.leaderboard[0].primaryMetric, 4);
+  assert.equal(raid.body.leaderboard[1].primaryMetric, 2, "only the best attempt ranks");
+  assert.equal(raid.body.leaderboard.length, 2);
+  assert.equal(JSON.stringify(raid.body).includes("raidPoolId"), false);
+  const tooMany = await api("/api/admin/raids", { method: "POST", auth: "admin", body: { ...input, maxAttempts: 4 } });
+  assert.equal(tooMany.body.raid.readiness.ready, false);
+  assert.equal((await api(`/api/admin/raids/${tooMany.body.raid.id}/open`, { method: "POST", auth: "admin" })).status, 409);
 });
