@@ -122,6 +122,10 @@ export class ArcadeStore {
         }
         continue;
       }
+        // Coindle v2 changes ranking and raid selection. Existing cabinets keep
+        // their reviewed version until an operator drains runs/raids and updates
+        // both the versioned entry and adapter through the normal review flow.
+        if (prior?.manifest.id === "coindle" && prior.manifest.version === "1.0.0") continue;
       // One narrow correction for v1 imports created during integration. Admin
       // edits clear this review marker; future starts never overwrite them.
       if (prior && (game.legacyImportRevision ?? 0) >= 2 && prior.legacyImportRevision === undefined &&

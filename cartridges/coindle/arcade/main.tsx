@@ -27,7 +27,7 @@ function showGame(): void {
           <h1 className="mb-5 text-2xl font-black tracking-tight">Coindle</h1>
           <RapidFire runId={runId} raid={runConfig.mode === "raid"}
             onBegin={() => window.TokenArcade?.beginRun() ?? false}
-            onComplete={(solved, guesses) => window.TokenArcade?.complete({ primaryMetric: solved, secondaryMetrics: { guesses }, result: "completed" })} />
+            onComplete={(solved, guesses, skips) => window.TokenArcade?.complete({ primaryMetric: solved, secondaryMetrics: { guesses, skips }, result: "completed" })} />
         </main>
       </React.StrictMode>,
     );
@@ -52,7 +52,7 @@ function hideGame(): void { root?.unmount(); root = null; resetArcadeRound(); se
 
 if (window.TokenArcade?.embedded) {
   window.TokenArcade.register({
-    version: "1.0.0",
+    version: "1.1.0",
     capabilities: { pause: true, mute: true, touch: true, keyboard: true, orientation: "any" },
     mount(config) {
       const run = config as { mode: string; runId?: string; objective?: string };
