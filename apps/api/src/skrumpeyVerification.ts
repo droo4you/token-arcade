@@ -8,14 +8,17 @@ import { createSeededReplayVerifier } from "./seededReplay.ts";
  * Each rules version is replayed with its own frozen sim, so a run only ever scores against the
  * version its session was issued for, and boards (filtered by gameVersion) never mix versions.
  *  - 1.0.0: original single 230 m lane sprint (frozen copy in ./legacy).
- *  - 1.1.0: three-stage lane sprint with rising speed/density and new patterns (current cartridge sim.js).
+ *  - 1.1.0: three-stage lane sprint with rising speed/density and new patterns.
+ *  - 1.2.0: two-stage sprints with guaranteed hill recovery.
+ *  - 1.3.0: a bounded speed kick when DN Frenzy activates, identical in every mode.
  */
 const SIM_SOURCES: Record<string, URL> = {
+  "1.3.0": new URL("../../../cartridges/skrumpey-slide/releases/1.3.0/sim.js", import.meta.url),
   "1.2.0": new URL("../../../cartridges/skrumpey-slide/releases/1.2.0/sim.js", import.meta.url),
   "1.0.0": new URL("./legacy/skrumpey-sim-1.0.0.js", import.meta.url),
   "1.1.0": new URL("../../../cartridges/skrumpey-slide/releases/1.1.0/sim.js", import.meta.url),
 };
-export const SKRUMPEY_CURRENT_VERSION = "1.2.0";
+export const SKRUMPEY_CURRENT_VERSION = "1.3.0";
 export const SKRUMPEY_VERSIONS = Object.keys(SIM_SOURCES);
 const scripts = new Map<string, Script>();
 function simScript(version: string): Script {

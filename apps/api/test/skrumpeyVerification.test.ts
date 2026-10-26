@@ -66,3 +66,18 @@ test("Skrumpey Slide: 1.0.0 sessions still verify against the frozen 1.0.0 sim",
 test("Skrumpey Slide: unknown rules versions are rejected", async () => {
   assert.equal((await v.verify({ ...config, gameVersion: "9.9.9" } as GameRunConfig, result())).valid, false);
 });
+
+test("Skrumpey Slide: 1.2.0 and Frenzy 1.3.0 verify only with their issued rules", async () => {
+  for (const version of ["1.2.0", "1.3.0"]) {
+    const played = botRun(issued, version), r = played.r;
+    const start = new Date(Date.now() - played.input.length * 1000 / 60 - 5000).toISOString();
+    const cfg = { ...config, gameVersion: version, startedAt: start } as GameRunConfig;
+    const res = result({ gameVersion: version, startedAt: start, primaryMetric: r.score,
+      secondaryMetrics: { distance: r.distance, bestCombo: r.bestCombo, perfects: r.perfects, collectibles: r.gems,
+        kills: r.kills, hits: r.hits, falls: r.falls, rescued: r.rescued, trainBest: r.trainBest, ticks: r.endTick } },
+      { v: 1, rules: version, seed: played.seed, input: played.input });
+    assert.deepEqual(await v.verify(cfg, res), { valid: true });
+    const other = version === "1.2.0" ? "1.3.0" : "1.2.0";
+    assert.match((await v.verify({ ...cfg, gameVersion: other }, { ...res, gameVersion: other })).reason!, /rules/);
+  }
+});
