@@ -81,3 +81,24 @@ test('gorge route: rings and cans spawn below the rim over the gap, gorge therma
   assert.ok(rings > 20 && cans > 3 && th > 10, JSON.stringify({ rings, cans, th }));
 });
 test('thin air only exists on grand canyon', () => { assert.ok(GC.air.thin); assert.equal(L.get('snake-river').air.thin, undefined); assert.equal(L.get('snake-river').air.gorge, undefined); });
+test('nose-dive recovery: full pull-up levels the nose within 0.8 s from 50-100 m/s, in the gorge and up high', () => {
+  for (const [y, V, gam] of [[-60, 50, -0.5], [-60, 70, -0.5], [-60, 100, -0.6], [100, 60, -0.3], [60, 60, -0.3]]) {
+    const s = S.newRun(1); s.phase = 'sky'; s.z = S.C.ROAD_LEN + 800; s.y = y; s.m = V; s.gam = gam; s.sky = []; s.drafts = []; s.skyChunk = 999;
+    let t = 0; while (s.gam < -0.03 && t < 0.8) { S.step(s, { pitch: 1 }); t += S.C.DT; }
+    assert.ok(s.gam >= -0.03, `y${y} V${V}: gam ${s.gam.toFixed(2)} after ${t.toFixed(2)} s`);
+  }
+});
+test('thin air never drains speed below its floor', () => {
+  const s = S.newRun(1); s.phase = 'sky'; s.z = S.C.ROAD_LEN + 800; s.y = 200; s.m = 58; s.gam = 0; s.sky = []; s.drafts = []; s.skyChunk = 999;
+  const m0 = S0.forLevel({ ...GC, air: { ...GC.air, thin: undefined } }).newRun(1); Object.assign(m0, { phase: 'sky', z: s.z, y: 200, m: 58, gam: 0, sky: [], drafts: [], skyChunk: 999 });
+  S.step(s, { pitch: 0.3 }); S0.forLevel({ ...GC, air: { ...GC.air, thin: undefined } }).step(m0, { pitch: 0.3 });
+  assert.ok(Math.abs(s.m - m0.m) < 1e-9, 'below vFloor thin air adds nothing');
+});
+test('lip grace: clipping the far wall 2 m below the lip scrapes onto the rim; 10 m below is still a crash', () => {
+  for (const [dy, ok] of [[-2, true], [-10, false]]) {
+    const s = S.newRun(1), far = S.C.ROAD_LEN + S.C.CANYON_W; s.phase = 'sky'; s.z = far - 3; s.y = dy; s.m = 70; s.gam = -0.05; s.sky = []; s.drafts = []; s.skyChunk = 999;
+    for (let k = 0; k < 30 && !s.over; k++) S.step(s, {});
+    assert.equal(!s.over || s.reason === 'landed', ok, `dy ${dy}: ${s.reason}`);
+    if (ok) assert.equal(s.counts.lipSaves, 1);
+  }
+});

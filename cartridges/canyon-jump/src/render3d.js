@@ -127,13 +127,16 @@ function init() {
   if (usesAir('heli')) { for (let h = 0; h < 4; h++) SK['heli' + h] = pool(P.heli(h), navMat, 16); SK.rotor = pool(P.heliRotor(), birdMat, 64, false); }
   if (usesAir('condor')) SK.condor = pool(P.condor(), birdMat, 64);
   // Updraft columns: tall open cylinders with a scrolling dusty shimmer (additive, no depth write) + rising dust motes.
-  let draftMesh = null, draftTex = null;
+  let draftMesh = null, draftTex = null, shimmer = null, shimTex = null;
   if (level.air?.updraft) {
     draftTex = canvasTexLocal(64, 256, (g, w, h) => { for (let y = 0; y < h; y++) for (let x = 0; x < w; x += 2) { const v = (0.5 + 0.5 * Math.sin(y * 0.11 + Math.sin(x * 0.2) * 3)) * Math.sin(Math.PI * y / h); g.fillStyle = `rgba(255,255,255,${(v * v * 0.9).toFixed(3)})`; g.fillRect(x, y, 2, 1); } });
     draftTex.wrapS = draftTex.wrapT = THREE.RepeatWrapping; draftTex.repeat.set(3, 2);
     const cg = new THREE.CylinderGeometry(1, 1, 1, 24, 1, true); cg.translate(0, 0.5, 0);
     draftMesh = new THREE.InstancedMesh(cg, new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffd6a0').multiplyScalar(0.045), alphaMap: draftTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: true }), 24);
     draftMesh.count = 0; draftMesh.frustumCulled = false; draftMesh.renderOrder = 4; scene.add(draftMesh);
+    shimTex = draftTex.clone(); shimTex.needsUpdate = true; shimTex.repeat.set(5, 3);
+    shimmer = new THREE.InstancedMesh(cg, new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb070').multiplyScalar(0.11), alphaMap: shimTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: true }), 24);
+    shimmer.count = 0; shimmer.frustumCulled = false; shimmer.renderOrder = 5; scene.add(shimmer);
   }
   function canvasTexLocal(w, h, draw) { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; draw(cv.getContext('2d'), w, h); const t = new THREE.CanvasTexture(cv); return t; }
   const rr = rng(77);
@@ -213,9 +216,12 @@ function init() {
       put(m, g.x, g.y, g.z, 0, 0, t * 0.8 + g.z, pulse);
     }
     if (draftMesh) { draftMesh.count = 0;
-      for (const d of s.drafts || []) { if (d.z < z0 - 40 || d.z > z1 + 300 || draftMesh.count >= 24) continue;
-        o3.position.set(d.x, d.bottom, -d.z); o3.rotation.set(0, t * 0.25 + d.z, 0); o3.scale.set(d.r * 0.6, d.top - d.bottom, d.r * 0.6); o3.updateMatrix(); draftMesh.setMatrixAt(draftMesh.count++, o3.matrix); }
-      draftMesh.instanceMatrix.needsUpdate = true; draftTex.offset.y = -t * 0.35; }
+      shimmer.count = 0;
+      for (const d of s.drafts || []) { if (d.z < z0 - 40 || d.z > z1 + 300 || draftMesh.count >= 24) continue; const spent = d.gain >= (d.max || 1e9) ? 0.35 : 1;
+        o3.position.set(d.x, d.bottom, -d.z); o3.rotation.set(0, t * 0.25 + d.z, 0); o3.scale.set(d.r * 0.6 * spent, d.top - d.bottom, d.r * 0.6 * spent); o3.updateMatrix(); draftMesh.setMatrixAt(draftMesh.count++, o3.matrix);
+        // Gorge thermals also get an inner heat-shimmer core (brighter, faster scroll) so they read from far away.
+        if (d.gorge && shimmer.count < 24) { o3.rotation.set(0, -t * 0.6 + d.z, 0); o3.scale.set(d.r * 0.32 * spent, d.top - d.bottom, d.r * 0.32 * spent); o3.updateMatrix(); shimmer.setMatrixAt(shimmer.count++, o3.matrix); } }
+      draftMesh.instanceMatrix.needsUpdate = true; shimmer.instanceMatrix.needsUpdate = true; draftTex.offset.y = -t * 0.35; shimTex.offset.y = -t * 1.1; }
     for (const g of [OB, PK, SK, HALO]) for (const k in g) g[k].instanceMatrix.needsUpdate = true;
     padTex.offset.y = -t * 1.6;
   }
@@ -426,8 +432,8 @@ function init() {
     }
     // Updraft dust: warm motes spiralling up the columns ahead (quality-gated).
     if (s.drafts && s.drafts.length && L.fx > 0.2) for (const d of s.drafts) {
-      if (d.z < s.z - 20 || d.z > s.z + 500 || Math.random() > dt * 10 * L.fx) continue;
-      const a = Math.random() * 6.283, rr = d.r * 0.7 * Math.sqrt(Math.random()), yy = Math.max(d.bottom + 5, (s.y || 0) + (Math.random() - 0.5) * 80);
+      if (d.z < s.z - 20 || d.z > s.z + 500 || Math.random() > dt * (d.gorge ? 26 : 10) * L.fx) continue;
+      const a = Math.random() * 6.283, rr = d.r * 0.7 * Math.sqrt(Math.random()), yy = d.gorge && Math.random() < 0.5 ? d.bottom + 4 + Math.random() * 30 : Math.max(d.bottom + 5, (s.y || 0) + (Math.random() - 0.5) * 80);
       fx.emit({ x: d.x + Math.cos(a) * rr, y: yy, z: -(d.z + Math.sin(a) * rr), vx: -Math.sin(a) * 3, vy: 10 + Math.random() * 8, vz: Math.cos(a) * 3, jitter: 2, jitterY: 3, life: 2.2, s0: 0.8, s1: 2.6, color: '#ffd8a8', alpha: 0.22, drag: 0.2, grav: -0.2 }, 2);
     }
     // STABILIZE: white cold-gas jets from the car's four corners and both sides while the thrusters burn.

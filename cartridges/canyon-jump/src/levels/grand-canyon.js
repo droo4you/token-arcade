@@ -71,10 +71,14 @@
       satellite: { r: 2.8, chance: 0.3, minY: 242 },
       high: { minY: 215, ringLine: 0.55, can: 0.3, orb: 0.4 },
       updraft: { chance: 0.2, r: 34, w: 22, top: 190, maxGain: 20, pastRim: 160, condorP: 0.45 },
-      // Inside-the-gorge route: rings + AIR cans below the rim, and strong gorge thermals (up to 45 m of lift) to climb back out.
-      gorge: { depth: 0.55, ringLine: 0.5, can: 0.15, thermal: 0.3, r: 38, w: 30, top: 30, maxGain: 45 },
+      // Inside-the-gorge route: rings + AIR cans below the rim, and strong gorge thermals (up to 55 m of lift) to climb back out.
+      gorge: { depth: 0.55, ringLine: 0.5, can: 0.3, thermal: 0.3, r: 40, w: 36, top: 30, maxGain: 55 },
       // Thin air: above 50 m the car bleeds up to 12 m/s² extra, so floating high and safe is the slow line.
-      thin: { y: 50, span: 100, k: 12 },
+      thin: { y: 50, span: 100, k: 12, vFloor: 60 },
+      // Dive recovery (see README): pull-up authority from 38 m/s (base sim: 70) all the way to level (base: only below -13°), and hands-off the nose can fall at most 0.35 rad/s.
+      recover: { v: 38, until: -0.02, rate: 1.6, maxDrop: 0.35 },
+      // Far-wall lip grace: clip the far wall within 4 m of the lip and you scrape up onto the rim at 80% speed.
+      lipGrace: { depth: 4, reach: 6, keep: 0.8 },
       gust: { vx: 4, rate: 0.6, from: 0.3, to: 0.75 },
     },
     pickups: { orb: '#ffcf3f', air: '#4ff0ff', pad: '#ff4fd8' },

@@ -12,6 +12,9 @@
   const R3 = () => { const r = glCanvas && window.CJRender3D; return r && r.ready ? r : null; };
   const waiting3D = () => glCanvas && !window.CJRender3D?.failed && !R3() && G.t < 4;
   let W = 960, H = 540, dpr = 1;
+  const RP = window.CJReplay || null;
+  const PLAYBACK = (() => { if (!RP || TA?.embedded) return null; const m = /replay=([^&]+)/.exec(location.hash + '&' + location.search); if (!m) return null; try { return RP.decode(decodeURIComponent(m[1])); } catch (e) { console.warn('[canyon-jump] bad replay', e); return null; } })();
+  if (RP) { const L0 = window.CJLevel || window.CJLevels?.get(window.CJLevels.DEFAULT); fetch('src/sim.js').then(r => r.text()).then(t => { G.simHash = RP.hash(t + JSON.stringify(L0)); if (G.rec) G.rec.data = (f => res => Object.assign(f(res), { simHash: G.simHash }))(G.rec.data); }).catch(() => {}); }
   const LVL_ID = window.CJLevel && window.CJLevels && window.CJLevel.id !== window.CJLevels.DEFAULT ? '.' + window.CJLevel.id : ''; // per-level local best (Snake River keeps the old key)
   const BEST_KEY = (TA?.embedded ? 'ta.canyon-jump.best' : 'canyon-jump.best') + LVL_ID;
   let best = 0; try { best = +localStorage.getItem(BEST_KEY) || 0; } catch (e) { /* storage blocked */ }
@@ -66,6 +69,7 @@
     if (down && e.code === 'KeyR' && G.paused && canRestart()) { G.paused = false; A.resume(); startRun(); return; }
     if (down && (e.code === 'KeyP' || e.code === 'Escape') && G.screen === 'play') { togglePause(); return; }
     if (down && G.screen === 'title' && window.CJLevelSelect && /^Digit[1-9]$/.test(e.code)) { const L = window.CJLevelSelect.list[+e.code.slice(5) - 1]; if (L && L.id !== window.CJLevelSelect.level.id) window.CJLevelSelect.go(L.id); return; }
+    if (down && e.code === 'KeyR' && G.screen === 'end' && G.lastReplay) { copyReplay(); return; }
     if (down && (e.code === 'Enter' || e.code === 'Space') && (G.screen === 'title' || (G.screen === 'end' && G.t - G.endAt > 0.8))) { e.preventDefault(); startRun(); return; }
     if (!a) return; e.preventDefault();
     if (down && !held.has(a)) { if (a in edges) edges[a] = true; }
@@ -114,6 +118,7 @@
     if (G.screen === 'play' && hitBtn(p, 'mute')) { toggleMute(); return; }
     if (G.paused) { pauseMenuTap(p); return; }
     if (G.screen === 'title' && G.lvlChip && window.CJLevelSelect) { const c = G.lvlChip; if (p.y > c.y - c.h / 2 - 6 && p.y < c.y + c.h / 2 + 6 && Math.abs(p.x - c.x) < c.w / 2 + 6) { window.CJLevelSelect.cycle(p.x < c.x ? -1 : 1); return; } }
+    if (G.screen === 'end' && G.replayBtn && G.lastReplay) { const c = G.replayBtn; if (Math.abs(p.x - c.x) < c.w / 2 + 6 && Math.abs(p.y - c.y) < c.h / 2 + 6) { copyReplay(); return; } }
     if (G.screen !== 'play') { if (G.screen === 'title' || G.t - G.endAt > 0.8) startRun(); return; }
     if (hitBtn(p, 'pause')) { togglePause(); return; }
     const run = G.run, b = BTN();
@@ -189,13 +194,21 @@
     if (TA?.active && !TA.beginRun()) return;
     G.arcadeRunOpen = !!TA?.active;
     A.init(); A.sfx('go');
-    const seed = params.has('seed') && !TA?.embedded ? +params.get('seed') : (Math.random() * 2 ** 31) >>> 0;
+    let seed = params.has('seed') && !TA?.embedded ? +params.get('seed') : (Math.random() * 2 ** 31) >>> 0;
+    // Replays (src/replay.js): ?#replay=CJR1.… plays a recorded run back; every live run is recorded for COPY REPLAY.
+    G.play = null; G.copied = 0; G.simScore = null;
+    if (PLAYBACK && !G.playedOnce) { seed = PLAYBACK.seed >>> 0; G.play = RP.inputs(PLAYBACK); G.playIdx = 0; G.playedOnce = true; }
+    G.rec = RP ? RP.recorder({ level: (window.CJLevel || window.CJLevels?.get(window.CJLevels.DEFAULT))?.id, seed, build: window.CJ_BUILD || 'dev', simHash: G.simHash || null, ua: navigator.userAgent.slice(0, 80), touch: !!G.touch, at: new Date().toISOString() }) : null;
     G.run = S.newRun(seed); G.screen = 'play'; G.acc = 0; G.result = null; G.paused = false;
     G.particles.length = 0; G.popups.length = 0; R3()?.reset(); G.banner = { text: 'BEAT THE CLEAR LINE', sub: 'grab speed pads, dodge everything', t: G.t, dur: 2.2, color: '#ffd23f' };
     G.cam = { x: 0, y: 2.6, z: -8, f: 600, hy: HY(0.44), roll: 0 }; G.roll = 0; G.hitStop = 0; G.camDip = 0; G.fovKick = 0; G.machT = 0; G.newBestShown = false; G.landingRoll = 0;
   }
   function finish() {
     const r = S.score(G.run); G.result = r; G.endAt = G.t; G.screen = 'end';
+    if (G.rec) {
+      const q = G.simScore || r; G.lastReplay = RP.encode(G.rec.data({ reason: q.reason, total: q.total, distance: q.distance, shownTotal: r.total, ticks: G.run.tick, playback: !!G.play }));
+      try { const k = 'canyon-jump.replays', a = JSON.parse(localStorage.getItem(k) || '[]'); a.unshift(G.lastReplay); localStorage.setItem(k, JSON.stringify(a.slice(0, 5))); } catch (e) { /* ignore */ }
+    }
     if (r.total > best) { best = r.total; r.newBest = true; try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) { /* ignore */ } }
     if (G.arcadeRunOpen && TA?.active) {
       G.arcadeRunOpen = false;
@@ -203,6 +216,12 @@
         secondaryMetrics: { distance: r.distance, pastRim: r.pastRim, pickups: r.pickups, tricks: r.tricks, trickCount: r.counts.tricks, rings: r.counts.rings, bestMult: r.counts.bestMult,
           landing: r.landing, mach05: r.mach05, topKmh: r.topKmh, launchSpeed: r.launchV, landed: r.reason === 'landed' ? 1 : 0, elapsedMs: Math.round(G.run.t * 1000) } });
     }
+  }
+  function copyReplay() {
+    if (!G.lastReplay) return;
+    const done = ok => { G.copied = ok ? 1 : 2; G.copiedAt = G.t; A.sfx('ui'); };
+    const download = () => { try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([G.lastReplay], { type: 'text/plain' })); a.download = `canyon-jump-replay-${Date.now()}.txt`; a.click(); done(false); } catch (e) { /* ignore */ } };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(G.lastReplay).then(() => done(true), download); else download();
   }
   function togglePause() { G.paused = !G.paused; G.paused ? A.suspend() : A.resume(); }
 
@@ -232,6 +251,7 @@
         case 'pad': A.sfx('pad'); G.fovKick = 0.8; burst(cs.x, cs.y, 16, ['#ff4fd8', '#ffd0f4', '#fff'], 260, 0.5, 200, true); G.shake = Math.max(G.shake, 6); G.flash = 0.25; G.flashColor = '#ff4fd8'; G.boostT = 0.6; popup('SPEED PAD', '#ff4fd8', true); break;
         case 'lane': A.sfx('lane'); break;
         case 'updraft': A.sfx('whoosh', 0.6); popup('UPDRAFT', '#ffd8a8', false, '↑'); break;
+        case 'lip': A.sfx('land'); G.shake = Math.max(G.shake, 10); popup('LIP SAVE!', '#ffd23f', true, 'scraped the rim'); break;
         case 'near': if (s.phase === 'sky') { A.sfx('whoosh', 1); G.shake = Math.max(G.shake, 5); popup('NEAR MISS', '#fff4e0', false, `×${fmtMult(ev.mult)}`); G.comboPulse = 1; } else { A.sfx('near'); popup('NEAR MISS', '#fff4e0', false, `+${C.NEAR_ROAD_PTS}`); } break;
         case 'ring': A.sfx('ring', s.counts.rings); G.fovKick = Math.max(G.fovKick, 0.7); G.flash = Math.max(G.flash, 0.18); G.flashColor = '#ffd23f'; G.boostT = Math.max(G.boostT, 0.45); G.shake = Math.max(G.shake, 6); G.comboPulse = 1;
           popup(ev.risky ? 'RISKY RING' : 'BOOST RING', '#ffd23f', ev.risky, `×${fmtMult(ev.mult)}`); burst(cs.x, cs.y - 10, 18, ['#ffd23f', '#fff6c0', '#ff9f1a'], 300, 0.5, 0, true); break;
@@ -282,7 +302,13 @@
       G.slowT = Math.max(0, (G.slowT || 0) - dt);
       if (G.hitStop > 0) G.hitStop -= dt; // freeze-frame on impact (presentation only; sim just pauses)
       else G.acc += G.slowT > 0 ? dt * 0.3 : dt;
-      while (G.acc >= C.DT) { G.acc -= C.DT; if (!s.over) S.step(s, readInput()); }
+      while (G.acc >= C.DT) { G.acc -= C.DT; if (!s.over) {
+        let inp = readInput();
+        if (G.play) inp = Object.assign({}, G.play[G.playIdx++] || {}); else if (RP) RP.quant(inp);
+        if (G.rec) G.rec.push(inp);
+        S.step(s, inp);
+        if (s.over && G.rec && !G.simScore) G.simScore = S.score(s); // the sim's own result, before the cosmetic landing roll-out moves s.z
+      } }
       handleEvents(s);
     }
     if (s.over && s.reason === 'landed') { G.landingRoll = Math.max(0, G.landingRoll - 18 * dt); s.z += G.landingRoll * dt; s.x *= 0.98; }
@@ -514,6 +540,14 @@
       const band = s.y < 0 ? 'IN THE GORGE' : ({ bird: 'BIRDS', plane: 'PLANES', balloon: 'BALLOONS', satellite: 'SATELLITES', heli: 'HELICOPTERS', condor: 'CONDORS' })[S.zoneAt(s, s.y)];
       const deg = Math.round((s.gam || 0) * 57.3);
       text(`ALT ${Math.round(s.y)} m  ·  ${deg > 0 ? '▲' : deg < 0 ? '▼' : '■'} ${Math.abs(deg)}°  ·  ${band}`, W / 2, py + 32, T.label, s.y < 0 ? '#ff9fb0' : '#ffd9e6', 'center', false, 700);
+      // Thermal cue (levels with updrafts): THERMAL AHEAD with a side arrow while one is lined up, UPDRAFT +N m/s while riding it.
+      if (s.drafts && s.drafts.length && !s.over) {
+        const w = S.updraftAt(s, s.x, s.y, s.z), fwd = Math.max(10, s.m * Math.cos(s.gam || 0));
+        const ahead = w > 0 ? null : s.drafts.filter(d => d.z > s.z && (d.z - s.z) / fwd < 2.5 && s.y < d.top && d.gain < (d.max || s.cfg.updraft.maxGain)).sort((a, b) => a.z - b.z)[0];
+        const ty2 = py + (s.cmb && s.cmb.pot > 0 ? 100 : 66), pulse = 0.75 + 0.25 * Math.sin(G.t * 8);
+        if (w > 0) { ctx.globalAlpha = pulse; chip(W / 2 - 92, ty2 - 14, 184, 28, 14); text(`▲ UPDRAFT +${Math.round(w)} m/s`, W / 2, ty2, T.body, '#ffd8a8', 'center', false, 800); ctx.globalAlpha = 1; }
+        else if (ahead) { const dx = ahead.x - s.x, arrow = Math.abs(dx) < ahead.r * 0.5 ? '▲' : dx < 0 ? '◀' : '▶'; chip(W / 2 - 92, ty2 - 14, 184, 28, 14); text(`${arrow} THERMAL ${Math.round(ahead.z - s.z)} m`, W / 2, ty2, T.body, '#ffc080', 'center', false, 800); }
+      }
       // Combo pot: unbanked until a clean landing.
       if (s.cmb && s.cmb.pot > 0 && !(s.over && s.reason === 'landed')) {
         const cp = G.comboPulse || 0, cy = py + 64 + (narrow ? 4 : 0), lost = s.over;
@@ -712,6 +746,11 @@
       const pulse = 1 + 0.06 * Math.sin(G.t * 8); ctx.save(); ctx.translate(W / 2, py + 354); ctx.scale(pulse, pulse);
       panel(-110, -18, 220, 36, 18, '#ffd23f'); text('★ NEW BEST ★', 0, 1, 18, '#1a0d26', 'center', false); ctx.restore();
     } else if (!r.newBest) text(`best ${best.toLocaleString('en-US')}`, W / 2, py + 346, 14, '#b9a6ee', 'center', false, 800);
+    if (G.lastReplay && el > 0.8) { // COPY REPLAY: paste the code to Grok to have the run re-simulated and analyzed
+      const bw = 210, bx = W / 2, by2 = Math.max(mg().t + 24, py - 30); G.replayBtn = { x: bx, y: by2, w: bw, h: 34 };
+      const msg = G.copied === 1 && G.t - G.copiedAt < 3 ? 'REPLAY COPIED ✓' : G.copied === 2 && G.t - G.copiedAt < 3 ? 'REPLAY DOWNLOADED ✓' : (G.play ? '▶ REPLAY · COPY (R)' : '📋 COPY REPLAY (R)');
+      chip(bx - bw / 2, by2 - 17, bw, 34, 17); text(msg, bx, by2, 14, '#5af0ff', 'center', false, 800);
+    }
     if (el > 0.8) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.t * 5); text(G.touch ? 'TAP TO RIDE AGAIN' : 'SPACE / TAP TO RIDE AGAIN', W / 2, Math.min(H - mg().b - 14, py + ph + 28), 20, '#fff'); }
     ctx.globalAlpha = 1;
     if (G.screen === 'end') drawParticles();

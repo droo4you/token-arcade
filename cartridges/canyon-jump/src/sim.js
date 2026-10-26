@@ -469,17 +469,21 @@
     s.bank = clamp(s.vx / 14, -1, 1);
     // Pitch -> lift. Dive recovery: nose-down + stick up at mid/high speed gets faster pitch and a higher g cap.
     let V = s.m, g = s.gam;
-    const recovering = g <= C.DIVE_RECOVER_GAM && sy > 0.15 && V >= C.DIVE_RECOVER_V;
+    // Level recover block (Grand Canyon): pull-up authority from a lower speed, and a cap on how fast the nose can fall
+    // when you are not pushing it down. Absent on Snake River, so the base sim is unchanged.
+    const RC = s.cfg.recover;
+    const recovering = g <= (RC ? RC.until : C.DIVE_RECOVER_GAM) && sy > 0.15 && V >= (RC ? RC.v : C.DIVE_RECOVER_V);
     s.pIn = lerpRate(s.pIn, sy, recovering ? C.PITCH_RESP * C.DIVE_RECOVER_PITCH_K : C.PITCH_RESP, dt);
     const L = liftAccel(V, s.pIn, recovering ? C.G_LIMIT * C.DIVE_RECOVER_G_K : C.G_LIMIT), Lv = L * (1 - C.TRICK_DIP * (1 - Math.cos(s.rot || 0)) / 2);
     s.gLoad = L / C.G_SKY;
     g += (Lv - C.G_SKY * Math.cos(g)) / Math.max(V, 12) * dt;
     // Extra flight-path authority while recovering: high-speed nosedives otherwise turn too slowly (÷V).
-    if (recovering) g += sy * C.DIVE_RECOVER_RATE * dt;
+    if (recovering) g += sy * (RC ? RC.rate : C.DIVE_RECOVER_RATE) * dt;
+    if (RC && sy >= 0 && g < s.gam) g = Math.max(g, s.gam - RC.maxDrop * dt);
     // Committed dive (stick forward, nose below the horizon): the car tucks and parasitic drag drops, so a dive banks real speed.
     const tuck = s.pIn < 0 && g < 0 ? -s.pIn * C.DIVE_TUCK : 0;
     V += (-C.G_SKY * Math.sin(g) - (C.DRAG0 + C.DRAG2 * V * V) * (1 - tuck) - C.DRAG_I * s.gLoad * s.gLoad) * dt;
-    const TH = s.cfg.thin; if (TH && s.y > TH.y) V -= TH.k * Math.min(1, (s.y - TH.y) / TH.span) * dt; // thin air up high (level 2+): floating high bleeds speed
+    const TH = s.cfg.thin; if (TH && s.y > TH.y && V > TH.vFloor) V = Math.max(TH.vFloor, V - TH.k * Math.min(1, (s.y - TH.y) / TH.span) * dt); // never drains you below vFloor (that was the nose-dive trap) // thin air up high (level 2+): floating high bleeds speed
     s.gam = clamp(g, C.GAM_MIN, C.GAM_MAX); s.m = clamp(V, 0, C.M_MAX);
     s.boostCd = Math.max(0, s.boostCd - dt); s.boostT = Math.max(0, s.boostT - dt);
     if (input.boostEdge && s.boostCd <= 0) {
@@ -522,6 +526,12 @@
     }
     if (s.y >= s.cfg.ceil) { s.y = s.cfg.ceil; s.gam = Math.min(0, s.gam); s.vy = Math.min(0, s.vy); }
     s.maxAlt = Math.max(s.maxAlt, s.y);
+    // Lip grace (level air.lipGrace): clipping the far wall within a few metres of the lip scrapes you up onto the rim
+    // (speed and nose-down penalty) instead of ending the run. Base sim: no grace.
+    const LG = s.cfg.lipGrace;
+    if (LG && s.y < 0 && s.y > -LG.depth && s.z > FAR_RIM() - LG.reach && (inWall(s.z, s.y) || (z0 < FAR_RIM() && s.z >= FAR_RIM()))) {
+      s.y = 0.4; s.z = Math.max(s.z, FAR_RIM() + 0.5); s.gam = Math.max(s.gam, 0.04); s.m *= LG.keep; s.counts.lipSaves = (s.counts.lipSaves || 0) + 1; s.events.push({ e: 'lip' });
+    }
     if (inWall(s.z, s.y) || (z0 < FAR_RIM() && s.z >= FAR_RIM() && s.y < 0)) { s.events.push({ e: 'crash', what: 'wall' }); end(s, 'short'); return; }
     if (z0 < FAR_RIM() && s.z >= FAR_RIM()) s.events.push({ e: 'rim' });
     while (C.ROAD_LEN + 140 + s.skyChunk * C.SKY_CHUNK < s.z + 520) spawnSkyChunk(s);
