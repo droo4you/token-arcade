@@ -126,6 +126,16 @@ export class ArcadeStore {
         // their reviewed version until an operator drains runs/raids and updates
         // both the versioned entry and adapter through the normal review flow.
         if (prior?.manifest.id === "coindle" && prior.manifest.version === "1.0.0") continue;
+        // Do not change live Skip rules or its artifact URL during startup.
+        // An operator upgrades the cabinet after draining existing runs/raids.
+        if (prior?.manifest.id === "skip-to-10k" && prior.manifest.version === "1.0.0") {
+          if (prior.review?.approvedBy === "platform:legacy-import" && (prior.legacyImportRevision ?? 0) < 3) {
+            this.saveGame({ ...prior, legacyImportRevision: 3, manifest: { ...prior.manifest,
+              supportedModes: ["free", "ranked", "raid"], supportedObjectives: ["distance"],
+              verifier: { kind: "replay", description: "Passport Play uses the standard loadout and issued seed; the server replays the throw and every 120 Hz input." } } });
+          }
+          continue;
+        }
       // One narrow correction for v1 imports created during integration. Admin
       // edits clear this review marker; future starts never overwrite them.
       if (prior && (game.legacyImportRevision ?? 0) >= 2 && prior.legacyImportRevision === undefined &&
@@ -277,13 +287,14 @@ export class ArcadeStore {
     } catch (error) { this.db.exec("ROLLBACK"); throw error; }
   }
 
-  createSession(session: RunSession, maxAttempts?: number): boolean {
+  createSession(session: RunSession, maxAttempts?: number, assignAttempt?: (attempt: number) => void): boolean {
     this.db.exec("BEGIN IMMEDIATE");
     try {
       if (session.config.raidId && maxAttempts !== undefined) {
         const row = this.db.prepare("SELECT COUNT(*) AS count FROM run_sessions WHERE raid_id = ? AND player_id = ?")
           .get(session.config.raidId, session.playerId) as CountRow;
         if (row.count >= maxAttempts) { this.db.exec("ROLLBACK"); return false; }
+          assignAttempt?.(row.count);
       }
       this.db.prepare("INSERT INTO run_sessions (id,player_id,game_id,mode,raid_id,json) VALUES (?,?,?,?,?,?)")
         .run(session.config.runId, session.playerId, session.config.gameId, session.config.mode, session.config.raidId ?? null, JSON.stringify(session.config));

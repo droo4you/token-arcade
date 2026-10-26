@@ -19,6 +19,12 @@ import { TestnetMinicoinService } from "./testnet-minicoin.ts";
 import { FundedRaids, FundedRaidError } from "./fundedRaids.ts";
 import { AutomaticPayouts } from "./automaticPayouts.ts";
 import { freePlayReport } from "./freePlayAnalytics.ts";
+import { skipBoardRules, skipRules, SKIP_RAID_RULES, skipRaidResults } from "./skipBoards.ts";
+
+function requestedSkipRules(board: unknown) {
+  if (!skipRules.BOARDS.some(value => value === board)) fail(400, "INVALID_BOARD", "Choose Open, Zero, Mid or Max");
+  return normalizeRunRules(skipBoardRules(board));
+}
 
 const OBJECTIVES = new Set<GameObjective>(["score", "total_score", "distance", "destruction", "completion_time", "stars", "guesses", "coins_solved"]);
 const MODES = new Set(["free", "ranked", "raid"]);
@@ -54,14 +60,14 @@ function isoDate(value: unknown, field: string): string {
 function respond(response: ServerResponse, status: number, data: unknown): void {
   response.writeHead(status, jsonHeaders).end(JSON.stringify(data));
 }
-async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
+async function readJson(request: IncomingMessage, maxLength = 65_536): Promise<Record<string, unknown>> {
   if (!(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
     fail(415, "UNSUPPORTED_MEDIA_TYPE", "Use application/json");
   }
   let body = "";
   for await (const chunk of request) {
     body += chunk.toString();
-    if (body.length > 65_536) fail(413, "BODY_TOO_LARGE", "JSON body is too large");
+    if (body.length > maxLength) fail(413, "BODY_TOO_LARGE", "JSON body is too large");
   }
   try {
     const parsed: unknown = JSON.parse(body);
@@ -237,6 +243,7 @@ function raidBlockers(raid: Raid, store: ArcadeStore, adapters: AdapterRegistry)
     }
     if (["buy-bounce", "mood-swings"].includes(game.manifest.adapterId) && (raid.rules?.viewportWidth !== 390 || raid.rules?.viewportHeight !== 844)) blockers.push("eMONAD raids require the reviewed 390×844 viewport rules");
     if (game.manifest.adapterId === "mood-swings" && (raid.maxAttempts !== 3 || raid.objective !== "score")) blockers.push("Mood Swings raids require best of three attempts, ranked by peak Mood");
+    if (game.manifest.adapterId === "skip-to-10k-v2" && (raid.maxAttempts !== 3 || raid.objective !== "score" || raid.rules?.format !== skipRules.FORMAT || raid.rules?.board !== "triathlon")) blockers.push("Skip raids require three runs: Zero, Mid and Max, scored by their total");
     const adapter = adapters.get(game.manifest.adapterId);
     if (!adapter?.verifier) blockers.push("Game-specific score verifier is not registered");
   }
@@ -299,10 +306,12 @@ interface LeaderboardEntry {
 }
 
 function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid", raidId?: string, objective?: GameObjective, gameVersion?: string, rules?: GameRules): LeaderboardEntry[] {
-  const results = store.listAcceptedResults(gameId, mode, raidId).filter((item) =>
+  const skipV2 = rules?.format === skipRules.FORMAT;
+  let results = store.listAcceptedResults(gameId, mode, raidId).filter((item) =>
     (objective === undefined || item.result.objective === objective) &&
     (gameVersion === undefined || item.result.gameVersion === gameVersion) &&
-    JSON.stringify(item.result.rules ?? {}) === JSON.stringify(rules ?? {}));
+    (skipV2 && mode === "raid" ? item.result.gameVersion === "1.1.0" && item.result.rules?.format === skipRules.FORMAT : JSON.stringify(item.result.rules ?? {}) === JSON.stringify(rules ?? {})));
+  if (skipV2 && mode === "raid") results = skipRaidResults(results);
   const best = new Map<string, AcceptedResult>();
   const twoPlaces = store.getGame(gameId)?.manifest.adapterId === "two-places";
   const compare = (a: AcceptedResult, b: AcceptedResult) => {
@@ -310,6 +319,9 @@ function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid"
       return b.result.primaryMetric - a.result.primaryMetric || (b.result.secondaryMetrics?.goodVibes ?? 0) - (a.result.secondaryMetrics?.goodVibes ?? 0)
         || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
     }
+    if (skipV2) return b.result.primaryMetric - a.result.primaryMetric
+      || (b.result.secondaryMetrics?.gwei ?? 0) - (a.result.secondaryMetrics?.gwei ?? 0)
+      || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
     if (twoPlaces) {
       const apples = (b.result.secondaryMetrics?.apples ?? 0) - (a.result.secondaryMetrics?.apples ?? 0);
       if (apples) return apples;
@@ -345,7 +357,7 @@ function updatePassport(store: ArcadeStore, passport: Passport, result: GameRunR
   const wasFirstGame = !store.hasAcceptedGame(passport.playerId, result.gameId);
   const wasFirstRaid = raid ? !store.hasAcceptedRaid(passport.playerId, raid.id) : false;
   const bestScores = { ...passport.bestScores };
-  const key = result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? `${result.gameId}@${result.gameVersion}:${result.objective}` : `${result.gameId}:${result.objective}`;
+  const key = result.rules?.format === skipRules.FORMAT ? `${result.gameId}@${result.gameVersion}:${result.objective}_${result.rules.board}` : result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? `${result.gameId}@${result.gameVersion}:${result.objective}` : `${result.gameId}:${result.objective}`;
   const prior = bestScores[key];
   const lowerIsBetter = result.objective === "completion_time" || result.objective === "guesses";
   if (prior === undefined || (lowerIsBetter ? result.primaryMetric < prior : result.primaryMetric > prior)) bestScores[key] = result.primaryMetric;
@@ -454,6 +466,11 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
     if (raid.gameId === "emonad-cabinet" && raid.gameVersion === "2.0.0") {
       const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id).filter(item => item.result.gameVersion === "2.0.0");
       return { moodGoal: { goodVibes: runs.reduce((sum, item) => sum + (item.result.secondaryMetrics?.goodVibes ?? 0), 0), runs: runs.length, participants: new Set(runs.map(item => item.playerId)).size } };
+    }
+    if (raid.rules?.format === skipRules.FORMAT) {
+      const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id).filter(item => item.result.gameVersion === "1.1.0" && item.result.rules?.format === skipRules.FORMAT);
+      return { skipGoal: { distance: runs.reduce((n, r) => n + (r.result.secondaryMetrics?.distance ?? 0), 0),
+        broke10k: new Set(runs.filter(r => (r.result.secondaryMetrics?.peak ?? 0) >= 10000).map(r => r.playerId)).size } };
     }
     if (raid.objective !== "coins_solved") return {};
     const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id);
@@ -650,7 +667,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const raid = raidId ? store.getRaid(raidId) : undefined;
         if (mode === "raid" && (!raid || raid.gameId !== gameId || raid.status === "draft")) fail(400, "INVALID_RAID", "A matching raidId is required");
         const objective = mode === "raid" ? raid!.objective : game.manifest.supportedObjectives[0];
-        const rules = mode === "raid" ? raid?.rules : adapters.get(game.manifest.adapterId)?.rankedRules;
+        const rules = mode === "raid" ? raid?.rules : game.manifest.adapterId === "skip-to-10k-v2" ? requestedSkipRules(url.searchParams.get("board") ?? "zero") : adapters.get(game.manifest.adapterId)?.rankedRules;
         return respond(response, 200, { gameId, mode, objective, ...(raidId ? { raidId } : {}), ...(raid ? raidTotal(raid) : {}), entries: (raid && publicRaid(raid).finalResult?.entries) ?? leaderboard(store, gameId, mode, raidId, objective, mode === "ranked" ? game.manifest.version : undefined, rules) });
       }
 
@@ -837,7 +854,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const blockers = raidBlockers(raid, store, adapters);
           if (blockers.length) fail(409, "RAID_NOT_READY", "Raid cannot issue runs", blockers);
         }
-        const issuedRules = mode === "raid" ? raid?.rules : adapter.rankedRules;
+        const issuedRules = mode === "raid" ? raid?.rules : game.manifest.adapterId === "skip-to-10k-v2" ? requestedSkipRules(body.board ?? "zero") : adapter.rankedRules;
         if (raid?.funding) fundedRaids.snapshotWallet(raid, passport);
         const config: GameRunConfig = {
           runId: randomUUID(), gameId, gameVersion: game.manifest.version, mode,
@@ -847,7 +864,8 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           ...(issuedRules ? { rules: issuedRules } : {}),
           startedAt: new Date(now).toISOString(), expiresAt: new Date(Math.min(now + (adapter.runTimeoutMs ?? 120_000), raid ? Date.parse(raid.endsAt) : Infinity)).toISOString(),
         };
-        const created = store.createSession({ playerId: passport.playerId, config }, raid?.maxAttempts);
+        const created = store.createSession({ playerId: passport.playerId, config }, raid?.maxAttempts,
+          raid && game.manifest.adapterId === "skip-to-10k-v2" ? attempt => { config.rules = requestedSkipRules(skipRules.RAID_BOARDS[attempt]); } : undefined);
         if (!created) fail(409, "ATTEMPT_LIMIT", "No raid attempts remain");
         return respond(response, 201, { run: config });
       }
@@ -870,7 +888,8 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (!session || session.playerId !== passport.playerId) fail(404, "NOT_FOUND", "Run session not found");
         if (session.consumedAt) fail(409, "RUN_CONSUMED", "Run result was already accepted");
         if (Date.now() > Date.parse(session.config.expiresAt ?? "")) fail(409, "RUN_EXPIRED", "Run session expired");
-        const body = await readJson(request);
+        // A bounded 905-second Skip replay contains up to 108,600 input chars.
+        const body = await readJson(request, session.config.rules?.format === skipRules.FORMAT ? 131_072 : 65_536);
         if (Date.now() >= Date.parse(session.config.expiresAt ?? "")) fail(409, "RUN_EXPIRED", "Run submission must arrive before its deadline");
         const checked = validateRunResultShape(session.config, isRecord(body.result) ? body.result : body);
         if (!checked.valid) fail(400, "INVALID_RESULT", checked.reason);
@@ -881,7 +900,8 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (game?.status !== "published" && game?.status !== "paused") fail(409, "GAME_UNAVAILABLE", "Game is no longer available for completing issued runs");
         if (game?.manifest.version !== session.config.gameVersion) fail(409, "GAME_VERSION_CHANGED", "Game version changed during this run");
         const verifier = game && adapters.get(game.manifest.adapterId)?.verifier;
-        if (result.mode === "ranked" && JSON.stringify(session.config.rules ?? {}) !== JSON.stringify(adapters.get(game!.manifest.adapterId)?.rankedRules ?? {})) {
+        const currentRules = game!.manifest.adapterId === "skip-to-10k-v2" ? requestedSkipRules(session.config.rules?.board) : adapters.get(game!.manifest.adapterId)?.rankedRules;
+        if (result.mode === "ranked" && JSON.stringify(session.config.rules ?? {}) !== JSON.stringify(currentRules ?? {})) {
           fail(409, "RULES_CHANGED", "Passport Play rules changed during this run");
         }
         if (!verifier) fail(409, "VERIFIER_UNAVAILABLE", "Game-specific verifier is not installed");
@@ -1019,7 +1039,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const raid = validateRaidInput(body);
           if (store.getGame(raid.gameId)?.manifest.adapterId === "mood-swings") raid.gameVersion = "2.0.0";
           const adapterId = store.getGame(raid.gameId)?.manifest.adapterId ?? "";
-          const defaults = adapterId === "coindle-v2" ? RAPID_RAID_RULES : adapters.get(adapterId)?.rankedRules;
+          const defaults = adapterId === "skip-to-10k-v2" ? SKIP_RAID_RULES : adapterId === "coindle-v2" ? RAPID_RAID_RULES : adapters.get(adapterId)?.rankedRules;
           if (defaults || raid.rules) raid.rules = normalizeRunRules({ ...defaults, ...raid.rules });
           const blockers = raidBlockers(raid, store, adapters);
           if (!store.getGame(raid.gameId)) fail(404, "NOT_FOUND", "Game not found");
