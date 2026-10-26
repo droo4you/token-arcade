@@ -7,7 +7,7 @@ const S = process.env.LEVEL ? S0.forLevel(require(require('path').join(__dirname
 const N = +process.env.N || 200;
 function human(seed, skill) {
   const r = S.rng((seed * 2654435761) ^ 0xC0FFEE);
-  const s = S.newRun(seed); let nextBoostT = 0, firstT = 0.6 + r() * 1.8, laneCd = 0, ringFocus = r() < 0.3 * skill, cleared = false, flight0 = 0, airAtLaunch = -1, hitBy = null;
+  const s = S.newRun(seed); let nextBoostT = 0, firstT = 0.6 + r() * 1.8, laneCd = 0, ringFocus = r() < 0.3 * skill, cleared = false, flight0 = 0, airAtLaunch = -1, hitBy = null, skyT = 0, lowT = 0;
   const padMissP = 0.55 - 0.25 * skill;
   for (const p of s.pickups) if (p.type === 'pad') p.ignore = r() < padMissP;
   while (!s.over && s.tick < 300 * 120) {
@@ -25,11 +25,12 @@ function human(seed, skill) {
       }
       if (i.pitch != null) i.pitch = S.clamp(i.pitch + (r() - 0.5) * 0.3, -1, 1);
     } else i = {};
+    if (s.phase === 'sky') { skyT++; if (s.y < 0 && s.z < C.ROAD_LEN + C.CANYON_W) lowT++; }
     S.step(s, i); for (const e of s.events) if (e.e === 'crash' && s.reason === 'air') hitBy = e.what; s.events.length = 0;
     if (airAtLaunch < 0 && s.phase !== 'road') airAtLaunch = s.counts.air;
     if (!cleared && s.phase === 'sky' && s.z >= C.ROAD_LEN + C.CANYON_W) cleared = true;
   }
-  return { hitBy, r: S.score(s), skyAir: s.counts.air - Math.max(0, airAtLaunch), cleared, flightPast: Math.max(0, s.z - C.ROAD_LEN - C.CANYON_W) };
+  return { below: skyT ? lowT / skyT : 0, hitBy, r: S.score(s), skyAir: s.counts.air - Math.max(0, airAtLaunch), cleared, flightPast: Math.max(0, s.z - C.ROAD_LEN - C.CANYON_W) };
 }
 function stats(skill) {
   const res = []; for (let seed = 1; seed <= N; seed++) res.push(human(seed, skill));
@@ -47,6 +48,7 @@ function stats(skill) {
     machDistShare: (M => +q(M.map(x => x.r.distance / x.r.total), .5).toFixed(2))(L.filter(x => x.r.mach05)),
     machTricksBeatDist: (M => +(M.filter(x => x.r.tricks > x.r.distance).length / Math.max(1, M.length)).toFixed(3))(L.filter(x => x.r.mach05)),
     machLargestIsDist: (M => +(M.filter(x => x.r.distance >= Math.max(x.r.tricks, x.r.pickups, x.r.landing, x.r.mach)).length / Math.max(1, M.length)).toFixed(3))(L.filter(x => x.r.mach05)),
+    belowRim: +(L.reduce((a, x) => a + x.below, 0) / L.length).toFixed(3),
     crash: +(L.filter(x => x.r.reason !== 'landed').length / L.length).toFixed(2), drafts: +(L.reduce((a, x) => a + (x.r.counts.drafts || 0), 0) / L.length).toFixed(2),
     hitBy: L.reduce((a, x) => { if (x.hitBy) a[x.hitBy] = (a[x.hitBy] || 0) + 1; return a; }, {}) };
 }

@@ -18,7 +18,7 @@ test('grand canyon is registered, valid, and Snake River stays the default', () 
   assert.equal(L.DEFAULT, 'snake-river'); assert.equal(L.LEVELS[0].id, 'snake-river');
   assert.equal(S.C.CANYON_W, GC.sim.CANYON_W); assert.equal(S.C.CANYON_DEPTH, GC.sim.CANYON_DEPTH);
   assert.equal(S0.C.CANYON_W, 520, 'base sim untouched');
-  assert.ok(GC.sim.CANYON_W >= 900 && GC.sim.CANYON_W <= 1300);
+  assert.ok(GC.sim.CANYON_W >= 2200 && GC.sim.CANYON_W <= 2600);
   assert.equal(GC.car.paint, L.get('snake-river').car.paint, 'car stays white');
 });
 test('base sim and forLevel(snake-river) fly byte-identical runs', () => {
@@ -52,7 +52,7 @@ test('updraft lift is bounded per column (altitude only, capped at maxGain)', ()
   let rode = 0;
   for (let seed = 1; seed <= 30; seed++) {
     const { s } = fly(S, seed);
-    for (const d of s.drafts) { assert.ok(d.gain <= U.maxGain + 1e-9, 'gain ' + d.gain); assert.ok(d.w <= U.w * 1.15 + 1e-9); if (d.gain > 0) rode++; }
+    for (const d of s.drafts) { assert.ok(d.gain <= (d.max || U.maxGain) + 1e-9, 'gain ' + d.gain); assert.ok(d.w <= Math.max(U.w * 1.15, GC.air.gorge.w) + 1e-9); if (d.gain > 0) rode++; }
   }
   assert.ok(rode > 10, 'bots ride some updrafts: ' + rode);
   // Hover in one column: the gain caps at maxGain.
@@ -70,3 +70,14 @@ test('distance stays king on grand canyon Mach runs', () => {
   }
   assert.ok(mach > 5, 'mach runs ' + mach);
 });
+test('gorge route: rings and cans spawn below the rim over the gap, gorge thermals are capped', () => {
+  let rings = 0, cans = 0, th = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const { s } = fly(S, seed);
+    for (const g of s.rings) if (g.gorge) { rings++; assert.ok(g.y < 0 && g.y > -S.C.CANYON_DEPTH * 0.6 && g.z > S.C.ROAD_LEN && g.z < S.C.ROAD_LEN + S.C.CANYON_W + 200); }
+    for (const p of s.skyPickups) if (p.gorge) { cans++; assert.ok(p.y < 0); }
+    for (const d of s.drafts) if (d.gorge) { th++; assert.ok(d.gain <= GC.air.gorge.maxGain + 1e-9); }
+  }
+  assert.ok(rings > 20 && cans > 3 && th > 10, JSON.stringify({ rings, cans, th }));
+});
+test('thin air only exists on grand canyon', () => { assert.ok(GC.air.thin); assert.equal(L.get('snake-river').air.thin, undefined); assert.equal(L.get('snake-river').air.gorge, undefined); });

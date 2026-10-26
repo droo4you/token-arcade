@@ -27,7 +27,7 @@
     need(typeof L.name === 'string' && L.name.length > 0, 'name required');
     const s = L.sim || {};
     need(num(s.ROAD_LEN, 500, 6000), 'sim.ROAD_LEN 500..6000');
-    need(num(s.CANYON_W, 50, 2000), 'sim.CANYON_W 50..2000');
+    need(num(s.CANYON_W, 50, 4000), 'sim.CANYON_W 50..4000');
     need(num(s.CANYON_DEPTH, 20, 1500), 'sim.CANYON_DEPTH 20..1500');
     need(num(s.CLEAR_V, 30, 200), 'sim.CLEAR_V 30..200');
     need(num(s.RAMP_LEN, 10, 200) && num(s.RAMP_H, 1, 40), 'sim.RAMP_LEN / RAMP_H');

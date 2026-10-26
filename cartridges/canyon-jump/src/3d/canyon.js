@@ -146,14 +146,19 @@ function buttes(level, S, group, seed) {
   const C = S.C, D = C.CANYON_DEPTH, r = rng(seed * 31 + 7), strata = level.canyon.strata, all = [];
   for (let i = 0; i < n; i++) {
     const parts = [];
-    const side = i % 2 ? 1 : -1, x = side * (95 + r() * 620), z = C.ROAD_LEN + 120 + r() * (C.CANYON_W - 240);
-    const H = D * (0.45 + r() * 0.5), tiers = 3 + Math.floor(r() * 3); let y = 0, rad = 40 + r() * 70;
+    // Half are "near" buttes flanking the inside-the-gorge route (edge kept >= 8 m outside the +-36 m flight corridor).
+    const nearB = i % 4 < 2, rad0 = nearB ? 14 + r() * 16 : 40 + r() * 70, side = i % 2 ? 1 : -1;
+    const x = side * (nearB ? 44 + rad0 + r() * 40 : 95 + rad0 * 0.5 + r() * 620), z = C.ROAD_LEN + 120 + r() * (C.CANYON_W - 240);
+    const H = D * (nearB ? 0.55 + r() * 0.35 : 0.45 + r() * 0.5), tiers = 3 + Math.floor(r() * 3); let y = 0, rad = rad0;
     for (let k = 0; k < tiers; k++) {
-      const hh = H / tiers * (k === tiers - 1 ? 0.7 : 1), seg = 7 + (k % 3);
-      const cliff = new THREE.CylinderGeometry(rad * 0.94, rad, hh * 0.75, seg, 2);
-      const ps = cliff.attributes.position; for (let j = 0; j < ps.count; j++) { const a = Math.atan2(ps.getZ(j), ps.getX(j)), f = 0.82 + 0.36 * noise2(a * 1.7 + i, k * 3.1); ps.setX(j, ps.getX(j) * f); ps.setZ(j, ps.getZ(j) * f); }
+      const hh = H / tiers * (k === tiers - 1 ? 0.7 : 1), seg = 22 + (k % 3) * 2, rows = Math.max(4, Math.round(hh * 0.75 / 6));
+      const cliff = new THREE.CylinderGeometry(rad * 0.94, rad, hh * 0.75, seg, rows);
+      // Fluted, eroded cliff: low-frequency lobes + vertical gullies + per-row ledge wobble (no more octagon drums).
+      const ps = cliff.attributes.position; for (let j = 0; j < ps.count; j++) { const a = Math.atan2(ps.getZ(j), ps.getX(j)), yy = ps.getY(j);
+        const f = 0.8 + 0.3 * noise2(a * 1.7 + i, k * 3.1) + 0.07 * Math.sin(a * 13 + i) * (0.6 + 0.4 * noise2(a * 5, yy * 0.05 + k)) + 0.05 * noise2(a * 3 + 7, yy * 0.12);
+        ps.setX(j, ps.getX(j) * f); ps.setZ(j, ps.getZ(j) * f); }
       parts.push(tint(xf(cliff, { y: y + hh * 0.375 }), strata[(k * 2 + i) % strata.length], 0.12, seed + i * 7 + k));
-      const talus = new THREE.CylinderGeometry(rad * 0.7, rad * 0.94, hh * 0.25, seg, 1);
+      const talus = new THREE.CylinderGeometry(rad * 0.7, rad * 0.94, hh * 0.25, seg, 2); { const tp = talus.attributes.position; for (let j = 0; j < tp.count; j++) { const a = Math.atan2(tp.getZ(j), tp.getX(j)), f = 0.8 + 0.3 * noise2(a * 1.7 + i, k * 3.1 + 0.5) + 0.06 * noise2(a * 9, k); tp.setX(j, tp.getX(j) * f); tp.setZ(j, tp.getZ(j) * f); } }
       parts.push(tint(xf(talus, { y: y + hh * 0.75 + hh * 0.125 }), strata[(k * 2 + i + 1) % strata.length], 0.12, seed + i * 7 + k + 50));
       y += hh; rad *= 0.62 + r() * 0.12;
     }

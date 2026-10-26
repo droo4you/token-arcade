@@ -328,12 +328,27 @@
         }
       }
     }
+    // Inside-the-gorge route (level air.gorge): ring lines and AIR cans below the rim, and strong gorge thermals that are
+    // the way back out. Own RNG stream; only over the gap.
+    if (A.gorge && overGap) {
+      const Gz = A.gorge, g = rng((s.seed + 0x2545f491 + i * 32452843) >>> 0);
+      const lo = -C.CANYON_DEPTH * Gz.depth, hi = -12;
+      if (g() < Gz.ringLine) {
+        const gx = (g() * 2 - 1) * C.SKY_X * 0.5, gz = z0 + g() * C.SKY_CHUNK * 0.4, y0 = lo + g() * (hi - lo);
+        for (let k = 0; k < 4; k++) { const ring = { x: gx + (k - 1.5) * 2, y: y0, z: gz + k * 26, taken: false, risky: false, gorge: true }; if (clearOf(ring.x, ring.y, ring.z, C.RING_R)) s.rings.push(ring); }
+      }
+      if (g() < Gz.can) { const p = { type: 'air', z: z0 + g() * C.SKY_CHUNK, x: (g() * 2 - 1) * 14, y: lo + g() * (hi - lo), taken: false, gorge: true }; if (clearOf(p.x, p.y, p.z, 2.6)) s.skyPickups.push(p); }
+      if (g() < Gz.thermal) {
+        const zc = z0 + g() * C.SKY_CHUNK;
+        s.drafts.push({ x: (g() * 2 - 1) * C.SKY_X * 0.6, z: zc, r: Gz.r, w: Gz.w, top: Gz.top, bottom: -C.CANYON_DEPTH, gain: 0, max: Gz.maxGain, gorge: true });
+      }
+    }
   }
   /* Vertical air speed (m/s) of any updraft column at (x, y, z): strongest at the core, fading to the edge and near the top. */
   function updraftAt(s, x, y, z) {
     let w = 0; if (!s.drafts) return 0;
     for (const d of s.drafts) {
-      if (Math.abs(z - d.z) > d.r || y > d.top || d.gain >= s.cfg.updraft.maxGain) continue;
+      if (Math.abs(z - d.z) > d.r || y > d.top || d.gain >= (d.max || s.cfg.updraft.maxGain)) continue;
       const q = Math.hypot(x - d.x, z - d.z) / d.r; if (q >= 1) continue;
       w = Math.max(w, d.w * (1 - q * q) * Math.min(1, (d.top - y) / 30));
     }
@@ -464,6 +479,7 @@
     // Committed dive (stick forward, nose below the horizon): the car tucks and parasitic drag drops, so a dive banks real speed.
     const tuck = s.pIn < 0 && g < 0 ? -s.pIn * C.DIVE_TUCK : 0;
     V += (-C.G_SKY * Math.sin(g) - (C.DRAG0 + C.DRAG2 * V * V) * (1 - tuck) - C.DRAG_I * s.gLoad * s.gLoad) * dt;
+    const TH = s.cfg.thin; if (TH && s.y > TH.y) V -= TH.k * Math.min(1, (s.y - TH.y) / TH.span) * dt; // thin air up high (level 2+): floating high bleeds speed
     s.gam = clamp(g, C.GAM_MIN, C.GAM_MAX); s.m = clamp(V, 0, C.M_MAX);
     s.boostCd = Math.max(0, s.boostCd - dt); s.boostT = Math.max(0, s.boostT - dt);
     if (input.boostEdge && s.boostCd <= 0) {
@@ -500,7 +516,7 @@
     if (s.drafts.length) {
       const w = updraftAt(s, s.x, s.y, s.z);
       if (w > 0) {
-        const d = s.drafts.find(d => Math.abs(s.z - d.z) <= d.r && Math.hypot(s.x - d.x, s.z - d.z) < d.r), dy = Math.min(w * dt, s.cfg.updraft.maxGain - d.gain);
+        const d = s.drafts.find(d => Math.abs(s.z - d.z) <= d.r && Math.hypot(s.x - d.x, s.z - d.z) < d.r), dy = Math.min(w * dt, (d.max || s.cfg.updraft.maxGain) - d.gain);
         d.gain += dy; s.y += dy; if (!d.rode) { d.rode = true; s.counts.drafts = (s.counts.drafts || 0) + 1; s.events.push({ e: 'updraft' }); }
       }
     }
@@ -575,7 +591,8 @@
     let tx = s.x;
     const tgt = s.rings.concat(s.skyPickups.filter(p => p.type === 'air')).filter(r => !r.taken && r.z > s.z + 10 && (r.z - s.z) / fwd < 2.2)
       .sort((a, b) => a.z - b.z)[0];
-    if (tgt && !landing && (pastRim || tgt.y > 12)) { tx = tgt.x; ty = tgt.y; }
+    if (tgt && !landing && (pastRim || tgt.y > 12 || (s.cfg.gorge && tgt.gorge && s.m > 70))) { tx = tgt.x; ty = tgt.y; }
+    if (s.cfg.gorge && !pastRim && s.y < 0) { const th2 = s.drafts.find(d => d.gorge && d.z > s.z && d.z - s.z < fwd * 3 && d.gain < d.max); if (th2) { tx = th2.x; ty = Math.max(ty, s.y); } }
     const th = threats(s).filter(t => t.tt < 1.1)[0];
     if (th) { tx = th.x >= s.x ? th.x - th.o.r - 6 : th.x + th.o.r + 6; ty = th.y > s.y ? th.y - th.o.r - 6 : th.y + th.o.r + 6; }
     i.steer = clamp((tx - s.x) * 0.3, -1, 1);
@@ -583,7 +600,7 @@
     let gDes = clamp((ty - s.y) / (fwd * 1.2), -0.55, 0.45);
     const tImpact = s.vy < 0 ? h / -s.vy : 99;
     if (pastRim && (h < 30 || tImpact < 2.6)) gDes = Math.max(gDes, -0.14); // flare: level out before touchdown
-    if (!pastRim && h < 25 + Math.max(0, -s.vy)) gDes = Math.max(gDes, 0.15);
+    if (!pastRim && (s.cfg.gorge ? s.y - groundY(s.z) : h) < 25 + Math.max(0, -s.vy)) gDes = Math.max(gDes, 0.15);
     i.pitch = clamp((gDes - s.gam) * 4 + (gDes > s.gam ? 0.15 : 0), -1, 1);
     if (s.m < 58 && h < 40) i.pitch = Math.max(i.pitch, 0.3);
     // Mach run: off a top-speed launch with 3+ cans, chain three boosts while the cooldown allows (commit once started).

@@ -331,6 +331,10 @@ function init() {
       tx = s.x * 0.85; ty = s.y - Math.sin(g) * dist + h * Math.cos(g); tz = s.z - Math.cos(g) * dist;
       lx = s.x; ly = s.y + Math.sin(s.gam || 0) * 22 + 0.4 - alt * 3.5 - hold * 1.5; lz = s.z + Math.cos(s.gam || 0) * 22;
       fov = 61 + skK * 9 + dive * 10 + (G.trickKick || 0) * -4 - (G.stabFx || 0) * 4;
+      // Gorge levels: over the gap, tilt the look point down a little and widen so the canyon below stays in frame
+      // (fades in after the launch and out near the far rim; the car stays centered, so control reads the same).
+      if (level.air?.gorge && !s.over) { const k = smooth(C.ROAD_LEN + 40, C.ROAD_LEN + 200, s.z) * (1 - smooth(C.ROAD_LEN + C.CANYON_W - 250, C.ROAD_LEN + C.CANYON_W, s.z)) * (1 - hold);
+        ty += k * 1.6; ly -= k * (5 + alt * 4); fov += k * 5; }
     } else {
       // Straightaway chase: back and up far enough that rows of obstacles read well ahead (phase 3: ~+45% distance,
       // ~2x height, look point 21 m down the road, tilted down so the road ahead fills more of the screen), the car still big enough to read its lane. Blends into the run-up/ramp cam.

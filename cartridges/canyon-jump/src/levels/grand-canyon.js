@@ -1,13 +1,13 @@
 /* Level 2: Grand Canyon (South Rim, Arizona). Wider, deeper, and the first level with real air traffic:
    tour helicopters sweeping the gap, condors riding thermals, updraft columns and a crosswind over the deep middle.
-   Gap ~1,000 m (the real canyon is 1.5+ km at most overlooks; this is the narrow, jumpable reach near the Skywalk). */
+   Gap 2.6 km (~8,500 ft): clearing is a real threat. The gorge is a route, not wallpaper: rings + AIR below the rim and gorge thermals to climb back out; thin air up high makes the safe high float the slow line. */
 (function (root) {
   'use strict';
   const LEVEL = {
     id: 'grand-canyon',
     name: 'Grand Canyon',
     tagline: 'South Rim · golden hour',
-    sim: { ROAD_LEN: 2300, CANYON_W: 1300, CANYON_DEPTH: 320, CLEAR_V: 90, RAMP_LEN: 44, RAMP_H: 6, LANE_W: 3.4 },
+    sim: { ROAD_LEN: 2300, CANYON_W: 2600, CANYON_DEPTH: 320, CLEAR_V: 90, RAMP_LEN: 44, RAMP_H: 6, LANE_W: 3.4 },
     // Stepped Grand Canyon profile: Kaibab cliff, Toroweap slope, Coconino cliff, Supai benches, Redwall, Tonto platform, inner gorge.
     wall: [[0, 0], [5, 0.5], [30, 3], [38, 14], [70, 18], [80, 30], [130, 36], [150, 58], [200, 64], [215, 84], [270, 92], [300, 110], [320, 124]],
     time: {
@@ -40,7 +40,7 @@
       signs: [
         { at: 1000, text: 'GRAND CANYON 1.3 KM' },
         { at: 1600, text: 'SOUTH RIM 700 M' },
-        { at: 2000, text: 'GAP 3300 FT' },
+        { at: 2000, text: 'GAP 8500 FT' },
         { at: 2180, text: 'SEND IT' },
       ],
     },
@@ -50,11 +50,11 @@
       wallJitter: 14,
       ledges: 9,
       columns: 0,
-      buttes: 14,           // stepped buttes rising out of the gap floor (render-only, kept off the flight line)
+      buttes: 34,           // stepped buttes rising out of the gap floor (render-only, kept off the flight line)
       mist: { density: 0.5 },
       river: { color: '#2f7a5a', width: 70 },
       skywalk: { side: -1, zOff: -60 }, // glass horseshoe overlook on the launch rim
-      plaque: { text: 'GRAND CANYON', sub: '3,300 FT', side: 1, zOff: -30 },
+      plaque: { text: 'GRAND CANYON', sub: '8,500 FT · 2.6 KM', side: 1, zOff: -30 },
     },
     obstacles: { cactus: 'saguaro', rock: 'sandstone', tumbleweed: 'tumbleweed', cone: 'cone' },
     skyObjects: { bird: 'crow', plane: 'jet', satellite: 'sat', balloon: 'balloon', heli: 'heli', condor: 'condor' },
@@ -70,7 +70,11 @@
       plane: { r: 3.4 }, bird: { r: 1.4 },
       satellite: { r: 2.8, chance: 0.3, minY: 242 },
       high: { minY: 215, ringLine: 0.55, can: 0.3, orb: 0.4 },
-      updraft: { chance: 0.3, r: 34, w: 22, top: 190, maxGain: 26, pastRim: 160, condorP: 0.45 },
+      updraft: { chance: 0.2, r: 34, w: 22, top: 190, maxGain: 20, pastRim: 160, condorP: 0.45 },
+      // Inside-the-gorge route: rings + AIR cans below the rim, and strong gorge thermals (up to 45 m of lift) to climb back out.
+      gorge: { depth: 0.55, ringLine: 0.5, can: 0.15, thermal: 0.3, r: 38, w: 30, top: 30, maxGain: 45 },
+      // Thin air: above 50 m the car bleeds up to 12 m/s² extra, so floating high and safe is the slow line.
+      thin: { y: 50, span: 100, k: 12 },
       gust: { vx: 4, rate: 0.6, from: 0.3, to: 0.75 },
     },
     pickups: { orb: '#ffcf3f', air: '#4ff0ff', pad: '#ff4fd8' },
