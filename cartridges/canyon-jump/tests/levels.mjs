@@ -11,7 +11,8 @@ test('every level validates', () => {
   assert.equal(new Set(L.LEVELS.map(l => l.id)).size, L.LEVELS.length, 'ids unique');
 });
 test('level gameplay numbers match the running sim (until newRun takes a level)', () => {
-  for (const lvl of L.LEVELS) assert.deepEqual(L.simMismatches(lvl, S.C), [], lvl.id);
+  for (const lvl of L.LEVELS) assert.deepEqual(L.simMismatches(lvl, S.forLevel(lvl).C), [], lvl.id);
+  assert.deepEqual(L.simMismatches(L.get('snake-river'), S.C), [], 'base sim is Snake River');
 });
 test('validator catches broken levels', () => {
   const bad = structuredClone(L.get(L.DEFAULT));

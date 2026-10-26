@@ -2,7 +2,7 @@
    Units are meters and seconds. x = lateral, y = altitude, z = forward along the highway. */
 (function (root) {
   'use strict';
-  const C = Object.freeze({
+  const BASE = {
     DT: 1 / 120,
     ROAD_LEN: 2300,      // canyon rim (ramp lip) at this z
     CANYON_W: 520,       // far rim at ROAD_LEN + CANYON_W
@@ -63,7 +63,11 @@
     MACH05: 617 / 3.6, MACH_BONUS: 1250,
     // Ground and road past the far rim are drawn this far (the 3D road is also a treadmill): ~2x the longest flight we can produce.
     RUNWAY_PAST_RIM: 20000,
-  });
+  };
+  /* make(over, air): a sim bound to one level's geometry. make() with no overrides is the original Snake River sim,
+     byte for byte. forLevel(L) builds one from L.sim (+ L.wall) and L.air; the page swaps window.CJSim for it at load. */
+  function make(over, levelAir) {
+  const C = Object.freeze(Object.assign({}, BASE, over || {}));
 
   function rng(seed) {
     let a = seed >>> 0;
@@ -131,6 +135,7 @@
 
   /* Sky settings for a run: the level's air block (defaults to the default level's file). */
   function defaultAir() {
+    if (levelAir) return levelAir;
     const L = root.CJLevels || (typeof require === 'function' ? require('./levels.js') : null);
     return L.get(L.DEFAULT).air;
   }
@@ -144,7 +149,7 @@
       m: 0, vy: 0, vx: 0, gam: 0, pIn: 0, gLoad: 1, air: C.AIR_START, rot: 0, trick: 0, trickKind: null, trickDir: 1, trickDur: 0, lastTrickEnd: -9, stabT: 0, stabDur: 0, stabCd: 0, stabRot0: 0, stabRot1: 0,
       cmb: { pot: 0, mult: 1, n: 0, last: null }, bank: 0, boostCd: 0, chain: 0, lastBoostT: -9, boostT: 0, rollCoast: 0, rollKick: 0, rollKickGiven: 0, launchT: 0,
       obstacles: road.obstacles, pickups: road.pickups,
-      sky: [], skyPickups: [], rings: [], skyChunk: 0,
+      sky: [], skyPickups: [], rings: [], skyChunk: 0, drafts: [],
       pts: { pickups: 0, tricks: 0, landing: 0, mach: 0 },
       counts: { orbs: 0, air: 0, pads: 0, tricks: 0, flips: 0, rolls: 0, rings: 0, boosts: 0, nearMiss: 0, mach: 0, bestMult: 1, stabs: 0, autoFinish: 0, diveBoosts: 0 }, maxV: 0,
       maxAlt: 0, landGam: 0, onRoad: false, events: [],
@@ -260,6 +265,7 @@
       const y = clamp(s.y + (r() - 0.45) * 60, yMin, mainTop - 6), type = bandType(s, y), rad = A[type].r;
       const o = { type, z: z0 + r() * C.SKY_CHUNK, x: (r() * 2 - 1) * C.SKY_X * 0.85, y, phase: r() * 6.28, r: rad, hit: false, near: false };
       if (type === 'balloon') { o.dx = A.balloon.driftX; o.dy = A.balloon.driftY; o.rate = A.balloon.rate; o.hue = Math.floor(r() * 4); }
+      else if (type === 'heli' || type === 'condor') { const T = A[type]; o.dx = o.sx = T.dx; o.dy = T.dy; o.rate = T.rate * (0.8 + r() * 0.4); o.hue = Math.floor(r() * 4); }
       const near = placed.concat(s.sky.slice(-6));
       if (near.some(p => Math.abs(p.z - o.z) < 25 && Math.hypot(p.x - o.x, p.y - o.y) < p.r + o.r + 9)) continue;
       placed.push(o);
@@ -272,7 +278,7 @@
     s.sky.push(...placed);
     const all = placed.concat(s.sky.slice(-9));
     // A reward is legal if it never overlaps any hazard's hitbox wherever that hazard sways.
-    const clearOf = (x, y, z, rad) => all.every(o => Math.abs(o.z - z) > 12 || Math.hypot(o.x - x, o.y - y) - 4.5 > o.r + 1.1 + rad + swayY(o));
+    const clearOf = (x, y, z, rad) => all.every(o => Math.abs(o.z - z) > 12 || Math.hypot(o.x - x, o.y - y) - 4.5 > o.r + 1.1 + rad + swayY(o) + (o.sx || 0));
     for (const o of placed) {
       const roll = r(), side = r() < 0.5 ? 1 : -1;
       if (roll < 0.45) { // boost ring above/below the hazard
@@ -308,9 +314,36 @@
       if (h() < H.can) { const p = { type: 'air', z: z0 + h() * C.SKY_CHUNK, x: (h() * 2 - 1) * 16, y: hy(), taken: false, high: true }; if (clearOf(p.x, p.y, p.z, 2.6)) s.skyPickups.push(p); }
       if (h() < H.orb) { const p = { type: 'orb', z: z0 + h() * C.SKY_CHUNK, x: (h() * 2 - 1) * 16, y: hy(), taken: false, high: true }; if (clearOf(p.x, p.y, p.z, 2.6)) s.skyPickups.push(p); }
     }
+    // Updraft columns (level air.updraft): thermals rising off the canyon floor and the far rim. Own RNG stream.
+    // Condors ride them: some columns carry a circling condor, so the free lift has a price.
+    if (A.updraft) {
+      const U = A.updraft, u = rng((s.seed + 0x7f4a7c15 + i * 15485863) >>> 0), zc = z0 + u() * C.SKY_CHUNK;
+      if (zc < FAR_RIM() + U.pastRim && u() < U.chance) {
+        const d = { x: (u() * 2 - 1) * C.SKY_X * 0.7, z: zc, r: U.r * (0.85 + u() * 0.3), w: U.w * (0.85 + u() * 0.3), top: U.top * (0.75 + u() * 0.25), bottom: groundY(zc), gain: 0 };
+        s.drafts.push(d);
+        if (A.condor && u() < U.condorP) {
+          const T = A.condor, oy = clamp(s.y + (u() - 0.4) * 40, d.bottom + 20, d.top - 12);
+          const o = { type: 'condor', z: d.z + (u() - 0.5) * d.r, x: d.x, y: oy, phase: u() * 6.28, r: T.r, hit: false, near: false, dx: d.r * 0.55, sx: d.r * 0.55, dy: T.dy, rate: T.rate, hue: 0, draft: true };
+          s.sky.push(o);
+        }
+      }
+    }
+  }
+  /* Vertical air speed (m/s) of any updraft column at (x, y, z): strongest at the core, fading to the edge and near the top. */
+  function updraftAt(s, x, y, z) {
+    let w = 0; if (!s.drafts) return 0;
+    for (const d of s.drafts) {
+      if (Math.abs(z - d.z) > d.r || y > d.top || d.gain >= s.cfg.updraft.maxGain) continue;
+      const q = Math.hypot(x - d.x, z - d.z) / d.r; if (q >= 1) continue;
+      w = Math.max(w, d.w * (1 - q * q) * Math.min(1, (d.top - y) / 30));
+    }
+    return w;
   }
   // Motion is small and bounded so what you see 5 s out is where it will be.
+  // Tour helicopters sweep slowly across the gap (dx up to ~16 m); condors circle (inside a thermal when they ride one).
   function skyObjPos(o, t) {
+    if (o.type === 'heli') return { x: o.x + Math.sin(t * o.rate + o.phase) * o.dx, y: o.y + Math.sin(t * 0.9 + o.phase) * o.dy };
+    if (o.type === 'condor') return { x: o.x + Math.cos(t * o.rate + o.phase) * o.dx, y: o.y + Math.sin(t * o.rate * 0.5 + o.phase) * o.dy };
     if (o.type === 'balloon') return { x: o.x + Math.sin(t * o.rate + o.phase) * o.dx, y: o.y + Math.sin(t * o.rate * 1.7 + o.phase * 2) * o.dy };
     if (o.type === 'bird') return { x: o.x + Math.sin(t * 1.3 + o.phase) * 2, y: o.y + Math.sin(t * 2.6 + o.phase) * 0.8 };
     if (o.type === 'plane') return { x: o.x + Math.sin(t * 0.35 + o.phase) * 4, y: o.y };
@@ -393,7 +426,7 @@
       const dx = s.x - p.x, dy = s.y - p.y, d = Math.hypot(dx, dy); if (d > C.MAGNET_R || d < 1e-6) continue;
       const k = Math.min(d, C.MAGNET_V * dt) / d, nx = p.x + dx * k, ny = p.y + dy * k;
       // Never drag a reward toward a hazard: stop if the new spot would sit inside any nearby hazard's clearance.
-      if (s.sky.some(o => Math.abs(o.z - p.z) < 12 && Math.hypot(o.x - nx, o.y - ny) < o.r + 1.1 + C.RING_R + 4.5 + swayY(o) + 4)) continue;
+      if (s.sky.some(o => Math.abs(o.z - p.z) < 12 && Math.hypot(o.x - nx, o.y - ny) < o.r + 1.1 + C.RING_R + 4.5 + swayY(o) + (o.sx || 0) + 4)) continue;
       p.x = nx; p.y = ny;
     }
   }
@@ -414,6 +447,8 @@
     } else {
       s.vx = lerpRate(s.vx, sx * C.STEER_V, sx ? C.STEER_RESP : C.STEER_RESP * 1.3, dt);
     }
+    // Crosswind (level air.gust): a slow, deterministic sideways push over the deepest part of the gap.
+    const G = s.cfg.gust; if (G && s.z > C.ROAD_LEN + C.CANYON_W * G.from && s.z < C.ROAD_LEN + C.CANYON_W * G.to) s.x += G.vx * Math.sin(s.t * G.rate + (s.seed % 7)) * dt;
     s.x = clamp(s.x + s.vx * dt, -C.SKY_X, C.SKY_X);
     if (Math.abs(s.x) >= C.SKY_X) s.vx = 0;
     s.bank = clamp(s.vx / 14, -1, 1);
@@ -461,6 +496,14 @@
     if (s.stabT > 0 && s.vy < 0) s.vy *= 1 - C.STAB_SINK; // thrusters push up a little against the sink
     const z0 = s.z; s.z += Math.max(4, s.m * Math.cos(s.gam)) * dt;
     s.y = s.y + s.vy * dt;
+    // Updrafts lift the car with the rising air (altitude only, no airspeed), capped per column by air.updraft.maxGain.
+    if (s.drafts.length) {
+      const w = updraftAt(s, s.x, s.y, s.z);
+      if (w > 0) {
+        const d = s.drafts.find(d => Math.abs(s.z - d.z) <= d.r && Math.hypot(s.x - d.x, s.z - d.z) < d.r), dy = Math.min(w * dt, s.cfg.updraft.maxGain - d.gain);
+        d.gain += dy; s.y += dy; if (!d.rode) { d.rode = true; s.counts.drafts = (s.counts.drafts || 0) + 1; s.events.push({ e: 'updraft' }); }
+      }
+    }
     if (s.y >= s.cfg.ceil) { s.y = s.cfg.ceil; s.gam = Math.min(0, s.gam); s.vy = Math.min(0, s.vy); }
     s.maxAlt = Math.max(s.maxAlt, s.y);
     if (inWall(s.z, s.y) || (z0 < FAR_RIM() && s.z >= FAR_RIM() && s.y < 0)) { s.events.push({ e: 'crash', what: 'wall' }); end(s, 'short'); return; }
@@ -563,7 +606,16 @@
       combo: { pot: s.cmb.pot, mult: s.cmb.mult, n: s.cmb.n }, onRoad: s.onRoad };
   }
 
-  const api = { C, bandType, zoneAt, defaultAir, stabilize, trickProgress, speedOf, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp, groundY, agl, liftAccel, bot, LAUNCH_GAM, wallInset, inWall };
+  const api = { C, make, forLevel, updraftAt, bandType, zoneAt, defaultAir, stabilize, trickProgress, speedOf, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp, groundY, agl, liftAccel, bot, LAUNCH_GAM, wallInset, inWall };
+  return api;
+  }
+  /* A sim for a level object: its sim block (+ optional wall profile) over the base constants, and its air block. */
+  function forLevel(L) {
+    if (!L) return make();
+    const over = Object.assign({}, L.sim); if (L.wall) over.WALL = L.wall;
+    return make(over, L.air);
+  }
+  const api = make();
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.CJSim = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

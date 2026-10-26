@@ -12,7 +12,8 @@
   const R3 = () => { const r = glCanvas && window.CJRender3D; return r && r.ready ? r : null; };
   const waiting3D = () => glCanvas && !window.CJRender3D?.failed && !R3() && G.t < 4;
   let W = 960, H = 540, dpr = 1;
-  const BEST_KEY = TA?.embedded ? 'ta.canyon-jump.best' : 'canyon-jump.best';
+  const LVL_ID = window.CJLevel && window.CJLevels && window.CJLevel.id !== window.CJLevels.DEFAULT ? '.' + window.CJLevel.id : ''; // per-level local best (Snake River keeps the old key)
+  const BEST_KEY = (TA?.embedded ? 'ta.canyon-jump.best' : 'canyon-jump.best') + LVL_ID;
   let best = 0; try { best = +localStorage.getItem(BEST_KEY) || 0; } catch (e) { /* storage blocked */ }
 
   const G = {
@@ -64,6 +65,7 @@
     if (down && (e.code === 'KeyM')) { toggleMute(); return; }
     if (down && e.code === 'KeyR' && G.paused && canRestart()) { G.paused = false; A.resume(); startRun(); return; }
     if (down && (e.code === 'KeyP' || e.code === 'Escape') && G.screen === 'play') { togglePause(); return; }
+    if (down && G.screen === 'title' && window.CJLevelSelect && /^Digit[1-9]$/.test(e.code)) { const L = window.CJLevelSelect.list[+e.code.slice(5) - 1]; if (L && L.id !== window.CJLevelSelect.level.id) window.CJLevelSelect.go(L.id); return; }
     if (down && (e.code === 'Enter' || e.code === 'Space') && (G.screen === 'title' || (G.screen === 'end' && G.t - G.endAt > 0.8))) { e.preventDefault(); startRun(); return; }
     if (!a) return; e.preventDefault();
     if (down && !held.has(a)) { if (a in edges) edges[a] = true; }
@@ -111,6 +113,7 @@
     const p = toLogical(e);
     if (G.screen === 'play' && hitBtn(p, 'mute')) { toggleMute(); return; }
     if (G.paused) { pauseMenuTap(p); return; }
+    if (G.screen === 'title' && G.lvlChip && window.CJLevelSelect) { const c = G.lvlChip; if (p.y > c.y - c.h / 2 - 6 && p.y < c.y + c.h / 2 + 6 && Math.abs(p.x - c.x) < c.w / 2 + 6) { window.CJLevelSelect.cycle(p.x < c.x ? -1 : 1); return; } }
     if (G.screen !== 'play') { if (G.screen === 'title' || G.t - G.endAt > 0.8) startRun(); return; }
     if (hitBtn(p, 'pause')) { togglePause(); return; }
     const run = G.run, b = BTN();
@@ -228,6 +231,7 @@
         case 'air': A.sfx('air'); burst(cs.x, cs.y - 30, 14, ['#5af0ff', '#ffffff'], 220, 0.6); G.airPulse = 1; popup('+1 AIR', '#5af0ff', false, s.air > 1 ? `${s.air} cans` : null, 'air'); break;
         case 'pad': A.sfx('pad'); G.fovKick = 0.8; burst(cs.x, cs.y, 16, ['#ff4fd8', '#ffd0f4', '#fff'], 260, 0.5, 200, true); G.shake = Math.max(G.shake, 6); G.flash = 0.25; G.flashColor = '#ff4fd8'; G.boostT = 0.6; popup('SPEED PAD', '#ff4fd8', true); break;
         case 'lane': A.sfx('lane'); break;
+        case 'updraft': A.sfx('whoosh', 0.6); popup('UPDRAFT', '#ffd8a8', false, '↑'); break;
         case 'near': if (s.phase === 'sky') { A.sfx('whoosh', 1); G.shake = Math.max(G.shake, 5); popup('NEAR MISS', '#fff4e0', false, `×${fmtMult(ev.mult)}`); G.comboPulse = 1; } else { A.sfx('near'); popup('NEAR MISS', '#fff4e0', false, `+${C.NEAR_ROAD_PTS}`); } break;
         case 'ring': A.sfx('ring', s.counts.rings); G.fovKick = Math.max(G.fovKick, 0.7); G.flash = Math.max(G.flash, 0.18); G.flashColor = '#ffd23f'; G.boostT = Math.max(G.boostT, 0.45); G.shake = Math.max(G.shake, 6); G.comboPulse = 1;
           popup(ev.risky ? 'RISKY RING' : 'BOOST RING', '#ffd23f', ev.risky, `×${fmtMult(ev.mult)}`); burst(cs.x, cs.y - 10, 18, ['#ffd23f', '#fff6c0', '#ff9f1a'], 300, 0.5, 0, true); break;
@@ -256,7 +260,7 @@
           burst(cs.x, cs.y - 10, 36, ['#f4f1ee', '#a9b3cc', '#3a2a3f'], 420, 1.1);
           sparks(cs.x, cs.y - 10, 28);
           { const lost = ev.lost ? `  ·  combo lost (${fmtPts(ev.lost)})` : '';
-            const B = { botched: ['BOTCHED LANDING', 'finish the trick before you touch down' + lost], nosedive: ['NOSE-DIVED', 'level out before you land' + lost], wall: ['HIT THE WALL', 'climb above the far rim'] }[ev.what] || ['WIPEOUT', `hit a ${ev.what === 'balloon' ? 'hot air balloon' : ev.what}`];
+            const B = { botched: ['BOTCHED LANDING', 'finish the trick before you touch down' + lost], nosedive: ['NOSE-DIVED', 'level out before you land' + lost], wall: ['HIT THE WALL', 'climb above the far rim'] }[ev.what] || ['WIPEOUT', `hit a ${{ balloon: 'hot air balloon', heli: 'tour helicopter', condor: 'condor' }[ev.what] || ev.what}`];
             G.banner = { text: B[0], sub: B[1], t: G.t, dur: 3, color: '#ff3b5c' }; } break;
         case 'land': A.sfx('land'); G.shake = 14; G.camDip = 1; G.hitStop = 0.06; dustRing(cs.x, cs.y, cs.k || 30); burst(cs.x, cs.y, 24, ['#e3925a', '#ffd9a8', '#fff'], 300, 1); G.landZ = s.z; G.landingRoll = Math.max(10, s.m * 0.6);
           G.banner = { text: ev.combo ? `COMBO +${fmtPts(ev.combo)}` : 'STUCK THE LANDING', sub: `${ev.combo ? `×${fmtMult(ev.mult)} cashed  ·  ` : ''}+${C.LANDING_BONUS} landing${ev.onRoad ? `  ·  +${C.ROAD_BONUS} on the road` : ''}${s.counts.autoFinish ? '  ·  trick auto-finished' : ''}`, t: G.t, dur: 3, color: ev.combo ? '#ffd23f' : '#5af0ff' };
@@ -507,7 +511,7 @@
       const farRim = C.ROAD_LEN + C.CANYON_W, toRim = Math.ceil(farRim - s.z);
       chip(px, py, pw, 44);
       text(toRim > 0 ? `FAR RIM IN ${toRim} m` : `+${Math.floor(s.z - farRim).toLocaleString('en-US')} m PAST THE RIM`, W / 2, py + 15, T.body, toRim > 0 ? '#ffd23f' : '#5af0ff', 'center', true, 800);
-      const band = s.y < 0 ? 'IN THE GORGE' : ({ bird: 'BIRDS', plane: 'PLANES', balloon: 'BALLOONS', satellite: 'SATELLITES' })[S.zoneAt(s, s.y)];
+      const band = s.y < 0 ? 'IN THE GORGE' : ({ bird: 'BIRDS', plane: 'PLANES', balloon: 'BALLOONS', satellite: 'SATELLITES', heli: 'HELICOPTERS', condor: 'CONDORS' })[S.zoneAt(s, s.y)];
       const deg = Math.round((s.gam || 0) * 57.3);
       text(`ALT ${Math.round(s.y)} m  ·  ${deg > 0 ? '▲' : deg < 0 ? '▼' : '■'} ${Math.abs(deg)}°  ·  ${band}`, W / 2, py + 32, T.label, s.y < 0 ? '#ff9fb0' : '#ffd9e6', 'center', false, 700);
       // Combo pot: unbanked until a clean landing.
@@ -633,8 +637,12 @@
   function drawTitle() {
     const M = mg(), narrow = W < 700, size = Math.min(78, (W - 40) / 7.2), ly = M.t + (G.portrait ? H * 0.1 : H * 0.15);
     logo(ly, size);
-    const lvl = (window.CJLevels && window.CJLevels.get(window.CJLevels.DEFAULT)) || null;
-    text(lvl ? `${lvl.name.toUpperCase()}  ·  ${lvl.tagline}` : 'floor it.  send it.  stick it.', W / 2, ly + size * 0.62, T.body + 1, '#c8d8e8', 'center', true, 700);
+    const lvl = window.CJLevel || (window.CJLevels && window.CJLevels.get(window.CJLevels.DEFAULT)) || null, LS = window.CJLevelSelect;
+    if (LS && LS.list.length > 1) { // Free Play level picker: tap ◀ / ▶ (or press 1-9) to switch canyons
+      const n = LS.list.findIndex(l => l.id === lvl.id) + 1, label = `◀   LEVEL ${n} · ${lvl.name.toUpperCase()}   ▶`, cw2 = Math.min(W - 40, 360), y = ly + size * 0.62;
+      G.lvlChip = { x: W / 2, y, w: cw2, h: 30 }; chip(W / 2 - cw2 / 2, y - 15, cw2, 30, 15);
+      text(label, W / 2, y, T.body + 1, '#ffd23f', 'center', false, 800);
+    } else text(lvl ? `${lvl.name.toUpperCase()}  ·  ${lvl.tagline}` : 'floor it.  send it.  stick it.', W / 2, ly + size * 0.62, T.body + 1, '#c8d8e8', 'center', true, 700);
     text('floor it.  send it.  stick it.', W / 2, ly + size * 0.88, T.body + 2, '#fff4e0', 'center', true, 700);
     const steps = [
       ['STRAIGHTAWAY', G.touch ? 'Tap or swipe left / right to change lanes. Dodge everything, grab AIR cans and speed pads.' : '← / → or A / D to change lanes. Dodge everything, grab AIR cans and speed pads.', '#ffd23f'],

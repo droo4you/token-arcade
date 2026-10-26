@@ -64,3 +64,9 @@ Run locally: `npm run dev:cartridges` from the repo root, then open `http://127.
 - Four trick buttons under STABILIZE, left of BOOST: ROLL← / ROLL→ / FLIP↓ (front) / FLIP↑ (back).
 - Rolls impart `ROLL_VX` (10 m/s) lateral impulse; front/back flips nudge `FLIP_GAM` (0.18 rad) nose down/up. Mid-spin `TRICK_DIP` stays 0.12. Combo still treats both rolls as `roll` and both flips as `flip` for variety.
 - Desktop: C/Q left roll, L/E right roll, X/K front flip, V/, back flip; Z/J boost; Space/Shift stabilize.
+
+## Levels
+
+Free Play level select: `index.html?level=grand-canyon` (or ◀ / ▶ on the title chip, or keys 1-2 on the title). Snake River is the default; `arcade.html` always runs the default level, so Passport Play / raids keep one verified sim. Each level is `src/levels/<id>.js`; `src/level-select.js` swaps `window.CJSim` for `CJSim.forLevel(level)` (that level's gap, depth, wall profile and air block). `CJSim.forLevel(snake-river)` is byte-identical to the base sim (tested). Local best is stored per level.
+
+**Level 2: Grand Canyon** (`src/levels/grand-canyon.js`): 1,300 m gap (~4,260 ft), 320 m deep with a stepped Kaibab / Coconino / Redwall / Tonto wall profile, golden-hour light, stepped buttes in the gap, a glass Skywalk-style horseshoe on the launch rim. Air: condors below 40 m (and circling inside thermals), tour helicopters 40-170 m (r 5, sweeping ±12 m across your line), sparse balloons 170-235 m, satellites 242-292 m (ceiling 300). Updraft columns (30% of sky chunks, r ~34 m, up to ~25 m/s rising air) lift the car — altitude only, never airspeed — capped at 26 m per column. A mild crosswind (±4 m/s) drifts you over the middle 30-75% of the gap. Near misses on helicopters and condors count like any sky hazard. Balance: `LEVEL=grand-canyon node tools/human-proxy.cjs`.

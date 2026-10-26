@@ -196,5 +196,47 @@ export function sagebrush(color = '#7d8f6a', seed = 3, k = 1) {
   const g = merge(parts); g.scale(k, k * 1.05, k); return g;
 }
 
-export const SKINS = { saguaro, sagebrush, sandstone, tumbleweed, cone, crow, jet, sat, ring, balloon };
+/* Tour helicopter (EC130-style): rounded cabin with a big glass bubble, tail boom, fenestron fin, skids.
+   Main rotor is a separate instanced mesh (heliRotor) so it can spin. Hit radius 5 covers the rotor disc. Nose to -Z. */
+const HELI_PAL = [['#f4f4f0', '#e0302a'], ['#1c3a6a', '#ffd23f'], ['#ffffff', '#2a8ad8'], ['#2a2a2e', '#ff8c3a']];
+export function heli(hue = 0) {
+  const [body, stripe] = HELI_PAL[hue % HELI_PAL.length], parts = [];
+  parts.push(tint(xf(new THREE.SphereGeometry(1.2, 14, 10), { sx: 1.05, sy: 1.0, sz: 1.55, y: 0.1 }), body, 0.03, 1));
+  parts.push(tint(xf(new THREE.SphereGeometry(1.0, 12, 8, 0, TAU, 0, Math.PI * 0.55), { z: -1.0, y: 0.25, sx: 1.08, sz: 1.2, rx: -1.1 }), '#1a2a38', 0.05, 2)); // glass bubble
+  parts.push(tint(xf(new THREE.BoxGeometry(2.3, 0.22, 2.2), { y: 0.1, z: 0.2 }), stripe));
+  parts.push(tint(xf(new THREE.CylinderGeometry(0.22, 0.38, 4.2, 8), { z: 3.4, y: 0.5, rx: Math.PI / 2 + 0.06 }), body, 0.03, 3)); // tail boom
+  parts.push(tint(xf(new THREE.CylinderGeometry(0.7, 0.7, 0.25, 12), { z: 5.5, y: 0.9, rz: Math.PI / 2 }), stripe)); // fenestron
+  parts.push(tint(xf(new THREE.BoxGeometry(0.12, 1.4, 0.8), { z: 5.6, y: 1.5, rx: 0.3 }), body));
+  parts.push(tint(xf(new THREE.BoxGeometry(1.8, 0.1, 0.4), { z: 4.6, y: 0.5 }), body));
+  parts.push(tint(xf(new THREE.CylinderGeometry(0.18, 0.25, 0.6, 8), { y: 1.35 }), '#3a3a40')); // mast
+  for (const sx of [-1, 1]) {
+    parts.push(tint(xf(new THREE.CylinderGeometry(0.07, 0.07, 3.4, 6), { x: sx * 1.0, y: -1.35, rx: Math.PI / 2 }), '#2a2a2e'));
+    for (const zz of [-0.7, 0.8]) parts.push(tint(xf(new THREE.CylinderGeometry(0.05, 0.05, 0.6, 5), { x: sx * 0.85, y: -1.05, z: zz, rz: sx * 0.35 }), '#2a2a2e'));
+  }
+  parts.push(tint(xf(new THREE.SphereGeometry(0.09, 6, 4), { y: -0.95, z: 0.4 }), '#ff0000')); // anti-collision beacon
+  const g = merge(parts.map(p => p.index ? p.toNonIndexed() : p)); g.computeVertexNormals(); return g;
+}
+/* Main rotor: three blades on a hub, centered at the mast top (the instance is placed at heli + (0, 1.7, 0)). */
+export function heliRotor() {
+  const parts = [tint(new THREE.CylinderGeometry(0.25, 0.25, 0.18, 8), '#2a2a2e')];
+  for (let k = 0; k < 3; k++) parts.push(tint(xf(new THREE.BoxGeometry(4.9, 0.05, 0.32), { x: Math.cos(k / 3 * TAU) * 2.5, z: Math.sin(k / 3 * TAU) * 2.5, ry: -k / 3 * TAU }), '#1c1c20'));
+  return merge(parts.map(p => p.index ? p.toNonIndexed() : p));
+}
+/* California condor, gliding: black body, bald orange-pink head, long fingered wings with white underwing bars (~3 m span). */
+export function condor() {
+  const parts = [
+    tint(xf(new THREE.IcosahedronGeometry(0.34, 1), { sz: 2.2, sy: 0.8 }), '#141214', 0.1, 3),
+    tint(xf(new THREE.IcosahedronGeometry(0.16, 1), { z: -0.8, y: 0.06 }), '#e8806a', 0.1, 4),
+    tint(xf(new THREE.CylinderGeometry(0.1, 0.13, 0.22, 6), { z: -0.62, rx: Math.PI / 2 }), '#2a2224'),
+    tint(xf(new THREE.ConeGeometry(0.3, 0.55, 4), { z: 0.85, rx: Math.PI / 2, sy: 0.22, ry: Math.PI / 4 }), '#161416'),
+  ];
+  for (const sx of [-1, 1]) {
+    parts.push(tint(xf(new THREE.BoxGeometry(1.5, 0.05, 0.62), { x: sx * 0.85, y: 0.08, rz: sx * 0.08 }), '#141214', 0.08, 5));
+    parts.push(tint(xf(new THREE.BoxGeometry(1.2, 0.02, 0.18), { x: sx * 0.8, y: 0.05, z: -0.05 }), '#e8e4dc'));
+    for (let k = 0; k < 5; k++) parts.push(tint(xf(new THREE.BoxGeometry(0.42, 0.03, 0.07), { x: sx * (1.75 + k * 0.015), y: 0.12 + k * 0.012, z: -0.24 + k * 0.12, ry: sx * (0.12 - k * 0.08) }), '#0e0c0e'));
+  }
+  return merge(parts.map(p => p.index ? p.toNonIndexed() : p));
+}
+
+export const SKINS = { saguaro, sagebrush, sandstone, tumbleweed, cone, crow, jet, sat, ring, balloon, heli, condor };
 export { col };

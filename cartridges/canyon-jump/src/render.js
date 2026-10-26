@@ -560,7 +560,7 @@
     }
     for (const o of s.sky) if (!o.hit && o.z > zMin && o.z < zMax) items.push({ z: o.z, f: () => {
       const q = S.skyObjPos(o, s.t), p = cam.p(q.x, q.y, o.z); if (!p) return;
-      if (o.type === 'balloon') balloon(ctx, p.x, p.y, p.k, o.hue, (s.cfg.balloon && s.cfg.balloon.drawR) || 6); else if (o.type === 'bird') bird(ctx, p.x, p.y, p.k, s.t, o.phase); else if (o.type === 'plane') plane(ctx, p.x, p.y, p.k, Math.sin(o.phase * 3) > 0 ? 1 : -1, cam.q); else satellite(ctx, p.x, p.y, p.k, s.t, o.phase);
+      if (o.type === 'balloon') balloon(ctx, p.x, p.y, p.k, o.hue, (s.cfg.balloon && s.cfg.balloon.drawR) || 6); else if (o.type === 'bird' || o.type === 'condor') bird(ctx, p.x, p.y, p.k, s.t, o.phase); else if (o.type === 'plane' || o.type === 'heli') plane(ctx, p.x, p.y, p.k, Math.sin(o.phase * 3) > 0 ? 1 : -1, cam.q); else satellite(ctx, p.x, p.y, p.k, s.t, o.phase);
     } });
     for (const pk of s.skyPickups) if (!pk.taken && pk.z > zMin && pk.z < zMax) items.push({ z: pk.z, f: () => {
       const p = cam.p(pk.x, pk.y, pk.z); if (!p) return; pk.type === 'air' ? airCan(ctx, p.x, p.y + p.k, p.k, t) : orb(ctx, p.x, p.y + p.k, p.k, t);

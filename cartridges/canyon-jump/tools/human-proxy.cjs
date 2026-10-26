@@ -1,7 +1,9 @@
 /* Realistic human proxy for balance work (not shipped). Wraps the reference pilot with mobile-ish sloppiness:
    late lane changes, missed pads, boosts tapped with human gaps (chains only sometimes), few rings, no hazard-hugging.
    Deterministic per seed. Usage: node tools/human-proxy.cjs [path/to/sim.js]   env N=200 */
-const S = require(process.argv[2] || require('path').join(__dirname, '../src/sim.js')); const C = S.C;
+const S0 = require(process.argv[2] || require('path').join(__dirname, '../src/sim.js'));
+// env LEVEL=grand-canyon flies that level's sim (geometry + air); default is the base (Snake River) sim.
+const S = process.env.LEVEL ? S0.forLevel(require(require('path').join(__dirname, '../src/levels.js')).get(process.env.LEVEL)) : S0; const C = S.C;
 const N = +process.env.N || 200;
 function human(seed, skill) {
   const r = S.rng((seed * 2654435761) ^ 0xC0FFEE);
@@ -41,6 +43,11 @@ function stats(skill) {
     near: +(L.reduce((a, x) => a + x.r.counts.nearMiss, 0) / L.length).toFixed(2), air: +(L.reduce((a, x) => a + x.r.counts.air, 0) / L.length).toFixed(1),
     skyAir: +(L.reduce((a, x) => a + x.skyAir, 0) / L.length).toFixed(1), rings: +(L.reduce((a, x) => a + x.r.counts.rings, 0) / L.length).toFixed(1), total50: q(L.map(x => x.r.total), .5),
     hitsPerRun: +(L.filter(x => x.r.reason === 'air').length / L.length).toFixed(3), alt: { p50: q(L.map(x => x.r.maxAlt), .5), p90: q(L.map(x => x.r.maxAlt), .9), max: Math.max(...L.map(x => x.r.maxAlt)) },
+    // Distance-is-king checks on Mach runs: median distance share of the total, and how often tricks out-score distance.
+    machDistShare: (M => +q(M.map(x => x.r.distance / x.r.total), .5).toFixed(2))(L.filter(x => x.r.mach05)),
+    machTricksBeatDist: (M => +(M.filter(x => x.r.tricks > x.r.distance).length / Math.max(1, M.length)).toFixed(3))(L.filter(x => x.r.mach05)),
+    machLargestIsDist: (M => +(M.filter(x => x.r.distance >= Math.max(x.r.tricks, x.r.pickups, x.r.landing, x.r.mach)).length / Math.max(1, M.length)).toFixed(3))(L.filter(x => x.r.mach05)),
+    crash: +(L.filter(x => x.r.reason !== 'landed').length / L.length).toFixed(2), drafts: +(L.reduce((a, x) => a + (x.r.counts.drafts || 0), 0) / L.length).toFixed(2),
     hitBy: L.reduce((a, x) => { if (x.hitBy) a[x.hitBy] = (a[x.hitBy] || 0) + 1; return a; }, {}) };
 }
 console.log(JSON.stringify([stats(0.5), stats(1)], null, 0));

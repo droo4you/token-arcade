@@ -139,6 +139,52 @@ function hoodoo(level, h, rad, seed, x, y0, z) {
   return g;
 }
 
+/* Grand Canyon buttes / temples: wide stepped tiers (cliff, bench, cliff...) rising from the gap floor, banded in the
+   level's strata. One merged mesh; kept at |x| >= 95 m so they never sit on the flight line (sky is +-36 m). */
+function buttes(level, S, group, seed) {
+  const n = level.canyon.buttes | 0; if (!n) return;
+  const C = S.C, D = C.CANYON_DEPTH, r = rng(seed * 31 + 7), strata = level.canyon.strata, all = [];
+  for (let i = 0; i < n; i++) {
+    const parts = [];
+    const side = i % 2 ? 1 : -1, x = side * (95 + r() * 620), z = C.ROAD_LEN + 120 + r() * (C.CANYON_W - 240);
+    const H = D * (0.45 + r() * 0.5), tiers = 3 + Math.floor(r() * 3); let y = 0, rad = 40 + r() * 70;
+    for (let k = 0; k < tiers; k++) {
+      const hh = H / tiers * (k === tiers - 1 ? 0.7 : 1), seg = 7 + (k % 3);
+      const cliff = new THREE.CylinderGeometry(rad * 0.94, rad, hh * 0.75, seg, 2);
+      const ps = cliff.attributes.position; for (let j = 0; j < ps.count; j++) { const a = Math.atan2(ps.getZ(j), ps.getX(j)), f = 0.82 + 0.36 * noise2(a * 1.7 + i, k * 3.1); ps.setX(j, ps.getX(j) * f); ps.setZ(j, ps.getZ(j) * f); }
+      parts.push(tint(xf(cliff, { y: y + hh * 0.375 }), strata[(k * 2 + i) % strata.length], 0.12, seed + i * 7 + k));
+      const talus = new THREE.CylinderGeometry(rad * 0.7, rad * 0.94, hh * 0.25, seg, 1);
+      parts.push(tint(xf(talus, { y: y + hh * 0.75 + hh * 0.125 }), strata[(k * 2 + i + 1) % strata.length], 0.12, seed + i * 7 + k + 50));
+      y += hh; rad *= 0.62 + r() * 0.12;
+    }
+    const g = merge(parts); g.computeVertexNormals(); xf(g, { x, y: -D, z: -z, ry: r() * TAU }); all.push(g);
+  }
+  const m = new THREE.Mesh(merge(all), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }));
+  m.receiveShadow = true; m.userData.tag = 'canyonProps'; group.add(m);
+}
+/* Skywalk-style glass horseshoe overlook cantilevered off the launch rim, off to one side of the road. */
+function skywalk(level, S, group) {
+  const sw = level.canyon.skywalk; if (!sw) return;
+  const C = S.C, side = sw.side || -1, x0 = side * 70, R = 11, w = 3;
+  const g = new THREE.Group(); g.position.set(x0, 0.2, -C.ROAD_LEN);
+  const steel = new THREE.MeshStandardMaterial({ color: '#c8ccd2', metalness: 0.8, roughness: 0.3, envMapIntensity: 1.4 });
+  const glass = new THREE.MeshPhysicalMaterial({ color: '#9fe8ff', metalness: 0, roughness: 0.05, transmission: 0.0, transparent: true, opacity: 0.32, envMapIntensity: 2, side: THREE.DoubleSide, depthWrite: false });
+  // Deck: two straight arms from the rim plus a half-ring out over the gap (center of the arc at z = 12 m past the rim).
+  const arc = new THREE.RingGeometry(R - w / 2, R + w / 2, 32, 1, 0, Math.PI); arc.rotateX(-Math.PI / 2); arc.translate(0, 0, -12);
+  const deck = new THREE.Mesh(arc, glass); g.add(deck);
+  for (const sx of [-1, 1]) { const arm = new THREE.Mesh(new THREE.BoxGeometry(w, 0.15, 16), glass); arm.position.set(sx * R, 0, -4); g.add(arm);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.3, 16), glass); rail.position.set(sx * (R + w / 2), 0.65, -4); g.add(rail);
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 16), steel); beam.position.set(sx * R, -0.4, -4); g.add(beam); }
+  const outer = new THREE.CylinderGeometry(R + w / 2, R + w / 2, 1.3, 32, 1, true, -Math.PI / 2, Math.PI); outer.translate(0, 0.65, -12);
+  const inner = new THREE.CylinderGeometry(R - w / 2, R - w / 2, 1.3, 32, 1, true, -Math.PI / 2, Math.PI); inner.translate(0, 0.65, -12);
+  g.add(new THREE.Mesh(outer, glass), new THREE.Mesh(inner, glass));
+  const box = new THREE.TorusGeometry(R, 0.35, 6, 32, Math.PI); box.rotateX(-Math.PI / 2); box.translate(0, -0.4, -12); g.add(new THREE.Mesh(box, steel));
+  // A visitor center block back on the rim.
+  const vc = new THREE.Mesh(new THREE.BoxGeometry(30, 7, 16), new THREE.MeshStandardMaterial({ color: '#b98a64', roughness: 0.85 })); vc.position.set(0, 3.5, 22); vc.castShadow = true; g.add(vc);
+  g.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
+  group.add(g);
+}
+
 /* The kicker: chevron deck on a steel truss, edge rails, an LED lip and pylons with flags. */
 function rampTexture() {
   return canvasTex(256, 512, (g, w, h) => {
@@ -252,6 +298,7 @@ export function buildCanyon(level, S, terrainHeight) {
   const near = new THREE.Mesh(wall(level, S, terrainHeight, C.ROAD_LEN, 1, seed), mat), far = new THREE.Mesh(wall(level, S, terrainHeight, C.ROAD_LEN + C.CANYON_W, -1, seed + 17), mat);
   near.receiveShadow = far.receiveShadow = true; group.add(near, far);
   basaltColumns(level, S, group, seed);
+  buttes(level, S, group, seed); skywalk(level, S, group);
   const fr = floorAndRiver(level, S, group, seed);
   const ramp = buildRamp(C, S); group.add(ramp.group);
   const land = landingZone(level, S); group.add(land.group);
