@@ -126,18 +126,25 @@ export class ArcadeStore {
         // their reviewed version until an operator drains runs/raids and updates
         // both the versioned entry and adapter through the normal review flow.
         if (prior?.manifest.id === "coindle" && prior.manifest.version === "1.0.0") continue;
-        // Do not change live Skip rules or its artifact URL during startup.
-        // An operator upgrades the cabinet after draining existing runs/raids.
-        if (prior?.manifest.id === "skip-to-10k" && prior.manifest.version === "1.0.0") {
-          if (prior.review?.approvedBy === "platform:legacy-import" && (prior.legacyImportRevision ?? 0) < 3) {
-            this.saveGame({ ...prior, legacyImportRevision: 3, manifest: { ...prior.manifest,
-              supportedModes: ["free", "ranked", "raid"], supportedObjectives: ["distance"],
-              verifier: { kind: "replay", description: "Passport Play uses the standard loadout and issued seed; the server replays the throw and every 120 Hz input." } } });
+      // Reviewed Passport rollout for untouched platform imports. Preserve the
+      // hosted origin and operator metadata, and never invalidate issued play.
+      if (prior && ["skip-to-10k", "two-places"].includes(prior.manifest.id) && prior.manifest.version === "1.0.0") {
+        const entry = prior.manifest.entry;
+        if (prior.review?.approvedBy === "platform:legacy-import" && !prior.creatorId &&
+            prior.manifest.adapterId === prior.manifest.id && entry?.kind === "iframe" &&
+            new URL(entry.url).origin === entry.origin && new URL(entry.url).pathname === `/${prior.manifest.id}/v/1.0.0/`) {
+          const liveRun = (this.db.prepare("SELECT json FROM run_sessions WHERE game_id = ? AND consumed_at IS NULL").all(prior.manifest.id) as JsonRow[])
+            .some(row => { const expiry = Date.parse((JSON.parse(row.json) as GameRunConfig).expiresAt ?? ""); return !Number.isFinite(expiry) || expiry > Date.now(); });
+          const liveRaid = this.listRaids().some(raid => raid.gameId === prior.manifest.id && raid.status !== "settled" && raid.status !== "cancelled");
+          if (!liveRun && !liveRaid) {
+            this.saveGame({ ...prior, manifest: { ...prior.manifest, ...game.manifest,
+              entry: { kind: "iframe", origin: entry.origin, url: new URL(`/${game.manifest.id}/v/${game.manifest.version}/`, entry.origin).href } },
+              legacyImportRevision: game.legacyImportRevision });
           }
-          continue;
         }
-      // Retain published v1 rules and history until an explicit reviewed version upgrade.
-      if (prior?.manifest.id === "two-places" && prior.manifest.version === "1.0.0") continue;
+        // A later restart retries blocked migrations. Edited cabinets stay put.
+        continue;
+      }
       // One narrow correction for v1 imports created during integration. Admin
       // edits clear this review marker; future starts never overwrite them.
       if (prior && (game.legacyImportRevision ?? 0) >= 2 && prior.legacyImportRevision === undefined &&

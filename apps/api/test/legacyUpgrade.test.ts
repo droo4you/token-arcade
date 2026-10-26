@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ArcadeStore } from "../src/store.ts";
 
-test("existing Skip to 10K legacy import gains Passport Play on restart, keeping its stored entry origin", () => {
+test("existing Skip to 10K legacy import gains the four Passport boards on restart, keeping its stored entry origin", () => {
   const dir = mkdtempSync(join(tmpdir(), "ta-legacy-"));
   const path = join(dir, "a.sqlite");
   try {
@@ -20,7 +20,9 @@ test("existing Skip to 10K legacy import gains Passport Play on restart, keeping
     assert.deepEqual(upgraded.manifest.supportedModes, ["free", "ranked", "raid"]);
     assert.equal(upgraded.manifest.verifier?.kind, "replay");
     assert.equal(upgraded.manifest.entry?.origin, "https://cart.example");
-    assert.equal(upgraded.legacyImportRevision, 3);
+    assert.equal(upgraded.manifest.version, "1.1.0");
+    assert.equal(upgraded.manifest.adapterId, "skip-to-10k-v2");
+    assert.equal(upgraded.manifest.entry?.url, "https://cart.example/skip-to-10k/v/1.1.0/");
     // Coindle gains Rapid Fire Passport Play + Raid through the same reviewed upgrade (revision 3).
     assert.deepEqual(store.getGame("coindle")!.manifest.supportedModes, ["free", "ranked", "raid"]);
     assert.deepEqual(store.getGame("coindle")!.manifest.supportedObjectives, ["coins_solved", "guesses"]);

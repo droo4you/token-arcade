@@ -85,8 +85,24 @@
   body.landscape .tp-pill.p2 { left: calc(50% + 4 * var(--u)); bottom: calc(env(safe-area-inset-bottom, 0px) + 2 * var(--u)); }
   body.landscape .tp-speaker { display: none; }
 </style>
+<style>
+#free-menu[hidden], #free-levels[hidden], #free-menu-open[hidden] { display:none; }
+#free-menu { position:fixed; inset:0; z-index:20; background:#24152bf2; color:#fff4e4; display:grid; place-content:center; gap:12px; padding:20px; overflow:auto; font:700 16px monospace; text-align:center; }
+#free-menu button, #free-menu-open { padding:12px; border:2px solid #24152b; border-radius:8px; background:#c8e971; color:#24152b; font:inherit; cursor:pointer; }
+#free-menu button:disabled { background:#77677c; color:#ddd; cursor:default; }
+#free-levels { display:grid; grid-template-columns:repeat(5,minmax(42px,1fr)); gap:8px; max-width:440px; }
+#free-menu-open { position:fixed; right:8px; top:8px; z-index:10; font:700 14px monospace; }
+</style>
 </head>
 <body>
+<button id="free-menu-open" hidden>MENU</button>
+<section id="free-menu" aria-label="Free Play menu" hidden>
+<h1>TWO PLACES</h1>
+<button id="free-continue">CONTINUE</button>
+<button id="free-choose">CHOOSE LEVEL</button>
+<p id="free-menu-help">BEAT LEVELS TO UNLOCK MORE.</p>
+<div id="free-levels" aria-label="Unlocked levels" hidden></div>
+</section>
 <button id="finish-raid" hidden style="position:fixed;top:8px;right:8px;z-index:10;padding:10px">Finish raid run</button>
 <div id="shell">
   <div id="bezel">
