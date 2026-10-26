@@ -36,7 +36,12 @@ test("Skrumpey version URLs serve matching frozen rules and reject unsupported g
     assert.ok(!latestSim.includes("frenzyBoost"), "the previous release keeps its original physics");
     assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.3.0/`)).status, 200);
     assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.3.0/vendor/three.module.js`)).status, 200);
-    assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.4.0/`)).status, 404);
+    const raidSim = await (await fetch(`${origin}/skrumpey-slide/v/1.4.0/sim.js`)).text();
+    assert.equal(raidSim.replaceAll("1.4.0", "1.3.0").replaceAll("\r\n", "\n"), frenzySim.replaceAll("\r\n", "\n"), "raid policy does not change physics");
+    for (const asset of ["", "touch-input.js", "vendor/three.module.js", "vendor/GLTFLoader.js", "vendor/draco/draco_decoder.wasm"]) {
+      assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.4.0/${asset}`)).status, 200);
+    }
+    assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.5.0/`)).status, 404);
     assert.equal((await fetch(`${origin}/skip-to-10k/v/1.3.0/`)).status, 404);
     assert.equal((await fetch(`${origin}/skrumpey-slide/v/1.0.0/build-arcade.mjs`)).status, 404);
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
