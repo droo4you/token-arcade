@@ -12,7 +12,7 @@
   const R3 = () => { const r = glCanvas && window.CJRender3D; return r && r.ready ? r : null; };
   const waiting3D = () => glCanvas && !window.CJRender3D?.failed && !R3() && G.t < 4;
   let W = 960, H = 540, dpr = 1;
-  const RP = window.CJReplay || null;
+  const RP = window.CJReplay || null, RES = window.CJResult;
   const PLAYBACK = (() => { if (!RP || TA?.embedded) return null; const m = /replay=([^&]+)/.exec(location.hash + '&' + location.search); if (!m) return null; try { return RP.decode(decodeURIComponent(m[1])); } catch (e) { console.warn('[canyon-jump] bad replay', e); return null; } })();
   if (RP) { const L0 = window.CJLevel || window.CJLevels?.get(window.CJLevels.DEFAULT); fetch('src/sim.js').then(r => r.text()).then(t => { G.simHash = RP.hash(t + JSON.stringify(L0)); if (G.rec) G.rec.data = (f => res => Object.assign(f(res), { simHash: G.simHash }))(G.rec.data); }).catch(() => {}); }
   const LVL_ID = window.CJLevel && window.CJLevels && window.CJLevel.id !== window.CJLevels.DEFAULT ? '.' + window.CJLevel.id : ''; // per-level local best (Snake River keeps the old key)
@@ -204,17 +204,15 @@
     G.cam = { x: 0, y: 2.6, z: -8, f: 600, hy: HY(0.44), roll: 0 }; G.roll = 0; G.hitStop = 0; G.camDip = 0; G.fovKick = 0; G.machT = 0; G.newBestShown = false; G.landingRoll = 0;
   }
   function finish() {
-    const r = S.score(G.run); G.result = r; G.endAt = G.t; G.screen = 'end';
+    const r = RES.final(G, S, G.run); G.result = r; G.endAt = G.t; G.screen = 'end'; // sim score of record (roll-out never counts)
     if (G.rec) {
-      const q = G.simScore || r; G.lastReplay = RP.encode(G.rec.data({ reason: q.reason, total: q.total, distance: q.distance, shownTotal: r.total, ticks: G.run.tick, playback: !!G.play }));
+      G.lastReplay = RP.encode(G.rec.data({ reason: r.reason, total: r.total, distance: r.distance, ticks: G.run.tick, playback: !!G.play }));
       try { const k = 'canyon-jump.replays', a = JSON.parse(localStorage.getItem(k) || '[]'); a.unshift(G.lastReplay); localStorage.setItem(k, JSON.stringify(a.slice(0, 5))); } catch (e) { /* ignore */ }
     }
     if (r.total > best) { best = r.total; r.newBest = true; try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) { /* ignore */ } }
     if (G.arcadeRunOpen && TA?.active) {
       G.arcadeRunOpen = false;
-      TA.complete({ result: r.reason === 'landed' ? 'completed' : 'failed', primaryMetric: r.total,
-        secondaryMetrics: { distance: r.distance, pastRim: r.pastRim, pickups: r.pickups, tricks: r.tricks, trickCount: r.counts.tricks, rings: r.counts.rings, bestMult: r.counts.bestMult,
-          landing: r.landing, mach05: r.mach05, topKmh: r.topKmh, launchSpeed: r.launchV, landed: r.reason === 'landed' ? 1 : 0, elapsedMs: Math.round(G.run.t * 1000) } });
+      TA.complete(RES.submission(r, G.run));
     }
   }
   function copyReplay() {
@@ -307,11 +305,11 @@
         if (G.play) inp = Object.assign({}, G.play[G.playIdx++] || {}); else if (RP) RP.quant(inp);
         if (G.rec) G.rec.push(inp);
         S.step(s, inp);
-        if (s.over && G.rec && !G.simScore) G.simScore = S.score(s); // the sim's own result, before the cosmetic landing roll-out moves s.z
+        RES.capture(G, S, s); // freeze the sim's score on the ending tick, before the visual roll-out moves the car
       } }
       handleEvents(s);
     }
-    if (s.over && s.reason === 'landed') { G.landingRoll = Math.max(0, G.landingRoll - 18 * dt); s.z += G.landingRoll * dt; s.x *= 0.98; }
+    if (s.over && s.reason === 'landed') RES.rollOut(G, s, dt); // visual only
     // camera
     const k = 1 - Math.exp(-dt * 8), kz = 1 - Math.exp(-dt * 14);
     const target = { x: s.x * 0.65, y: 2.7, z: s.z - 7.5, f: G.fb / (1 + Math.max(0, (s.phase === 'road' ? s.v : s.m) - 40) / 260) * (1 - 0.12 * G.fovKick) };
@@ -492,7 +490,7 @@
     else { ctx.beginPath(); ctx.arc(cx + 2, cy, 6, -0.9, 0.9); ctx.stroke(); ctx.beginPath(); ctx.arc(cx + 2, cy, 11, -0.9, 0.9); ctx.stroke(); }
   }
   function drawHud(s) {
-    const r = S.score(s), M = mg(), narrow = W < 760, hb = hudBtns();
+    const r = G.screen === 'title' ? S.score(s) : RES.final(G, S, s), M = mg(), narrow = W < 760, hb = hudBtns();
     // score (left)
     const sw = narrow ? 128 : 170; chip(M.l, M.t, sw, 52);
     text('SCORE', M.l + 12, M.t + 15, T.label, '#ffb3c6', 'left', false, 800);
