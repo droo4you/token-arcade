@@ -122,13 +122,9 @@ export class ArcadeStore {
         }
         continue;
       }
-        // Coindle v2 changes ranking and raid selection. Existing cabinets keep
-        // their reviewed version until an operator drains runs/raids and updates
-        // both the versioned entry and adapter through the normal review flow.
-        if (prior?.manifest.id === "coindle" && prior.manifest.version === "1.0.0") continue;
       // Reviewed Passport rollout for untouched platform imports. Preserve the
       // hosted origin and operator metadata, and never invalidate issued play.
-      if (prior && ["skip-to-10k", "two-places"].includes(prior.manifest.id) && prior.manifest.version === "1.0.0") {
+      if (prior && ["skip-to-10k", "two-places", "coindle"].includes(prior.manifest.id) && prior.manifest.version === "1.0.0") {
         const entry = prior.manifest.entry;
         if (prior.review?.approvedBy === "platform:legacy-import" && !prior.creatorId &&
             prior.manifest.adapterId === prior.manifest.id && entry?.kind === "iframe" &&

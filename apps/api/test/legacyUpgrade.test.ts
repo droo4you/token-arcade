@@ -45,7 +45,7 @@ test("untouched emonad-cabinet legacy import is renamed to Mood Swings, id uncha
   store.close();
 });
 
-test("Coindle keeps an existing v1 cabinet and its hosted entry until a reviewed version upgrade", () => {
+test("Coindle upgrades an untouched v1 import while preserving its hosted origin and metadata", () => {
   const dir = mkdtempSync(join(tmpdir(), "coindle-version-"));
   const file = join(dir, "a.sqlite");
   let store = new ArcadeStore(file, false);
@@ -56,7 +56,16 @@ test("Coindle keeps an existing v1 cabinet and its hosted entry until a reviewed
     entry: { kind: "iframe" as const, origin: "https://cart.example", url: "https://cart.example/coindle/v/1.0.0/" } } };
   store.saveGame(legacy);
   store.close(); store = new ArcadeStore(file, false);
-  assert.deepEqual(store.getGame("coindle"), legacy);
+  const upgraded = store.getGame("coindle")!;
+  assert.equal(upgraded.manifest.version, "1.1.0");
+  assert.equal(upgraded.manifest.adapterId, "coindle-v2");
+  assert.equal(upgraded.manifest.skeletonId, "coindle-v2");
+  assert.equal(upgraded.manifest.entry?.url, "https://cart.example/coindle/v/1.1.0/");
+  assert.equal(upgraded.manifest.entry?.origin, "https://cart.example");
+  assert.equal(upgraded.legacyImportRevision, 4);
+  assert.deepEqual(upgraded.review, legacy.review);
+  assert.deepEqual(upgraded.economy, legacy.economy);
+  assert.equal(upgraded.publishedAt, legacy.publishedAt);
   store.close();
   rmSync(file); rmdirSync(dir);
 });
