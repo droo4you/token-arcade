@@ -253,6 +253,11 @@ function raidBlockers(raid: Raid, store: ArcadeStore, adapters: AdapterRegistry)
     }
     if (["buy-bounce", "mood-swings"].includes(game.manifest.adapterId) && (raid.rules?.viewportWidth !== 390 || raid.rules?.viewportHeight !== 844)) blockers.push("eMONAD raids require the reviewed 390×844 viewport rules");
     if (game.manifest.adapterId === "mood-swings" && (raid.maxAttempts !== 3 || raid.objective !== "score")) blockers.push("Mood Swings raids require best of three attempts, ranked by peak Mood");
+    if (game.manifest.adapterId === "skrumpey-slide" && (game.manifest.version === "1.4.0" || raid.gameVersion === "1.4.0")) {
+      if (raid.gameVersion !== "1.4.0" || game.manifest.version !== "1.4.0" || raid.maxAttempts !== 3 || raid.objective !== "score" || Object.keys(raid.rules ?? {}).length) {
+        blockers.push("Skrumpey 1.4.0 raids require the pinned version, one shared seed and best of three score attempts, with rescued Skrumpeys breaking ties");
+      }
+    }
     if (game.manifest.adapterId === "skip-to-10k-v2" && (raid.maxAttempts !== 3 || raid.objective !== "score" || raid.rules?.format !== skipRules.FORMAT || raid.rules?.board !== "triathlon")) blockers.push("Skip raids require three runs: Zero, Mid and Max, scored by their total");
     const adapter = adapters.get(game.manifest.adapterId);
     if (!adapter?.verifier) blockers.push("Game-specific score verifier is not registered");
@@ -316,6 +321,10 @@ interface LeaderboardEntry {
 }
 
 function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid", raidId?: string, objective?: GameObjective, gameVersion?: string, rules?: GameRules): LeaderboardEntry[] {
+  if (gameId === "skrumpey-slide" && raidId) {
+    const raid = store.getRaid(raidId);
+    gameVersion ??= raid?.gameVersion ?? raid?.funding?.gameVersion;
+  }
   const skipV2 = rules?.format === skipRules.FORMAT;
   let results = store.listAcceptedResults(gameId, mode, raidId).filter((item) =>
     (objective === undefined || item.result.objective === objective) &&
@@ -325,6 +334,10 @@ function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid"
   const best = new Map<string, AcceptedResult>();
   const twoPlaces = store.getGame(gameId)?.manifest.adapterId === "two-places";
   const compare = (a: AcceptedResult, b: AcceptedResult) => {
+    if (gameId === "skrumpey-slide" && a.result.gameVersion === "1.4.0" && b.result.gameVersion === "1.4.0") {
+      return b.result.primaryMetric - a.result.primaryMetric || (b.result.secondaryMetrics?.rescued ?? 0) - (a.result.secondaryMetrics?.rescued ?? 0)
+        || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
+    }
     if (a.result.gameId === "emonad-cabinet" && a.result.gameVersion === "2.0.0" && b.result.gameVersion === "2.0.0") {
       return b.result.primaryMetric - a.result.primaryMetric || (b.result.secondaryMetrics?.goodVibes ?? 0) - (a.result.secondaryMetrics?.goodVibes ?? 0)
         || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
@@ -373,7 +386,7 @@ function updatePassport(store: ArcadeStore, passport: Passport, result: GameRunR
   const wasFirstGame = !store.hasAcceptedGame(passport.playerId, result.gameId);
   const wasFirstRaid = raid ? !store.hasAcceptedRaid(passport.playerId, raid.id) : false;
   const bestScores = { ...passport.bestScores };
-  const key = result.rules?.format === twoRules.FORMAT
+  const key = result.gameId === "skrumpey-slide" && result.gameVersion === "1.4.0" ? `${result.gameId}@${result.gameVersion}:${result.objective}` : result.rules?.format === twoRules.FORMAT
     ? `${result.gameId}@${result.gameVersion}:${result.objective}${result.mode === "ranked" ? `_level_${Number(result.rules.level) + 1}` : "_raid"}` : result.rules?.format === skipRules.FORMAT ? `${result.gameId}@${result.gameVersion}:${result.objective}_${result.rules.board}` : result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? `${result.gameId}@${result.gameVersion}:${result.objective}` : `${result.gameId}:${result.objective}`;
   const prior = bestScores[key];
   const lowerIsBetter = result.objective === "completion_time" || result.objective === "guesses";
@@ -481,6 +494,10 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   }
   /** Community Raid total: every verified run in the raid counts, not just each player's best. */
   const raidTotal = (raid: Raid) => {
+    if (raid.gameId === "skrumpey-slide" && raid.gameVersion === "1.4.0") {
+      const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id).filter(item => item.result.gameVersion === "1.4.0");
+      return { skrumpeyGoal: { rescued: runs.reduce((sum, item) => sum + (item.result.secondaryMetrics?.rescued ?? 0), 0), runs: runs.length, participants: new Set(runs.map(item => item.playerId)).size } };
+    }
     if (raid.gameId === "emonad-cabinet" && raid.gameVersion === "2.0.0") {
       const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id).filter(item => item.result.gameVersion === "2.0.0");
       return { moodGoal: { goodVibes: runs.reduce((sum, item) => sum + (item.result.secondaryMetrics?.goodVibes ?? 0), 0), runs: runs.length, participants: new Set(runs.map(item => item.playerId)).size } };
@@ -1077,6 +1094,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const body = await readJson(request);
           const raid = validateRaidInput(body);
           if (store.getGame(raid.gameId)?.manifest.adapterId === "mood-swings") raid.gameVersion = "2.0.0";
+          if (store.getGame(raid.gameId)?.manifest.adapterId === "skrumpey-slide") raid.gameVersion = store.getGame(raid.gameId)!.manifest.version;
           const adapterId = store.getGame(raid.gameId)?.manifest.adapterId ?? "";
           const defaults = adapterId === "skip-to-10k-v2" ? SKIP_RAID_RULES : adapterId === "coindle-v2" ? RAPID_RAID_RULES : adapters.get(adapterId)?.rankedRules;
           if (defaults || raid.rules) raid.rules = normalizeRunRules({ ...defaults, ...raid.rules });

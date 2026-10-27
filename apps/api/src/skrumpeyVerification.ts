@@ -10,15 +10,17 @@ import { createSeededReplayVerifier } from "./seededReplay.ts";
  *  - 1.0.0: original single 230 m lane sprint (frozen copy in ./legacy).
  *  - 1.1.0: three-stage lane sprint with rising speed/density and new patterns.
  *  - 1.2.0: two-stage sprints with guaranteed hill recovery.
+ *  - 1.4.0: same physics as 1.3.0; rescued tie-breaks and best-of-three raid policy.
  *  - 1.3.0: a bounded speed kick when DN Frenzy activates, identical in every mode.
  */
 const SIM_SOURCES: Record<string, URL> = {
+  "1.4.0": new URL("../../../cartridges/skrumpey-slide/releases/1.4.0/sim.js", import.meta.url),
   "1.3.0": new URL("../../../cartridges/skrumpey-slide/releases/1.3.0/sim.js", import.meta.url),
   "1.2.0": new URL("../../../cartridges/skrumpey-slide/releases/1.2.0/sim.js", import.meta.url),
   "1.0.0": new URL("./legacy/skrumpey-sim-1.0.0.js", import.meta.url),
   "1.1.0": new URL("../../../cartridges/skrumpey-slide/releases/1.1.0/sim.js", import.meta.url),
 };
-export const SKRUMPEY_CURRENT_VERSION = "1.3.0";
+export const SKRUMPEY_CURRENT_VERSION = "1.4.0";
 export const SKRUMPEY_VERSIONS = Object.keys(SIM_SOURCES);
 const scripts = new Map<string, Script>();
 function simScript(version: string): Script {
@@ -52,7 +54,7 @@ const INPUT_RE = /^[0-?]+$/;
 
 function versionVerifier(gameId: string, version: string): GameVerifier {
   return createSeededReplayVerifier<string>(gameId, {
-    label: "Skrumpey Slide", gameVersion: version, objectives: ["score", "total_score"],
+    label: "Skrumpey Slide", gameVersion: version, objectives: version === "1.4.0" ? ["score"] : ["score", "total_score"],
     tickMs: 1_000 / 60, maxTicks: SKRUMPEY_MAX_TICKS, deriveSeed: skrumpeySeed,
     checkedSecondary: ["distance", "bestCombo", "perfects", "collectibles", "kills", "hits", "falls", "rescued", "trainBest", "ticks"],
     decodeProof(proof) {

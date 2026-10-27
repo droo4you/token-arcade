@@ -1,10 +1,18 @@
 # Skrumpey Slide v2.1 (v2 backup in v2/, v1 in v1/) (Tiny Wings / Dune! style)
 
+## Arcade rules 1.4.0 — rescue standings and raids
+
+Passport Play ranks one board by score, then most Skrumpeys rescued, then acceptance time and run ID. Community Raids pin 1.4.0, share one seed and allow three issued attempts per player, including abandoned attempts. Each player's best run counts. Every accepted run contributes its rescued Skrumpeys to a separate display-only community goal. The goal does not select a winner or alter a payout.
+
+The frozen 1.4.0 simulation is identical to 1.3.0 except for its version stamp. The new version isolates the changed ranking policy; all older releases and their standings keep their rules. Browser/account saves continue to use the existing casual key. The local publishing helper now targets 1.4.0 and includes the player-facing mode guide. Existing cabinets require an explicit reviewed manifest update after active sessions and raids drain; this change does not silently upgrade them.
+
+See `docs/SKRUMPEY_RAIDS_REVIEW.md` for automated coverage and queued hands-on review.
+
 ## Arcade rules 1.3.0 — DN Frenzy recovery
 
 At 45 meter points (+1 per ordinary DN nut, +3 per rare nut), DN Frenzy adds a one-time +4 m/s kick along the current movement direction, capped at the existing 80 m/s speed limit. It keeps the five-second nut rain and magnet. The kick runs in the shared simulation in Free Play, Passport Play and raids; avatars do not affect it. It adds no slope speed pads or purchasable boosts.
 
-Rules 1.3.0 has a new version URL and fresh boards. The server retains frozen 1.0.0, 1.1.0 and 1.2.0 simulations and assets for their existing runs. Publish the reviewed manifest with version `1.3.0` and entry `/skrumpey-slide/v/1.3.0/` after draining active sessions/raids; stored operator-managed cabinets are not silently changed. The local publishing helper targets 1.3.0.
+Rules 1.3.0 has a new version URL and fresh boards. The server retains frozen 1.0.0, 1.1.0 and 1.2.0 simulations and assets for their existing runs. Publish the reviewed manifest with version `1.3.0` and entry `/skrumpey-slide/v/1.3.0/` after draining active sessions/raids; stored operator-managed cabinets are not silently changed. The 1.3.0 release remains available at its frozen URL.
 
 The +4 m/s amount is an initial tuning choice. Human feel testing is queued separately; it does not block work on the next sprint item.
 
