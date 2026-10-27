@@ -73,6 +73,8 @@ test("Two Places HTTP boards separate all levels, apply time/apples order, and r
     return c;
   };
   try {
+    const saved = (await call("/api/me/progress/two-places")).body;
+    await call("/api/me/progress/two-places", "alice", { scope: saved.scope, prepare: { deviceId: "unlocked-fixture", guest: { "ta.two-places.two-places.v1": { unlocked: 20 } } } });
     for (let level = 0; level < 20; level++) {
       await submit("alice", level, 100 + level, 1);
       const board = await call(`/api/leaderboards/two-places?level=${level}`);
@@ -101,7 +103,7 @@ test("Two Places HTTP boards separate all levels, apply time/apples order, and r
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); store.close(); }
 });
 
-test("Two Places restart preserves the published legacy cartridge and its old board rules", () => {
+test("Two Places restart preserves a legacy record with a noncanonical entry", () => {
   const dir = mkdtempSync(join(tmpdir(), "two-legacy-")), file = join(dir, "db.sqlite");
   let store = new ArcadeStore(file, false);
   try {

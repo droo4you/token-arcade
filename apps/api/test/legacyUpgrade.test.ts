@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ArcadeStore } from "../src/store.ts";
 
-test("existing Skip to 10K legacy import gains Passport Play on restart, keeping its stored entry origin", () => {
+test("existing Skip to 10K legacy import gains the four Passport boards on restart, keeping its stored entry origin", () => {
   const dir = mkdtempSync(join(tmpdir(), "ta-legacy-"));
   const path = join(dir, "a.sqlite");
   try {
@@ -20,7 +20,9 @@ test("existing Skip to 10K legacy import gains Passport Play on restart, keeping
     assert.deepEqual(upgraded.manifest.supportedModes, ["free", "ranked", "raid"]);
     assert.equal(upgraded.manifest.verifier?.kind, "replay");
     assert.equal(upgraded.manifest.entry?.origin, "https://cart.example");
-    assert.equal(upgraded.legacyImportRevision, 3);
+    assert.equal(upgraded.manifest.version, "1.1.0");
+    assert.equal(upgraded.manifest.adapterId, "skip-to-10k-v2");
+    assert.equal(upgraded.manifest.entry?.url, "https://cart.example/skip-to-10k/v/1.1.0/");
     // Coindle gains Rapid Fire Passport Play + Raid through the same reviewed upgrade (revision 3).
     assert.deepEqual(store.getGame("coindle")!.manifest.supportedModes, ["free", "ranked", "raid"]);
     assert.deepEqual(store.getGame("coindle")!.manifest.supportedObjectives, ["coins_solved", "guesses"]);
@@ -57,4 +59,18 @@ test("Coindle keeps an existing v1 cabinet and its hosted entry until a reviewed
   assert.deepEqual(store.getGame("coindle"), legacy);
   store.close();
   rmSync(file); rmdirSync(dir);
+});
+
+test("Two Places reviewed guide adopts campaign unlocks without changing rules or version", () => {
+  const dir = mkdtempSync(join(tmpdir(), "two-unlock-guide-")), file = join(dir, "a.sqlite");
+  let store = new ArcadeStore(file, false);
+  try {
+    const prior = store.getGame("two-places")!;
+    store.saveGame({ ...prior, legacyImportRevision: 2, manifest: { ...prior.manifest, playGuide: { ...prior.manifest.playGuide!, ranked: "Choose any of the 20 levels." } } });
+    store.close(); store = new ArcadeStore(file, false);
+    const upgraded = store.getGame("two-places")!;
+    assert.match(upgraded.manifest.playGuide?.ranked ?? "", /unlocked levels/);
+    assert.equal(upgraded.manifest.version, prior.manifest.version);
+    assert.deepEqual(upgraded.manifest.entry, prior.manifest.entry);
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });

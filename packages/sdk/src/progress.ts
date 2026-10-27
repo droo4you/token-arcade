@@ -20,3 +20,10 @@ export function progressKeys(gameId: string): string[] {
     default: return [];
   }
 }
+
+/** Campaign unlocks are shared by Free Play and Passport level selection. */
+export function twoPlacesUnlockedCount(state: ProgressSnapshot): number {
+  const save = state["ta.two-places.two-places.v1"];
+  const value = save && typeof save === "object" ? (save as { unlocked?: unknown }).unlocked : undefined;
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(1, Math.min(20, Math.floor(value))) : 1;
+}
