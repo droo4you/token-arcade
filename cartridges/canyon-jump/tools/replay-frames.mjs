@@ -9,6 +9,7 @@ const b = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bi
 const p = await (await b.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
 await p.goto(BASE + 'index.html?ql=4#replay=' + encodeURIComponent(code), { waitUntil: 'domcontentloaded' });
 await p.waitForFunction(() => window.__cj && window.CJRender3D, null, { timeout: 60000 });
+await p.waitForFunction(() => window.__cj.playback, null, { timeout: 10000 }); // #replay= decodes async (CJZ1)
 await p.evaluate(() => window.__cj.startRun());
 for (const t of tsArg.split(',').map(Number)) {
   await p.evaluate(t => { const { G, S } = window.__cj, s = G.run; while (!s.over && s.t < t && G.play) { const i = Object.assign({}, G.play[G.playIdx++] || {}); G.rec && G.rec.push(i); S.step(s, i); s.events.length = 0; } G.paused = true; G.banner = null; }, t);

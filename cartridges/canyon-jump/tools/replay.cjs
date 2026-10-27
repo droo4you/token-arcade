@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Re-simulate a Canyon Jump replay headlessly and print what happened.
-   Usage: node tools/replay.cjs <CJR1.code | file.txt | -> [--every 0.25] [--png outDir [--frames t1,t2,...]] [--json]
+   Usage: node tools/replay.cjs <share URL (…#replay=CJZ1.…) | CJZ1./CJR1. code | file.txt | -> [--every 0.25] [--png outDir [--frames t1,t2,...]] [--json]
    Prints: header (level, seed, build, physics hash check), a timeline (t, phase, z, alt, AGL, speed, pitch angle, stick,
    AIR, thermal lift) every --every s plus every event (launch, boost, updraft, lip save, near miss, crash...), and the
    death cause with the 2 s before it. --png renders key frames through the browser (needs the preview server or
@@ -9,8 +9,8 @@ const fs = require('fs'), path = require('path');
 const SRC = path.join(__dirname, '../src');
 const S0 = require(SRC + '/sim.js'), LV = require(SRC + '/levels.js'), RP = require(SRC + '/replay.js');
 const args = process.argv.slice(2), opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
-let src = args[0]; if (!src) { console.error('usage: node tools/replay.cjs <code|file|-> [--every 0.25] [--png dir]'); process.exit(2); }
-const code = src === '-' ? fs.readFileSync(0, 'utf8') : fs.existsSync(src) ? fs.readFileSync(src, 'utf8') : src;
+let src = args[0]; if (!src) { console.error('usage: node tools/replay.cjs <url|code|file|-> [--every 0.25] [--png dir]'); process.exit(2); }
+const code = RP.extract(src === '-' ? fs.readFileSync(0, 'utf8') : fs.existsSync(src) ? fs.readFileSync(src, 'utf8') : src); // a share URL, CJZ1 or CJR1 code
 
 function simulate(data) {
   const level = LV.get(data.level || LV.DEFAULT), S = level.id === LV.DEFAULT ? S0 : S0.forLevel(level);
@@ -29,7 +29,7 @@ function simulate(data) {
 }
 function physicsHash(levelId) { const L = LV.get(levelId || LV.DEFAULT); return RP.hash(fs.readFileSync(SRC + '/sim.js', 'utf8') + JSON.stringify(L)); }
 
-const data = RP.decode(code), out = simulate(data), sc = out.score;
+const data = RP.decodeSync(code), out = simulate(data), sc = out.score;
 const localHash = physicsHash(data.level), hashOk = !data.simHash || data.simHash === localHash;
 if (args.includes('--json')) { console.log(JSON.stringify({ data: Object.assign({}, data, { rle: undefined }), score: sc, rows: out.rows, events: out.events, hashOk })); process.exit(0); }
 console.log(`Canyon Jump replay · level ${out.level.id} · seed ${data.seed} · build ${data.build} · ${data.ticks} ticks (${(data.ticks / 120).toFixed(1)} s) · ${data.touch ? 'touch' : 'keys'} · ${data.at || ''}`);

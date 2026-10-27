@@ -4,8 +4,8 @@
 (function (root) {
   'use strict';
   const LV = root.CJLevels; let id = new URLSearchParams(root.location.search).get('level');
-  // A replay link (#replay=CJR1.…) carries its own level.
-  try { const m = /replay=([^&]+)/.exec(root.location.hash + '&' + root.location.search); if (m && root.CJReplay) id = root.CJReplay.decode(decodeURIComponent(m[1])).level || id; } catch (e) { /* bad code: ignore */ }
+  // A replay link (#replay=CJZ1.<level>.… or CJR1.…) carries its own level.
+  try { const m = /replay=([^&]+)/.exec(root.location.hash + '&' + root.location.search); if (m && root.CJReplay) id = root.CJReplay.levelOf(m[1]) || id; } catch (e) { /* bad code: ignore */ }
   const level = LV.get(id || LV.DEFAULT);
   root.CJLevel = level;
   if (level.id !== LV.DEFAULT) root.CJSim = root.CJSim.forLevel(level);

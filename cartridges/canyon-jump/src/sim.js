@@ -472,7 +472,12 @@
     // Level recover block (Grand Canyon): pull-up authority from a lower speed, and a cap on how fast the nose can fall
     // when you are not pushing it down. Absent on Snake River, so the base sim is unchanged.
     const RC = s.cfg.recover;
-    const recovering = g <= (RC ? RC.until : C.DIVE_RECOVER_GAM) && sy > 0.15 && V >= (RC ? RC.v : C.DIVE_RECOVER_V);
+    let recovering;
+    if (RC) {
+      // Latched: engages only once a real dive starts (nose <= engage), releases when the nose is back above `until`.
+      if (s.rcv) s.rcv = g <= RC.until; else s.rcv = RC.engage == null ? g <= RC.until : g <= RC.engage;
+      recovering = s.rcv && sy > 0.15 && V >= RC.v;
+    } else recovering = g <= C.DIVE_RECOVER_GAM && sy > 0.15 && V >= C.DIVE_RECOVER_V;
     s.pIn = lerpRate(s.pIn, sy, recovering ? C.PITCH_RESP * C.DIVE_RECOVER_PITCH_K : C.PITCH_RESP, dt);
     const L = liftAccel(V, s.pIn, recovering ? C.G_LIMIT * C.DIVE_RECOVER_G_K : C.G_LIMIT), Lv = L * (1 - C.TRICK_DIP * (1 - Math.cos(s.rot || 0)) / 2);
     s.gLoad = L / C.G_SKY;

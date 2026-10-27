@@ -13,7 +13,8 @@
   const waiting3D = () => glCanvas && !window.CJRender3D?.failed && !R3() && G.t < 4;
   let W = 960, H = 540, dpr = 1;
   const RP = window.CJReplay || null, RES = window.CJResult;
-  const PLAYBACK = (() => { if (!RP || TA?.embedded) return null; const m = /replay=([^&]+)/.exec(location.hash + '&' + location.search); if (!m) return null; try { return RP.decode(decodeURIComponent(m[1])); } catch (e) { console.warn('[canyon-jump] bad replay', e); return null; } })();
+  // #replay=CJZ1.<level>.… (compressed share link) or CJR1.… (old codes): decoded async; startRun picks it up once ready.
+  let PLAYBACK = null; (() => { if (!RP || TA?.embedded) return Promise.resolve(null); const m = /replay=([^&]+)/.exec(location.hash + '&' + location.search); if (!m) return Promise.resolve(null); return RP.decodeAny(m[1]).then(d => (PLAYBACK = d), e => { console.warn('[canyon-jump] bad replay', e); return null; }); })();
   if (RP) { const L0 = window.CJLevel || window.CJLevels?.get(window.CJLevels.DEFAULT); fetch('src/sim.js').then(r => r.text()).then(t => { G.simHash = RP.hash(t + JSON.stringify(L0)); if (G.rec) G.rec.data = (f => res => Object.assign(f(res), { simHash: G.simHash }))(G.rec.data); }).catch(() => {}); }
   const LVL_ID = window.CJLevel && window.CJLevels && window.CJLevel.id !== window.CJLevels.DEFAULT ? '.' + window.CJLevel.id : ''; // per-level local best (Snake River keeps the old key)
   const BEST_KEY = (TA?.embedded ? 'ta.canyon-jump.best' : 'canyon-jump.best') + LVL_ID;
@@ -195,7 +196,7 @@
     G.arcadeRunOpen = !!TA?.active;
     A.init(); A.sfx('go');
     let seed = params.has('seed') && !TA?.embedded ? +params.get('seed') : (Math.random() * 2 ** 31) >>> 0;
-    // Replays (src/replay.js): ?#replay=CJR1.… plays a recorded run back; every live run is recorded for COPY REPLAY.
+    // Replays (src/replay.js): ?#replay=CJR1.… plays a recorded run back; every live run is recorded for SHARE REPLAY.
     G.play = null; G.copied = 0; G.simScore = null;
     if (PLAYBACK && !G.playedOnce) { seed = PLAYBACK.seed >>> 0; G.play = RP.inputs(PLAYBACK); G.playIdx = 0; G.playedOnce = true; }
     G.rec = RP ? RP.recorder({ level: (window.CJLevel || window.CJLevels?.get(window.CJLevels.DEFAULT))?.id, seed, build: window.CJ_BUILD || 'dev', simHash: G.simHash || null, ua: navigator.userAgent.slice(0, 80), touch: !!G.touch, at: new Date().toISOString() }) : null;
@@ -206,8 +207,10 @@
   function finish() {
     const r = RES.final(G, S, G.run); G.result = r; G.endAt = G.t; G.screen = 'end'; // sim score of record (roll-out never counts)
     if (G.rec) {
-      G.lastReplay = RP.encode(G.rec.data({ reason: r.reason, total: r.total, distance: r.distance, ticks: G.run.tick, playback: !!G.play }));
-      try { const k = 'canyon-jump.replays', a = JSON.parse(localStorage.getItem(k) || '[]'); a.unshift(G.lastReplay); localStorage.setItem(k, JSON.stringify(a.slice(0, 5))); } catch (e) { /* ignore */ }
+      const data = G.rec.data({ reason: r.reason, total: r.total, distance: r.distance, ticks: G.run.tick, playback: !!G.play });
+      G.lastReplay = RP.encode(data); G.shareCode = null; G.shareLink = null;
+      // Compress for the share link (deflate-raw + base64url, ~5x smaller); keep the last 5 in localStorage.
+      const tok = G.lastReplay; RP.encodeZ(data).then(z => { if (G.lastReplay !== tok) return; G.shareCode = z; G.shareLink = location.origin + location.pathname + '#replay=' + z; try { const k = 'canyon-jump.replays', a = JSON.parse(localStorage.getItem(k) || '[]'); a.unshift(z); localStorage.setItem(k, JSON.stringify(a.slice(0, 5))); } catch (e) { /* ignore */ } });
     }
     if (r.total > best) { best = r.total; r.newBest = true; try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) { /* ignore */ } }
     if (G.arcadeRunOpen && TA?.active) {
@@ -215,11 +218,19 @@
       TA.complete(RES.submission(r, G.run));
     }
   }
+  /* SHARE REPLAY: native share sheet (iOS/Android) with the link, else copy the link, else download the code. */
   function copyReplay() {
-    if (!G.lastReplay) return;
-    const done = ok => { G.copied = ok ? 1 : 2; G.copiedAt = G.t; A.sfx('ui'); };
-    const download = () => { try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([G.lastReplay], { type: 'text/plain' })); a.download = `canyon-jump-replay-${Date.now()}.txt`; a.click(); done(false); } catch (e) { /* ignore */ } };
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(G.lastReplay).then(() => done(true), download); else download();
+    if (!G.lastReplay || G.sharing) return;
+    const link = G.shareLink || (location.origin + location.pathname + '#replay=' + G.lastReplay);
+    const done = how => { G.copied = how; G.copiedAt = G.t; A.sfx('ui'); };
+    const download = () => { try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([link + '\n'], { type: 'text/plain' })); a.download = `canyon-jump-replay-${Date.now()}.txt`; a.click(); done(2); } catch (e) { /* ignore */ } };
+    const copy = () => navigator.clipboard?.writeText ? navigator.clipboard.writeText(link).then(() => done(1), download) : download();
+    const r = G.result || {};
+    if (navigator.share && (G.touch || navigator.maxTouchPoints > 0)) {
+      G.sharing = true;
+      navigator.share({ title: 'Canyon Jump replay', text: `Canyon Jump · ${(r.total || 0).toLocaleString('en-US')} pts · ${Math.round(r.distance || 0).toLocaleString('en-US')} m`, url: link })
+        .then(() => done(3), e => { if (e?.name !== 'AbortError') copy(); }).finally(() => { G.sharing = false; });
+    } else copy();
   }
   function togglePause() { G.paused = !G.paused; G.paused ? A.suspend() : A.resume(); }
 
@@ -744,9 +755,9 @@
       const pulse = 1 + 0.06 * Math.sin(G.t * 8); ctx.save(); ctx.translate(W / 2, py + 354); ctx.scale(pulse, pulse);
       panel(-110, -18, 220, 36, 18, '#ffd23f'); text('★ NEW BEST ★', 0, 1, 18, '#1a0d26', 'center', false); ctx.restore();
     } else if (!r.newBest) text(`best ${best.toLocaleString('en-US')}`, W / 2, py + 346, 14, '#b9a6ee', 'center', false, 800);
-    if (G.lastReplay && el > 0.8) { // COPY REPLAY: paste the code to Grok to have the run re-simulated and analyzed
+    if (G.lastReplay && el > 0.8) { // SHARE REPLAY: send the link to Grok to have the run re-simulated and analyzed
       const bw = 210, bx = W / 2, by2 = Math.max(mg().t + 24, py - 30); G.replayBtn = { x: bx, y: by2, w: bw, h: 34 };
-      const msg = G.copied === 1 && G.t - G.copiedAt < 3 ? 'REPLAY COPIED ✓' : G.copied === 2 && G.t - G.copiedAt < 3 ? 'REPLAY DOWNLOADED ✓' : (G.play ? '▶ REPLAY · COPY (R)' : '📋 COPY REPLAY (R)');
+      const fresh = G.t - G.copiedAt < 3, msg = fresh && G.copied === 1 ? 'LINK COPIED ✓' : fresh && G.copied === 2 ? 'REPLAY DOWNLOADED ✓' : fresh && G.copied === 3 ? 'SHARED ✓' : (G.play ? '▶ REPLAY · SHARE' : 'SHARE REPLAY') + (G.touch ? '' : ' (R)');
       chip(bx - bw / 2, by2 - 17, bw, 34, 17); text(msg, bx, by2, 14, '#5af0ff', 'center', false, 800);
     }
     if (el > 0.8) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.t * 5); text(G.touch ? 'TAP TO RIDE AGAIN' : 'SPACE / TAP TO RIDE AGAIN', W / 2, Math.min(H - mg().b - 14, py + ph + 28), 20, '#fff'); }
@@ -782,5 +793,5 @@
     audio(muted) { A.setMuted(muted); },
     destroy() { G.destroyed = true; cancelAnimationFrame(G.raf); A.destroy(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); removeEventListener('resize', resize); },
   });
-  window.__cj = { G, S, startRun, update, get run() { return G.run; } };
+  window.__cj = { G, S, startRun, update, get run() { return G.run; }, get playback() { return PLAYBACK; } };
 })();

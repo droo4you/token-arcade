@@ -61,22 +61,22 @@
     // Level 2 air: condors low (and riding thermals), tour helicopters through the mid band, a few balloons above them,
     // satellites near the ceiling. Updrafts give free height; a crosswind drifts you over the deep middle.
     air: {
-      ceil: 300,
+      ceil: 240, // was 300: with the latched recover this caps a stick-back glide from the ceiling short of the far rim
       density: { base: 1, max: 2, rampChunks: 6, extraP: 0.3 },
-      bands: [{ type: 'condor', top: 40 }, { type: 'heli', top: 170 }, { type: 'balloon', top: 235 }],
+      bands: [{ type: 'condor', top: 40 }, { type: 'heli', top: 170 }, { type: 'balloon', top: 205 }],
       condor: { r: 1.7, dx: 5, dy: 1.5, rate: 0.5 },
       heli: { r: 5, dx: 12, dy: 1.2, rate: 0.22 },
       balloon: { r: 4.2, drawR: 6, driftX: 3, driftY: 1.2, rate: 0.12 },
       plane: { r: 3.4 }, bird: { r: 1.4 },
-      satellite: { r: 2.8, chance: 0.3, minY: 242 },
+      satellite: { r: 2.8, chance: 0.3, minY: 208 },
       high: { minY: 215, ringLine: 0.55, can: 0.3, orb: 0.4 },
       updraft: { chance: 0.2, r: 34, w: 22, top: 190, maxGain: 20, pastRim: 160, condorP: 0.45 },
       // Inside-the-gorge route: rings + AIR cans below the rim, and strong gorge thermals (up to 55 m of lift) to climb back out.
       gorge: { depth: 0.55, ringLine: 0.5, can: 0.3, thermal: 0.3, r: 40, w: 36, top: 30, maxGain: 55 },
       // Thin air: above 50 m the car bleeds up to 12 m/s² extra, so floating high and safe is the slow line.
-      thin: { y: 50, span: 100, k: 12, vFloor: 60 },
-      // Dive recovery (see README): pull-up authority from 38 m/s (base sim: 70) all the way to level (base: only below -13°), and hands-off the nose can fall at most 0.35 rad/s.
-      recover: { v: 38, until: -0.02, rate: 1.6, maxDrop: 0.35 },
+      thin: { y: 50, span: 100, k: 12, vFloor: 50 },
+      // Dive recovery (see README): pull-up authority from 38 m/s (base sim: 70); latched: engages at nose <= -0.2 rad (a real dive), releases at -0.1 (base: only below -13°), and hands-off the nose can fall at most 0.35 rad/s.
+      recover: { v: 38, engage: -0.2, until: -0.1, rate: 1.6, maxDrop: 0.35 },
       // Far-wall lip grace: clip the far wall within 4 m of the lip and you scrape up onto the rim at 80% speed.
       lipGrace: { depth: 4, reach: 6, keep: 0.8 },
       gust: { vx: 4, rate: 0.6, from: 0.3, to: 0.75 },

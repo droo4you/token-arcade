@@ -21,9 +21,21 @@ for (const id of ['snake-river', 'grand-canyon']) test(`replay round trip is exa
     assert.equal(inp.length, s.tick); assert.equal(d.level, id);
     const r = S.newRun(d.seed); for (const i of inp) { if (r.over) break; S.step(r, i); r.events.length = 0; }
     assert.equal(JSON.stringify(S.score(r)), JSON.stringify(S.score(s)), 'seed ' + seed);
-    assert.equal(r.tick, s.tick); assert.ok(code.length < 60000, 'compact: ' + code.length);
+    assert.equal(r.tick, s.tick);
+    // share link: CJZ1 (deflate-raw + base64url) decodes to the same data, from the bare code or a full URL, and is small
+    const z = RP.encodeZSync(d), url = 'https://example.test/canyon-jump/index.html#replay=' + z;
+    assert.ok(z.startsWith('CJZ1.' + id + '.'), z.slice(0, 30)); assert.equal(RP.levelOf(url), id);
+    assert.deepEqual(RP.decodeSync(url), d); assert.deepEqual(RP.decodeSync(encodeURIComponent(url)), d); assert.deepEqual(RP.decodeSync(code), d);
+    assert.ok(z.length < 20000 && (code.length < 2000 || z.length < code.length / 3), `compact: ${z.length} vs ${code.length}`);
   }
 });
 test('tokens round trip', () => {
   for (const i of [{}, { boostEdge: true, pitch: -0.37, steer: 1 }, { rollEdge: true, rollDir: -1, up: true }, { flipBackEdge: true, stabEdge: true, leftEdge: true }]) assert.deepEqual(RP.untoken(RP.token(i)), i);
+});
+
+test('decodeAny accepts CJZ1 links and old CJR1 codes (async API used by the #replay loader)', async () => {
+  const d = { v: 1, level: 'grand-canyon', seed: 5, ticks: 3, rle: [[3, '0p50']], result: { reason: 'landed' } };
+  assert.deepEqual(await RP.decodeAny('see https://x.test/index.html#replay=' + await RP.encodeZ(d)), d);
+  assert.deepEqual(await RP.decodeAny(RP.encode(d)), d);
+  assert.throws(() => RP.extract('hello'));
 });

@@ -81,16 +81,19 @@ test('gorge route: rings and cans spawn below the rim over the gap, gorge therma
   assert.ok(rings > 20 && cans > 3 && th > 10, JSON.stringify({ rings, cans, th }));
 });
 test('thin air only exists on grand canyon', () => { assert.ok(GC.air.thin); assert.equal(L.get('snake-river').air.thin, undefined); assert.equal(L.get('snake-river').air.gorge, undefined); });
-test('nose-dive recovery: full pull-up levels the nose within 0.8 s from 50-100 m/s, in the gorge and up high', () => {
+test('nose-dive recovery: full pull-up gets the nose out of a real dive within 0.8 s from 50-100 m/s, in the gorge and up high, and it stays out', () => {
   for (const [y, V, gam] of [[-60, 50, -0.5], [-60, 70, -0.5], [-60, 100, -0.6], [100, 60, -0.3], [60, 60, -0.3]]) {
     const s = S.newRun(1); s.phase = 'sky'; s.z = S.C.ROAD_LEN + 800; s.y = y; s.m = V; s.gam = gam; s.sky = []; s.drafts = []; s.skyChunk = 999;
-    let t = 0; while (s.gam < -0.03 && t < 0.8) { S.step(s, { pitch: 1 }); t += S.C.DT; }
-    assert.ok(s.gam >= -0.03, `y${y} V${V}: gam ${s.gam.toFixed(2)} after ${t.toFixed(2)} s`);
+    let t = 0; while (s.gam < -0.2 && t < 0.8) { S.step(s, { pitch: 1 }); t += S.C.DT; }
+    assert.ok(s.gam >= -0.2, `y${y} V${V}: gam ${s.gam.toFixed(2)} after ${t.toFixed(2)} s`);
+    // latched assist releases at -0.1; slow (sub-56 m/s) pull-ups settle into a shallow glide, never back into a nose-dive
+    let worst = 0; for (let k = 0; k < 3 * 120 && !s.over; k++) { S.step(s, { pitch: 1 }); worst = Math.min(worst, s.gam); }
+    assert.ok(worst > -0.25, `y${y} V${V}: fell back to ${worst.toFixed(2)}`);
   }
 });
 test('thin air never drains speed below its floor', () => {
-  const s = S.newRun(1); s.phase = 'sky'; s.z = S.C.ROAD_LEN + 800; s.y = 200; s.m = 58; s.gam = 0; s.sky = []; s.drafts = []; s.skyChunk = 999;
-  const m0 = S0.forLevel({ ...GC, air: { ...GC.air, thin: undefined } }).newRun(1); Object.assign(m0, { phase: 'sky', z: s.z, y: 200, m: 58, gam: 0, sky: [], drafts: [], skyChunk: 999 });
+  const s = S.newRun(1); s.phase = 'sky'; s.z = S.C.ROAD_LEN + 800; s.y = 200; s.m = 48; s.gam = 0; s.sky = []; s.drafts = []; s.skyChunk = 999;
+  const m0 = S0.forLevel({ ...GC, air: { ...GC.air, thin: undefined } }).newRun(1); Object.assign(m0, { phase: 'sky', z: s.z, y: 200, m: 48, gam: 0, sky: [], drafts: [], skyChunk: 999 });
   S.step(s, { pitch: 0.3 }); S0.forLevel({ ...GC, air: { ...GC.air, thin: undefined } }).step(m0, { pitch: 0.3 });
   assert.ok(Math.abs(s.m - m0.m) < 1e-9, 'below vFloor thin air adds nothing');
 });
@@ -101,4 +104,19 @@ test('lip grace: clipping the far wall 2 m below the lip scrapes onto the rim; 1
     assert.equal(!s.over || s.reason === 'landed', ok, `dy ${dy}: ${s.reason}`);
     if (ok) assert.equal(s.counts.lipSaves, 1);
   }
+});
+
+test('ceiling float is dead: a stick-back hover from the ceiling cannot reach the far rim', () => {
+  // droober's float line: reach the ceiling over the first ~700 m of the gap, then hold full stick-back with no boosts.
+  // (Reaching the ceiling >1 km into the gap is a committed glide, not a float; that still clears.)
+  const far = S.C.ROAD_LEN + S.C.CANYON_W;
+  for (const dz of [300, 500, 700]) for (const V of [55, 60, 70, 80]) { const z0 = S.C.ROAD_LEN + dz;
+    const s = S.newRun(1); Object.assign(s, { phase: 'sky', z: z0, y: GC.air.ceil, m: V, gam: 0, sky: [], drafts: [], skyChunk: 1e9 });
+    let k = 0; while (!s.over && k++ < 120 * 200) S.step(s, { pitch: 1 });
+    assert.ok(s.z < far, `hover from z${z0} V${V} reached z ${s.z.toFixed(0)} (${s.reason})`);
+  }
+  // and it can't hold altitude: 10 s of stick-back at the ceiling loses real height
+  const s = S.newRun(1); Object.assign(s, { phase: 'sky', z: S.C.ROAD_LEN + 300, y: GC.air.ceil, m: 60, gam: 0, sky: [], drafts: [], skyChunk: 1e9 });
+  for (let k = 0; k < 1200; k++) S.step(s, { pitch: 1 });
+  assert.ok(s.y < GC.air.ceil - 40, 'still floating at ' + s.y.toFixed(0));
 });
