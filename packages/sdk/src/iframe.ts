@@ -1,5 +1,6 @@
 import type { FreePlayLifecycleEvent, GameManifest, GameRunConfig, GameRunResult, TokenArcadeGame } from "./index.ts";
 import { validateRunResultShape } from "./validate.ts";
+import type { RunDiagnostic, RunEvent } from "./diagnostics.ts";
 import type { ProgressConnection, ProgressRead, ProgressOperation } from "./progress.ts";
 
 /** The existing lifecycle contract, transported to a reviewed, separate-origin build. */
@@ -16,10 +17,13 @@ export class IframeCartridge implements TokenArcadeGame {
   private readonly onError?: (message: string) => void;
   private readonly onFreePlay?: (event: FreePlayLifecycleEvent) => void;
   private readonly progress?: ProgressConnection;
-  constructor(manifest: GameManifest, onState?: (state: "paused" | "running", reason?: string) => void, onError?: (message: string) => void, onFreePlay?: (event: FreePlayLifecycleEvent) => void, progress?: ProgressConnection) {
+  private readonly onDiagnostic?: (event: RunDiagnostic) => void;
+  private diagnostic: ((event: RunEvent) => void) | null = null;
+  constructor(manifest: GameManifest, onState?: (state: "paused" | "running", reason?: string) => void, onError?: (message: string) => void, onFreePlay?: (event: FreePlayLifecycleEvent) => void, progress?: ProgressConnection, onDiagnostic?: (event: RunDiagnostic) => void) {
     this.manifest = manifest; this.onState = onState; this.onError = onError;
     this.onFreePlay = onFreePlay;
     this.progress = progress;
+    this.onDiagnostic = onDiagnostic;
   }
 
   async mount(container: HTMLElement, config: GameRunConfig): Promise<void> {
@@ -64,6 +68,14 @@ export class IframeCartridge implements TokenArcadeGame {
       const channel = this.channel;
       const current = () => this.frame === frame && this.channel === channel;
       let progressStage = "idle", progressTimer: ReturnType<typeof setTimeout> | undefined;
+      const mountedAt = performance.now();
+      let sequence = 0;
+      this.diagnostic = event => {
+        try { this.onDiagnostic?.({ event, mountId: channel, sequence: sequence++, elapsedMs: Math.round(performance.now() - mountedAt), hidden: document.hidden, stage: progressStage }); } catch { /* Observation cannot interrupt play. */ }
+      };
+      this.diagnostic("mount");
+      const frameLoad = () => this.diagnostic?.("frame_load");
+      frame.addEventListener("load", frameLoad);
       const saving = new Set<string>();
       const fallback = () => {
         if (!current() || progressStage === "done") return;
@@ -75,12 +87,13 @@ export class IframeCartridge implements TokenArcadeGame {
         if (!settled) { settled = true; reject(new Error(message)); }
         else { this.destroy("error"); this.onError?.(message); }
       };
-      const timer = window.setTimeout(() => fail("The cartridge did not become ready. Check its service and approved host origins."), 15_000);
+      const timer = window.setTimeout(() => { this.diagnostic?.("timeout"); fail("The cartridge did not become ready. Check its service and approved host origins."); }, 15_000);
       const message = (event: MessageEvent) => {
         if (event.origin !== entry.origin || event.source !== frame.contentWindow) return;
         const data = event.data;
         if (!data || data.ta !== 1 || data.channel !== this.channel) return;
         if (data.type === "ta:hello" && progressStage === "idle") {
+          this.diagnostic?.("hello");
           if (!this.progress || !data.payload?.progress) { progressStage = "done"; this.send("ta:mount", this.config); }
           else {
             progressStage = "opening"; this.progress.status("Loading account progress…");
@@ -93,6 +106,7 @@ export class IframeCartridge implements TokenArcadeGame {
           }
         }
         if (data.type === "ta:progress_snapshot" && this.progress && progressStage === "reading") {
+          this.diagnostic?.("progress_snapshot");
           progressStage = "preparing";
           void this.progress.prepare(data.payload as ProgressRead).then(state => {
             if (!current() || progressStage !== "preparing") return;
@@ -100,6 +114,7 @@ export class IframeCartridge implements TokenArcadeGame {
           }).catch(fallback);
         }
         if (data.type === "ta:progress_ready" && progressStage === "applying") {
+          this.diagnostic?.("progress_ready");
           progressStage = "done"; clearTimeout(progressTimer);
           this.progress?.status("Saved to your account. Guest progress stays in this browser.");
           this.send("ta:mount", this.config);
@@ -116,7 +131,8 @@ export class IframeCartridge implements TokenArcadeGame {
             this.send("ta:progress_ack", { id }); this.progress?.status("Saved to your account.");
           }).catch(() => { if (current()) this.progress?.status("Saved in this browser. Account sync will retry."); }).finally(() => saving.delete(id));
         }
-        if (data.type === "ta:ready" && !settled) { settled = true; clearTimeout(timer); resolve(); }
+        if (data.type === "ta:ready" && !settled) { this.diagnostic?.("ready"); settled = true; clearTimeout(timer); resolve(); }
+        if (data.type === "ta:run_started") this.diagnostic?.("playing");
         if (data.type === "ta:run_started" && this.config?.mode === "free" && typeof data.payload?.runId === "string" && Number.isFinite(Date.parse(data.payload?.startedAt))) {
           if (data.payload.runId.length > 100) return;
           if (this.freeRun?.runId !== data.payload.runId) this.exitFreeRun("restart");
@@ -131,6 +147,7 @@ export class IframeCartridge implements TokenArcadeGame {
           }
         }
         if (data.type === "ta:run_complete" && this.config && !this.completed) {
+          this.diagnostic?.("complete");
           const checked = validateRunResultShape(this.config, data.payload);
           if (!checked.valid) { fail(checked.reason); return; }
           this.completed = true;
@@ -139,16 +156,20 @@ export class IframeCartridge implements TokenArcadeGame {
         }
         if (data.type === "ta:paused") this.onState?.("paused", data.payload?.reason);
         if (data.type === "ta:resumed" || data.type === "ta:run_started") this.onState?.("running");
-        if (data.type === "ta:error" && data.payload?.fatal) fail(String(data.payload.message).slice(0, 500));
+        if (data.type === "ta:error" && data.payload?.fatal) { this.diagnostic?.("fatal"); fail(String(data.payload.message).slice(0, 500)); }
       };
-      const visibility = () => { if (document.hidden) this.pause(); };
-      const pagehide = (event: PageTransitionEvent) => { if (!event.persisted) this.exitFreeRun("pagehide"); };
+      const visibility = () => { this.diagnostic?.(document.hidden ? "hidden" : "visible"); if (document.hidden) this.pause(); };
+      const pagehide = (event: PageTransitionEvent) => { this.diagnostic?.("pagehide"); if (!event.persisted) this.exitFreeRun("pagehide"); };
+      const contextEvents = ["blur", "focus", "offline", "online"] as const;
+      const contextListeners = contextEvents.map(event => { const listener = () => this.diagnostic?.(event); window.addEventListener(event, listener); return { event, listener }; });
       window.addEventListener("message", message);
       window.addEventListener("pagehide", pagehide);
       document.addEventListener("visibilitychange", visibility);
       this.cleanup = () => {
         clearTimeout(timer);
         clearTimeout(progressTimer);
+        frame.removeEventListener("load", frameLoad);
+        for (const { event, listener } of contextListeners) window.removeEventListener(event, listener);
         resize?.disconnect(); wrapper?.remove();
         window.removeEventListener("message", message);
         window.removeEventListener("pagehide", pagehide);
@@ -161,9 +182,9 @@ export class IframeCartridge implements TokenArcadeGame {
     });
   }
   private send(type: string, payload: unknown = {}): void { this.frame?.contentWindow?.postMessage({ ta: 1, channel: this.channel, type, payload }, this.manifest.entry!.origin); }
-  start(): void { this.send("ta:start"); this.frame?.focus(); }
-  pause(): void { this.send("ta:pause", { reason: "host" }); }
-  resume(): void { this.send("ta:resume"); this.frame?.focus(); }
+  start(): void { this.diagnostic?.("start"); this.send("ta:start"); this.frame?.focus(); }
+  pause(): void { this.diagnostic?.("pause"); this.send("ta:pause", { reason: "host" }); }
+  resume(): void { this.diagnostic?.("resume"); this.send("ta:resume"); this.frame?.focus(); }
   restart(): void { if (this.config?.mode === "free") this.send("ta:restart"); }
   private observe(event: FreePlayLifecycleEvent): void { try { this.onFreePlay?.(event); } catch { /* Analytics cannot interrupt gameplay. */ } }
   private exitFreeRun(reason: FreePlayLifecycleEvent["reason"]): void {
@@ -171,6 +192,7 @@ export class IframeCartridge implements TokenArcadeGame {
     this.observe({ type: "exited", run: this.freeRun, reason }); this.freeRun = null;
   }
   destroy(reason: FreePlayLifecycleEvent["reason"] = "navigation"): void {
+    this.diagnostic?.("destroy"); this.diagnostic = null;
     this.exitFreeRun(reason);
     this.send("ta:destroy");
     this.cleanup?.(); this.cleanup = null;

@@ -20,6 +20,8 @@ export interface LeaderboardEntry {
 export class ApiError extends Error {
   status: number;
   details: string[];
+  code?: string;
+  requestId?: string;
 
   constructor(status: number, message: string, details: string[] = []) {
     super(message);
@@ -54,8 +56,11 @@ export async function api<T>(
   }
   const payload: unknown = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = (payload as { error?: { message?: string; details?: string[] } }).error;
-    throw new ApiError(response.status, error?.message ?? `Request failed (${response.status}).`, error?.details ?? []);
+    const error = (payload as { error?: { message?: string; details?: string[]; code?: string } }).error;
+    const failure = new ApiError(response.status, error?.message ?? `Request failed (${response.status}).`, error?.details ?? []);
+    failure.code = error?.code;
+    failure.requestId = response.headers.get("X-Request-Id") ?? undefined;
+    throw failure;
   }
   return payload as T;
 }

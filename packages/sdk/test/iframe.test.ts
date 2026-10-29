@@ -28,6 +28,9 @@ class MockTokenList extends Set<string> {
 }
 
 class MockElement {
+  readonly events = new Map<string, Set<() => void>>();
+  addEventListener(name: string, callback: () => void) { if (!this.events.has(name)) this.events.set(name, new Set()); this.events.get(name)!.add(callback); }
+  removeEventListener(name: string, callback: () => void) { this.events.get(name)?.delete(callback); }
   readonly tag: string;
   readonly style: Record<string, string> = {};
   readonly children: MockElement[] = [];
@@ -152,6 +155,43 @@ test("iframe transport accepts only the reviewed origin, source and channel, and
   for (const callback of env.documentListeners.get("visibilitychange") ?? []) callback({});
   assert.equal(frame.posts.at(-1)?.message.type, "ta:pause");
   unsubscribe();
+});
+
+test("diagnostics identify a hidden-tab loading timeout and separate later mounts", async t => {
+  const env = environment(t);
+  const events: import("../src/diagnostics.ts").RunDiagnostic[] = [];
+  let timeout: () => void = () => {};
+  t.mock.method(window, "setTimeout", (callback: () => void) => { timeout = callback; return 123; });
+  const cartridge = new IframeCartridge(manifest, undefined, undefined, undefined, undefined, event => events.push(event));
+  env.cleanup(() => cartridge.destroy());
+  const mounting = cartridge.mount(env.element, { ...config, mode: "raid" });
+  const rejected = assert.rejects(mounting, /did not become ready/);
+  const frame = env.frames[0];
+  env.send(frame, "ta:hello", {}, { origin: "https://untrusted.example" });
+  env.document.hidden = true;
+  for (const listener of env.documentListeners.get("visibilitychange") ?? []) listener({});
+  timeout(); await rejected; cartridge.destroy();
+  assert.deepEqual(events.map(e => e.event), ["mount", "hidden", "pause", "timeout", "destroy"]);
+  assert.equal(events[3].hidden, true);
+  assert.equal(events[3].stage, "idle");
+  assert.deepEqual(events.map(e => e.sequence), [0, 1, 2, 3, 4]);
+  const oldMount = events[0].mountId;
+  const next = cartridge.mount(env.element, config);
+  env.send(env.frames[1], "ta:hello"); env.send(env.frames[1], "ta:ready"); await next;
+  assert.notEqual(events[5].mountId, oldMount);
+  assert.equal(events[5].sequence, 0);
+});
+
+test("throwing diagnostics cannot stop mount or completion", async t => {
+  const env = environment(t);
+  const cartridge = new IframeCartridge(manifest, undefined, undefined, undefined, undefined, () => { throw new Error("offline"); });
+  env.cleanup(() => cartridge.destroy());
+  const mounting = cartridge.mount(env.element, config);
+  env.send(env.frames[0], "ta:hello"); env.send(env.frames[0], "ta:ready"); await mounting;
+  let completed = false;
+  cartridge.onRunComplete(() => { completed = true; });
+  cartridge.start(); env.send(env.frames[0], "ta:run_complete", result);
+  assert.equal(completed, true);
 });
 
 test("a post-ready fatal iframe error removes the runtime and cannot accept a later result", async (t) => {
