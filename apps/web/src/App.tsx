@@ -15,6 +15,7 @@ import { gameHref, getCatalog, getGame, playHref, type ArcadeGame } from "./cata
 import { CreatorPortal } from "./CreatorPortal";
 import { FundedRaidControls } from "./FundedRaidControls";
 import { FreePlayAnalytics } from "./FreePlayAnalytics";
+import { RaidShare } from "./RaidShare";
 import { shippedSections } from "./shipped";
 import { getGuideTopic, guideTopics, guideFaq, guideDefinitions, type GuideTopic, type GuideTopicId } from "./guideContent";
 
@@ -504,7 +505,7 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
     <div className="raid-hero">
       <div><StatusBadge tone={isRaidOpen(raid, now) ? "good" : "wait"}>Raid {raidDisplayStatus(raid, now)}</StatusBadge><h1>{raid.name}</h1><p>{data.skrumpeyGoal ? "Three attempts on one shared course. Your best score counts; rescued Skrumpeys break ties." : data.twoPlacesGoal ? "A shared shuffled level order. Rank by levels beaten, then apples, then time." : skipRaid ? "Three skips, one shared seed: Zero, Mid and Max. Your total counts." : data.moodGoal ? "Three attempts. One shared sky. Your best peak Mood wins." : data.communityTotal ? (coindlePoolRaid ? "Best of three. Each run draws randomly from this raid’s hidden coin pool." : "Three minutes per attempt. Every verified solve adds to the community total.") : "Same course. Same rules. Put your best run on the board."}</p>
         <div className="raid-quickfacts"><div><Clock3 size={19} /><span>{countdown}</span></div><div><Ticket size={19} /><span>{entryLabel}</span></div><div><Trophy size={19} /><span>{prizeLabel}</span></div></div>
-        <div className="raid-hero-actions">{playable ? <ActionLink href={playHref(raid.gameId, "raid", raid.id)}>Start raid attempt</ActionLink> : <span className="raid-unavailable">{unavailable}</span>}</div>
+        <div className="raid-hero-actions">{playable ? <ActionLink href={playHref(raid.gameId, "raid", raid.id)}>Start raid attempt</ActionLink> : <span className="raid-unavailable">{unavailable}</span>}<RaidShare key={raid.id} id={raid.id} name={raid.name} /></div>
       </div><div className="raid-hero-glyph">✳</div>
     </div>
     <div className="raid-content">
