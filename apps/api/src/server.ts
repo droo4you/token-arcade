@@ -19,6 +19,7 @@ import { TestnetMinicoinService } from "./testnet-minicoin.ts";
 import { FundedRaids, FundedRaidError } from "./fundedRaids.ts";
 import { AutomaticPayouts } from "./automaticPayouts.ts";
 import { freePlayReport } from "./freePlayAnalytics.ts";
+import { initRunDiagnostics, recordRunDiagnostic, clientDiagnostic, diagnosticsReport } from "./runDiagnostics.ts";
 import { skipBoardRules, skipRules, SKIP_RAID_RULES, skipRaidResults } from "./skipBoards.ts";
 
 function requestedSkipRules(board: unknown) {
@@ -528,12 +529,35 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
     supplyRecipient: process.env.TESTNET_SUPPLY_RECIPIENT,
   }, auth.localDemoMode);
 
+  initRunDiagnostics(store);
   const server = createServer(async (request, response) => {
+    const requestId = randomUUID();
+    const audit: { playerId: string; runId?: string; raidId?: string; action?: string; gameId?: string } = { playerId: "" };
+    const record = (event: string, code?: string) => {
+      if (audit.playerId && audit.action) recordRunDiagnostic(store, audit, "server", { event, action: audit.action, requestId, gameId: audit.gameId, code, release: process.env.RENDER_GIT_COMMIT ?? null });
+    };
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
       const path = url.pathname;
       const method = request.method ?? "GET";
       if (!path.startsWith("/api/")) return serveStatic(request, response, path, staticRoot);
+      response.setHeader("X-Request-Id", requestId);
+      if (method === "POST" && /^\/api\/runs\/[^/]+\/diagnostics$/.test(path)) {
+        const identity = await auth.authenticate(request);
+        const player = store.getOrCreatePassport(identity.id);
+        const runId = decodeURIComponent(path.split("/")[3]);
+        const session = store.getSession(runId);
+        if (!session || session.playerId !== player.playerId) fail(404, "NOT_FOUND", "Run session not found");
+        if (Date.now() > Date.parse(session.config.expiresAt ?? session.config.startedAt) + 86400_000) fail(410, "EXPIRED", "Diagnostic window closed");
+        const body = await readJson(request, 2048);
+        let event;
+        try { event = clientDiagnostic(body); } catch { fail(400, "INVALID_INPUT", "Invalid diagnostic event"); }
+        const recent = store.db.prepare("SELECT COUNT(*) AS n FROM run_diagnostics WHERE source='client' AND player_id=? AND received_at > ?").get(player.playerId, new Date(Date.now() - 60_000).toISOString()) as { n: number };
+        const total = store.db.prepare("SELECT COUNT(*) AS n FROM run_diagnostics WHERE source='client' AND run_id=?").get(runId) as { n: number };
+        if (recent.n >= 120 || total.n >= 200) fail(429, "RATE_LIMITED", "Diagnostic limit reached");
+        recordRunDiagnostic(store, { playerId: player.playerId, runId, raidId: session.config.raidId }, "client", { ...event, gameId: session.config.gameId, gameVersion: session.config.gameVersion });
+        return respond(response, 200, { recorded: true });
+      }
       const fundedRoute = path.match(/^\/api\/admin\/raids\/([^/]+)\/funded\/(rules|bind|settlement)$/);
       if (fundedRoute) {
         requireAdmin(await auth.authenticate(request));
@@ -887,12 +911,14 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       if (method === "POST" && path === "/api/runs") {
         const identity = await auth.authenticate(request);
         const passport = store.getOrCreatePassport(identity.id);
+        audit.playerId = passport.playerId; audit.action = "issue";
         const body = await readJson(request);
         const gameId = requiredString(body.gameId, "gameId", 64);
         const mode = body.mode;
         if (mode !== "ranked" && mode !== "raid") fail(400, "INVALID_MODE", "Run mode must be ranked or raid");
         const game = store.getGame(gameId);
         if (!game || game.status !== "published") fail(404, "NOT_FOUND", "Published game not found");
+        audit.gameId = gameId;
         if (!game.manifest.supportedModes.includes(mode)) fail(409, "MODE_UNAVAILABLE", "Game does not support this mode");
         const adapter = adapters.get(game.manifest.adapterId);
         if (!adapter?.verifier) fail(409, "VERIFIER_UNAVAILABLE", "Game-specific verifier is not installed");
@@ -902,6 +928,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           const raidId = requiredString(body.raidId, "raidId", 80);
           raid = store.getRaid(raidId);
           if (!raid || raid.gameId !== gameId) fail(404, "NOT_FOUND", "Raid not found for this game");
+          audit.raidId = raid.id;
           if (raid.status !== "open" || now < Date.parse(raid.startsAt) || now >= Date.parse(raid.endsAt)) fail(409, "RAID_CLOSED", "Raid is not open for entries");
           const blockers = raidBlockers(raid, store, adapters);
           if (blockers.length) fail(409, "RAID_NOT_READY", "Raid cannot issue runs", blockers);
@@ -923,6 +950,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const created = store.createSession({ playerId: passport.playerId, config }, raid?.maxAttempts,
           raid && game.manifest.adapterId === "skip-to-10k-v2" ? attempt => { config.rules = requestedSkipRules(skipRules.RAID_BOARDS[attempt]); } : undefined);
         if (!created) fail(409, "ATTEMPT_LIMIT", "No raid attempts remain");
+        audit.runId = config.runId; record("issued");
         return respond(response, 201, { run: config });
       }
 
@@ -939,9 +967,12 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       if (method === "POST" && /^\/api\/runs\/[^/]+\/complete$/.test(path)) {
         const identity = await auth.authenticate(request);
         const passport = store.getOrCreatePassport(identity.id);
+        audit.playerId = passport.playerId; audit.action = "complete";
         const runId = decodeURIComponent(path.split("/")[3]);
         const session = store.getSession(runId);
         if (!session || session.playerId !== passport.playerId) fail(404, "NOT_FOUND", "Run session not found");
+        audit.runId = runId; audit.raidId = session.config.raidId; audit.gameId = session.config.gameId;
+        record("submission_received");
         if (session.consumedAt) fail(409, "RUN_CONSUMED", "Run result was already accepted");
         if (Date.now() > Date.parse(session.config.expiresAt ?? "")) fail(409, "RUN_EXPIRED", "Run session expired");
         // A bounded 905-second Skip replay contains up to 108,600 input chars.
@@ -973,6 +1004,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
           if (raid && Date.parse(result.finishedAt) >= Date.parse(raid.endsAt)) fail(409, "RAID_CLOSED", "Run finished after the raid ended");
           const updated = store.acceptResult(session, verifiedResult, (current) => updatePassport(store, current, verifiedResult, raid));
           if (!updated) fail(409, "RUN_CONSUMED", "Run result was already accepted or the raid is final");
+          record("accepted");
           const entries = leaderboard(store, result.gameId, result.mode as "ranked" | "raid", result.raidId, result.objective, result.mode === "ranked" ? game?.manifest.version : undefined, session.config.rules);
           return respond(response, 200, { verified: true, result: verifiedResult, passport: updated, leaderboardEntry: entries.find((entry) => entry.playerId === passport.playerId) });
         } finally {
@@ -988,6 +1020,13 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         const identity = await auth.authenticate(request);
         if (localMinicoinRehearsalRequested && identity.source === "local-demo") fail(403, "FORBIDDEN", "Local demo identities cannot curate the founder rehearsal");
         requireAdmin(identity);
+        if (method === "GET" && path === "/api/admin/run-diagnostics") {
+          const runId = url.searchParams.get("runId");
+          const raidId = url.searchParams.get("raidId");
+          const id = runId ?? raidId;
+          if (!id || id.length > 100 || (runId && raidId)) fail(400, "INVALID_INPUT", "Supply one runId or raidId");
+          return respond(response, 200, diagnosticsReport(store, runId ? "run_id" : "raid_id", id));
+        }
         if (method === "GET" && path === "/api/admin/creators") return respond(response, 200, { creators: store.listCreatorAccounts() });
         if (method === "POST" && /^\/api\/admin\/games\/[^/]+\/transfer$/.test(path)) {
           const game = store.getGame(decodeURIComponent(path.split("/")[4]));
@@ -1179,6 +1218,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       }
       fail(404, "NOT_FOUND", "API route not found");
     } catch (error) {
+      record("rejected", error instanceof HttpError || error instanceof AuthError ? error.code : "INTERNAL_ERROR");
       if (response.headersSent) return response.end();
       if (error instanceof HttpError) return respond(response, error.status, { error: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) } });
       if (error instanceof AuthError) return respond(response, error.status, { error: { code: error.code, message: error.message } });

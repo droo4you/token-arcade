@@ -1,4 +1,5 @@
 import { accountProgress } from "./accountProgress.ts";
+import { runDiagnostics, recordSubmissionFailure } from "./runDiagnostics.ts";
 import { progressKeys } from "../../../packages/sdk/src/progress.ts";
 import { nextAttemptHref } from "./playNavigation.ts";
 import { useTwoPlacesUnlocks } from "./useTwoPlacesUnlocks.ts";
@@ -340,7 +341,7 @@ function CartridgeView({ config, manifest, onComplete }: { config: GameRunConfig
     const cartridgeHost = new CartridgeHost();
     host.current = cartridgeHost;
     if (container.current) {
-      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => setPaused(state === "paused"), setError, event => { void recordFreePlayLifecycle(event, token.current); }, progress);
+      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => setPaused(state === "paused"), setError, event => { void recordFreePlayLifecycle(event, token.current); }, progress, runDiagnostics(config, () => token.current()));
       if (!cartridge) setError("The reviewed browser cartridge is not installed for this game.");
       else cartridgeHost.mount(cartridge, container.current, config, (result) => { if (active) callback.current(result); }).then(() => { if (active) cartridgeHost.start(); }).catch((reason) => { if (active) setError(messageFor(reason)); });
     }
@@ -400,6 +401,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
       const response = await api<CompleteResponse>(`/api/runs/${encodeURIComponent(runResult.runId)}/complete`, token.current, { method: "POST", body: runResult });
       if (completionGeneration.current === generation) { setVerified(response.verified); setRank(response.leaderboardEntry?.rank ?? null); }
     } catch (reason) {
+      if (config) recordSubmissionFailure(config, token.current, reason);
       try {
         const saved = await api<{ verified: boolean }>(`/api/runs/${encodeURIComponent(runResult.runId)}/result`, token.current);
         if (completionGeneration.current === generation) {

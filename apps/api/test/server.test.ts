@@ -16,6 +16,33 @@ const store = new ArcadeStore(":memory:", true);
 const server = createArcadeServer({ store, authSettings: { localDemoMode: true }, staticRoot: "nonexistent-build" });
 let base = "";
 
+test("run diagnostics are owned, bounded, sanitized and admin-only, with server rejection evidence", async () => {
+  const issued = await api("/api/runs", { method: "POST", auth: "diagnostic-player", body: { gameId: WARMUP_GAME_ID, mode: "ranked" } });
+  assert.equal(issued.status, 201);
+  const id = issued.body.run.runId;
+  const path = `/api/runs/${id}/diagnostics`;
+  const event = { event: "timeout", mountId: "11111111-1111-1111-1111-111111111111", sequence: 2, elapsedMs: 15000, hidden: true, stage: "applying", browser: "Safari", platform: "macOS", secret: "DO_NOT_STORE", url: "https://example.test/?token=DO_NOT_STORE" };
+  assert.equal((await api(path, { method: "POST", body: event })).status, 401);
+  assert.equal((await api(path, { method: "POST", auth: "other-player", body: event })).status, 404);
+  assert.equal((await api(path, { method: "POST", auth: "diagnostic-player", body: { ...event, event: "unknown" } })).status, 400);
+  assert.equal((await api(path, { method: "POST", auth: "diagnostic-player", body: event })).status, 200);
+  const reportPath = `/api/admin/run-diagnostics?runId=${id}`;
+  assert.equal((await api(reportPath)).status, 401);
+  assert.equal((await api(reportPath, { auth: "diagnostic-player" })).status, 403);
+  const failed = await api(`/api/runs/${id}/complete`, { method: "POST", auth: "diagnostic-player", body: {} });
+  assert.equal(failed.status, 400);
+  const report = (await api(reportPath, { auth: "admin" })).body;
+  assert.deepEqual(report.events.map((e: any) => e.event), ["issued", "timeout", "submission_received", "rejected"]);
+  assert.equal(report.events[1].hidden, true);
+  assert.equal(report.events[1].browser, "Safari");
+  assert.equal(report.events.at(-1).code, "INVALID_RESULT");
+  assert.equal(report.events.at(-1).requestId, report.events.at(-2).requestId);
+  assert.ok(!JSON.stringify(report).includes("DO_NOT_STORE"));
+  assert.equal(store.getSession(id)?.consumedAt, undefined, "diagnostics do not consume a run");
+  for (let n = 1; n < 120; n++) assert.equal((await api(path, { method: "POST", auth: "diagnostic-player", body: { ...event, sequence: n } })).status, 200);
+  assert.equal((await api(path, { method: "POST", auth: "diagnostic-player", body: event })).status, 429);
+});
+
 test("funded raid administration requires admin and claims require player authentication", async () => {
   assert.equal((await api("/api/admin/raids/missing/funded/rules")).status, 401);
   assert.equal((await api("/api/admin/raids/missing/funded/rules", { auth: "player" })).status, 403);
