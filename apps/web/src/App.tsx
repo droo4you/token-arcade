@@ -141,7 +141,7 @@ function Header({ health }: { health: Health | null }) {
         <Link href="/launch" className="nav-link nav-launch">Launch Console</Link>
       </nav>
       <div className="header-actions">
-        {!auth.ready ? <span className="passport-chip"><UserRound size={17} /><span>Checking account…</span></span> : auth.authenticated ? <Link href="/passport" className="passport-chip"><UserRound size={17} /><span>{profile?.identity === auth.identityKey ? profile.name : "My Passport"}</span></Link> : <button className="passport-chip" onClick={() => navigate("/passport")}><UserRound size={17} /><span>Guest</span></button>}
+        {!auth.ready ? <span className="passport-chip"><UserRound size={17} /><span>Checking account…</span></span> : auth.authenticated ? <Link href="/passport" className="passport-chip" ariaLabel="Open my Passport"><UserRound size={17} /><span>{profile?.identity === auth.identityKey ? profile.name : "My Passport"}</span></Link> : <button className="passport-chip" aria-label="Sign in to Passport" onClick={() => navigate("/passport")}><UserRound size={17} /><span>Guest</span></button>}
         <ThemeToggle />
         {health?.auth.localDemo && <span className="dev-dot" title="Local demo identities are available">demo available</span>}
         <button className="menu-button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={22} /> : <Menu size={22} />}</button>
@@ -527,8 +527,10 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
   if (raid.status !== "open" || !running) unavailable = "This raid is not open for attempts.";
   else if (attemptsLeft === 0) unavailable = "You have used all your attempts.";
   return <main className="page-width raid-page">
-    <Link href="/raids" className="back-link"><ArrowLeft size={17} /> All raids</Link>
-    <GuideLink topic="raids">How raids work</GuideLink>
+    <nav className="raid-page-links" aria-label="Raid navigation">
+      <Link href="/raids" className="back-link"><ArrowLeft size={17} /> All raids</Link>
+      <GuideLink topic="raids">How raids work</GuideLink>
+    </nav>
     {error && <ErrorNote error={`Standings could not refresh. Showing the last received results. ${error}`} />}
     {raid.finalResult && <section className="result-panel" aria-live="polite"><Trophy size={31} /><div><span>FINAL RESULT</span><h2>{leaderboard[0] ? `${leaderboard[0].displayName} wins!` : "No qualifying runs"}</h2><p>{leaderboard[0] ? `Winning result: ${metricText(leaderboard[0].primaryMetric, raid.objective)}. Final standings are saved below.` : "This raid ended without an accepted result."} {raid.funding ? "The testnet reward is settled after final standings are verified." : "This community challenge has no prize."}</p>{raid.funding && data.playerId === leaderboard[0]?.playerId && <RaidPrizeClaim raid={raid} />}</div></section>}
     <div className="raid-hero">
