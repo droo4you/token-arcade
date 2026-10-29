@@ -3,6 +3,7 @@ import { runDiagnostics, recordSubmissionFailure } from "./runDiagnostics.ts";
 import { progressKeys } from "../../../packages/sdk/src/progress.ts";
 import { nextAttemptHref } from "./playNavigation.ts";
 import { useTwoPlacesUnlocks } from "./useTwoPlacesUnlocks.ts";
+import { useRaidAttemptStatus } from "./useRaidAttemptStatus.ts";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import { formatEther } from "viem";
 import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, Gamepad2, LockKeyhole, Menu, Moon, Play, Plus, RotateCcw, Settings2, ShieldCheck, Sparkles, Sun, Ticket, Trophy, UserRound, X } from "lucide-react";
@@ -331,23 +332,36 @@ function CartridgeView({ config, manifest, onComplete }: { config: GameRunConfig
   const host = useRef<CartridgeHost | null>(null);
   const callback = useRef(onComplete);
   const [paused, setPaused] = useState(false);
-  const [error, setError] = useState("");
+  const [ready, setReady] = useState(false);
+  const [failure, setFailure] = useState<"loading" | "runtime" | null>(null);
   callback.current = onComplete;
   useEffect(() => {
     const mountedIdentity = auth.identityKey;
     let active = true;
-    setSaveStatus("");
+    let becameReady = false;
+    setSaveStatus(""); setReady(false); setPaused(false); setFailure(null);
+    const failed = () => { if (active) { setFailure(becameReady ? "runtime" : "loading"); setReady(false); } };
     const progress = mountedIdentity && progressKeys(config.gameId).length ? accountProgress(config.gameId, () => token.current(), () => active && identity.current === mountedIdentity, setSaveStatus) : undefined;
     const cartridgeHost = new CartridgeHost();
     host.current = cartridgeHost;
     if (container.current) {
-      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => setPaused(state === "paused"), setError, event => { void recordFreePlayLifecycle(event, token.current); }, progress, runDiagnostics(config, () => token.current()));
-      if (!cartridge) setError("The reviewed browser cartridge is not installed for this game.");
-      else cartridgeHost.mount(cartridge, container.current, config, (result) => { if (active) callback.current(result); }).then(() => { if (active) cartridgeHost.start(); }).catch((reason) => { if (active) setError(messageFor(reason)); });
+      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => { if (active) setPaused(state === "paused"); }, failed, event => { void recordFreePlayLifecycle(event, token.current); }, progress, runDiagnostics(config, () => token.current()));
+      if (!cartridge) failed();
+      else cartridgeHost.mount(cartridge, container.current, config, (result) => { if (active) callback.current(result); }).then(() => { if (active) { becameReady = true; setReady(true); cartridgeHost.start(); } }).catch(failed);
     }
     return () => { active = false; cartridgeHost.destroy(); host.current = null; };
   }, [config.runId, manifest.adapterId, auth.identityKey]);
-  return <>{saveStatus && <p role="status">{saveStatus}</p>}<div className="cartridge-mount" ref={container} />{error && <ErrorNote error={error} />}{<button className="under-game-button" onClick={() => { if (paused) host.current?.resume(); else host.current?.pause(); setPaused(!paused); }}>{paused ? "Resume game" : "Pause game"}</button>}</>;
+  return <>
+    {!ready && !failure && <div className="loading-slab" role="status">Loading {manifest.name}…<p>Keep this tab open while the game gets ready.</p></div>}
+    {failure && <section className="rules-panel" role="alert"><h2>{failure === "loading" ? "The game couldn’t finish loading" : "The game couldn’t continue"}</h2>
+      <p>{config.mode === "raid" ? "This attempt was already issued and still counts. Return to raid standings to check your remaining attempts. Opening another run uses another attempt." : config.mode === "ranked" ? "Your score has not been confirmed. Return to the cabinet to open a new run." : "Return to the cabinet and open Free Play again."}</p>
+      <p>If you report this, include a screenshot and the approximate time it happened.</p>
+      <ActionLink href={config.mode === "raid" && config.raidId ? `/raids/${encodeURIComponent(config.raidId)}` : gameHref(config.gameId)} tone="light">{config.mode === "raid" ? "Check raid attempts" : "Return to cabinet"}</ActionLink>
+    </section>}
+    {ready && paused && <section className="rules-panel" role="status"><h2>Game paused</h2><p>Resume your current run when you’re ready. {config.mode !== "free" && "The submission deadline keeps running while paused."}</p><button className="action action-lime" onClick={() => { host.current?.resume(); setPaused(false); }}>Resume current run</button></section>}
+    {saveStatus && !failure && <p role="status">{saveStatus}</p>}<div className="cartridge-mount" ref={container} hidden={!!failure} />
+    {ready && !paused && <button className="under-game-button" onClick={() => { host.current?.pause(); setPaused(true); }}>Pause game</button>}
+  </>;
 }
 
 function Player({ game }: { game: ArcadeGame | undefined }) {
@@ -369,6 +383,17 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   const completionGeneration = useRef(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const raidStatus = useRaidAttemptStatus(mode === "raid" ? raidId : undefined, config?.runId ?? (loading ? "issuing" : "idle"));
+  const now = useNow();
+  const remaining = raidStatus.data?.attemptsRemaining;
+  const raidOpen = !!raidStatus.data && isRaidOpen(raidStatus.data.raid, now);
+  const canStartNext = mode !== "raid" || (raidOpen && remaining !== undefined && remaining > 0);
+  const attemptMessage = raidStatus.error ? "Couldn’t check attempts. Return to raid standings before opening another run."
+    : !raidStatus.data ? "Checking remaining attempts…"
+    : !raidOpen ? "This raid is closed to new attempts."
+    : remaining === undefined ? "Sign in to check remaining attempts."
+    : remaining === 0 ? (config && !result ? "This is your last issued attempt. No further attempts remain." : "No attempts remaining. Only accepted scores appear in the standings.")
+    : `${remaining} ${remaining === 1 ? "attempt" : "attempts"} remaining${config && !result ? " after this one" : ""}.`;
   const token = useRef(auth.getToken);
   token.current = auth.getToken;
   useEffect(() => {
@@ -383,7 +408,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
       setConfig({ runId: crypto.randomUUID(), gameId: game.id, gameVersion: game.record?.manifest.version ?? "1.0.0", mode: "free", objective: game.record?.manifest.supportedObjectives[0] ?? "score", seed: crypto.randomUUID(), startedAt: now });
     } else {
       setLoading(true);
-      api<RunResponse>("/api/runs", token.current, { signal: controller.signal, method: "POST", body: { gameId: game.id, mode, raidId, level, ...(skipBoards ? { board } : {}) } }).then((response) => { if (active) setConfig(response.run); }).catch((reason) => { if (active) setError(controller.signal.aborted ? "The run took too long to open. Try again or return to the cabinet." : messageFor(reason)); }).finally(() => { clearTimeout(deadline); if (active) setLoading(false); });
+      api<RunResponse>("/api/runs", token.current, { signal: controller.signal, method: "POST", body: { gameId: game.id, mode, raidId, level, ...(skipBoards ? { board } : {}) } }).then((response) => { if (active) setConfig(response.run); }).catch((reason) => { if (active) setError(controller.signal.aborted ? (mode === "raid" ? "We couldn’t confirm whether your attempt opened. Check raid standings before trying again; an issued attempt still counts." : "The run took too long to open. Try again or return to the cabinet.") : messageFor(reason)); }).finally(() => { clearTimeout(deadline); if (active) setLoading(false); });
     }
     return () => { active = false; clearTimeout(deadline); controller.abort(); completionGeneration.current += 1; };
   }, [game?.id, readyToStart, mode, raidId, board, level, skipBoards, auth.ready, auth.identityKey]);
@@ -420,9 +445,10 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
     </section>}
     {config?.rules?.format === "two-levels-v1" && <p>{mode === "raid" ? "Follow the shared level order. Finish your run to submit completed levels; apples and time break ties." : `Speedrun: level ${Number(config.rules.level) + 1}. Fastest time wins; apples break a tie.`}</p>}
     {loading && !result && <div className="loading-slab">Issuing your {mode === "raid" ? "raid attempt" : "run"}…</div>}
+    {mode === "raid" && <section className="rules-panel" aria-label="Raid attempts"><strong role="status">{attemptMessage}</strong><p>Each issued attempt counts, including a run you leave or refresh.</p></section>}
     {error && <ErrorNote error={error} />}
-    {error && !config && !loading && <button className="action action-lime" onClick={newAttempt}>Try opening the run again</button>}
-    {mode !== "free" && result?.result === "completed" && !verified && !loading && <button className="action action-light" onClick={() => void complete(result)}>Retry result submission</button>}
+    {error && !config && !loading && mode !== "raid" && <button className="action action-lime" onClick={newAttempt}>Try opening the run again</button>}
+    {mode !== "free" && result?.result === "completed" && !verified && !loading && <div><button className="action action-light" onClick={() => void complete(result)}>Retry result submission</button><p>This resends the same score and does not use another attempt.</p></div>}
     {mode === "raid" && raidId && <Link className="back-link" href={`/raids/${encodeURIComponent(raidId)}`}>Return to raid standings</Link>}
     {config?.rules?.format === "skip-four-v1" && <p>Loadout: {String(config.rules.board).toUpperCase()}. {mode === "raid" ? "Complete Zero, Mid and Max; all three scores form your raid total." : "This run competes on its own board."}</p>}
     {config && (!result || mode === "free") && <CartridgeView key={config.runId} config={config} manifest={game.record!.manifest} onComplete={complete} />}
@@ -431,7 +457,8 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
        <h2>{metricText(result.primaryMetric, result.objective)}</h2><span className="result-metric">{result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? "Peak Mood" : result.objective.replaceAll("_", " ")}</span>{verified && rank !== null && <span className="result-rank" data-testid="result-rank">Rank #{rank} on the {mode === "raid" ? "raid" : "Passport Play"} board</span>}
       <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "Run summaries help us improve game balance. Progress saves in this browser and syncs to your account when signed in. Competitive scores require Passport Play or Community Raid." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
       {result.secondaryMetrics && <dl className="result-details">{Object.entries(result.secondaryMetrics).filter(([key]) => !["ticks", "elapsedMs"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1")}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl>}
-    </div><button className="action action-lime" disabled={loading} onClick={newAttempt}><RotateCcw size={18} /> {mode === "free" ? "Play again" : "New attempt"}</button></div>}
+      {mode === "raid" && <p>{attemptMessage}</p>}
+    </div>{mode === "raid" && !canStartNext ? <ActionLink href={`/raids/${encodeURIComponent(raidId ?? "")}`} tone="light">Return to raid standings</ActionLink> : <button className="action action-lime" disabled={loading} onClick={newAttempt}><RotateCcw size={18} /> {mode === "free" ? "Play again" : mode === "raid" ? "Start next attempt" : "New attempt"}</button>}</div>}
     {game.record?.manifest.controls?.orientation === "landscape" && <p className="orientation-note">On a phone, turn sideways for the full playfield.</p>}
     <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. We collect run starts, exits and summaries for game balance, linked to your Passport when signed in or a random browser ID when playing as a guest." : "Competitive results follow the cabinet’s issued rules and verifier before they reach its leaderboard."}</p></div>
   </main>;
