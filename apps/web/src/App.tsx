@@ -1,3 +1,5 @@
+import { PrivacyPolicy } from "./PrivacyPolicy";
+import { PrivacyControls, PrivacyRequests } from "./PrivacyControls";
 import { accountProgress } from "./accountProgress.ts";
 import { runDiagnostics, recordSubmissionFailure } from "./runDiagnostics.ts";
 import { progressKeys } from "../../../packages/sdk/src/progress.ts";
@@ -11,12 +13,11 @@ import type { CommunityAsset, GameManifest, GameRecord, GameRunConfig, GameRunRe
 import { CartridgeHost } from "../../../packages/sdk/src/host";
 import { api, ApiError, messageFor, type CompleteResponse, type GameResponse, type GamesResponse, type Health, type LeaderboardEntry, type LeaderboardResponse, type PassportResponse, type RaidResponse, type RaidsResponse, type RunResponse } from "./api";
 import { useArcadeAuth } from "./auth";
-import { recordFreePlay, recordFreePlayLifecycle } from "./freePlay";
+
 import { createClientCartridge, hasClientCartridge } from "./cartridges";
 import { gameHref, getCatalog, getGame, playHref, type ArcadeGame } from "./catalog";
 import { CreatorPortal } from "./CreatorPortal";
 import { FundedRaidControls } from "./FundedRaidControls";
-import { FreePlayAnalytics } from "./FreePlayAnalytics";
 import { RaidShare } from "./RaidShare";
 import { shippedSections } from "./shipped";
 import { getGuideTopic, guideTopics, guideFaq, guideDefinitions, type GuideTopic, type GuideTopicId } from "./guideContent";
@@ -175,7 +176,7 @@ function ThemeToggle() {
 }
 
 function Footer() {
-  return <footer className="site-footer"><div className="footer-inner"><div className="footer-stamp">T<span>✦</span></div><p>Token Arcade <span>v0 / Metropolis</span><br /><strong>{brandLine}</strong></p><div className="footer-links"><Link href="/">Games</Link><Link href="/raids">Raids</Link><Link href="/passport">Passport</Link><Link href="/guide">Help & FAQ</Link><Link href="/shipped">Shipped</Link></div><span className="footer-small">Built for play. Made for Monad.</span></div></footer>;
+  return <footer className="site-footer"><div className="footer-inner"><div className="footer-stamp">T<span>✦</span></div><p>Token Arcade <span>v0 / Metropolis</span><br /><strong>{brandLine}</strong></p><div className="footer-links"><Link href="/">Games</Link><Link href="/raids">Raids</Link><Link href="/passport">Passport</Link><Link href="/guide">Help & FAQ</Link><Link href="/shipped">Shipped</Link><Link href="/privacy">Privacy</Link><Link href="/privacy/settings">Data controls</Link></div><span className="footer-small">Built for play. Made for Monad.</span></div></footer>;
 }
 
 function GameArt({ game, size = "card" }: { game: ArcadeGame; size?: "card" | "hero" | "detail" }) {
@@ -345,7 +346,7 @@ function CartridgeView({ config, manifest, onComplete }: { config: GameRunConfig
     const cartridgeHost = new CartridgeHost();
     host.current = cartridgeHost;
     if (container.current) {
-      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => { if (active) setPaused(state === "paused"); }, failed, event => { void recordFreePlayLifecycle(event, token.current); }, progress, runDiagnostics(config, () => token.current()));
+      const cartridge = createClientCartridge(config.gameId, manifest.adapterId, manifest, (state) => { if (active) setPaused(state === "paused"); }, failed, () => {}, progress, runDiagnostics(config, () => token.current()));
       if (!cartridge) failed();
       else cartridgeHost.mount(cartridge, container.current, config, (result) => { if (active) callback.current(result); }).then(() => { if (active) { becameReady = true; setReady(true); cartridgeHost.start(); } }).catch(failed);
     }
@@ -420,7 +421,7 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
   const complete = async (runResult: GameRunResult) => {
     const generation = completionGeneration.current;
     setResult(runResult); setVerified(false); setError(""); setRank(null);
-    if (mode === "free") { void recordFreePlay(runResult, token.current); return; }
+    if (mode === "free") return;
     setLoading(true);
     try {
       const response = await api<CompleteResponse>(`/api/runs/${encodeURIComponent(runResult.runId)}/complete`, token.current, { method: "POST", body: runResult });
@@ -455,12 +456,12 @@ function Player({ game }: { game: ArcadeGame | undefined }) {
     {result && <div className="result-panel"><div className="result-medal"><Trophy size={31} /></div><div>
       <span>{result.result === "failed" ? "RUN FINISHED" : mode === "free" ? "LOCAL RESULT" : loading ? "VERIFYING RESULT" : verified ? "VERIFIED RESULT" : "RESULT NOT VERIFIED"}</span>
        <h2>{metricText(result.primaryMetric, result.objective)}</h2><span className="result-metric">{result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? "Peak Mood" : result.objective.replaceAll("_", " ")}</span>{verified && rank !== null && <span className="result-rank" data-testid="result-rank">Rank #{rank} on the {mode === "raid" ? "raid" : "Passport Play"} board</span>}
-      <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "Run summaries help us improve game balance. Progress saves in this browser and syncs to your account when signed in. Competitive scores require Passport Play or Community Raid." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
+      <p>{result.result === "failed" ? "This run did not complete its objective." : mode === "free" ? "Progress saves in this browser and syncs to your account when signed in. Competitive scores require Passport Play or Community Raid." : verified ? "Accepted by the arcade verifier. Your Passport and the standings have been updated." : loading ? "Checking your run against the issued session and input proof…" : "This result was not accepted. See the message above for details."}</p>
       {result.secondaryMetrics && <dl className="result-details">{Object.entries(result.secondaryMetrics).filter(([key]) => !["ticks", "elapsedMs"].includes(key)).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, " $1")}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl>}
       {mode === "raid" && <p>{attemptMessage}</p>}
     </div>{mode === "raid" && !canStartNext ? <ActionLink href={`/raids/${encodeURIComponent(raidId ?? "")}`} tone="light">Return to raid standings</ActionLink> : <button className="action action-lime" disabled={loading} onClick={newAttempt}><RotateCcw size={18} /> {mode === "free" ? "Play again" : mode === "raid" ? "Start next attempt" : "New attempt"}</button>}</div>}
     {game.record?.manifest.controls?.orientation === "landscape" && <p className="orientation-note">On a phone, turn sideways for the full playfield.</p>}
-    <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. We collect run starts, exits and summaries for game balance, linked to your Passport when signed in or a random browser ID when playing as a guest." : "Competitive results follow the cabinet’s issued rules and verifier before they reach its leaderboard."}</p></div>
+    <div className="player-foot"><ShieldCheck size={21} /><p>{mode === "free" ? "Free Play never needs a wallet or account. Optional gameplay analytics are off. Game progress stays in this browser and syncs to your account when signed in." : "Competitive results follow the cabinet’s issued rules and verifier before they reach its leaderboard."}</p></div>
   </main>;
 }
 
@@ -567,7 +568,7 @@ function RaidDetail({ id, records }: { id: string; records: GameRecord[] }) {
 
 function AccountPrompt({ health }: { health: Health | null }) {
   const auth = useArcadeAuth();
-  return <div className="account-prompt"><div className="prompt-art"><span>✦</span></div><div><h2>Your arcade identity starts here.</h2><p>A Player Passport keeps verified scores and raid history together. New and returning players use the same sign-in. You can browse the arcade without an account.</p><div className="prompt-actions">{auth.configured ? <button className="action action-lime" onClick={auth.login}>Sign in / Create account <ArrowUpRight size={18} /></button> : <div className="setup-note"><Settings2 size={19} /><span>Privy sign-in is not configured. Add <code>VITE_PRIVY_APP_ID</code> and server credentials to enable player accounts.</span></div>}<ActionLink href="/" tone="light">Browse as Guest</ActionLink></div>{health?.auth.localDemo && <div className="demo-controls"><strong>Local developer demo</strong><span>These identities only work with LOCAL_DEMO_MODE on loopback.</span><div><button onClick={() => auth.setDemoRole("player")}>Enter as test player</button>{health.auth.localDemoAdmin && <button onClick={() => auth.setDemoRole("admin")}>Enter as test admin</button>}</div>{health.auth.localDemoAdmin === false && <span>Curator actions require an allowlisted Privy account in this rehearsal.</span>}</div>}</div></div>;
+  return <div className="account-prompt"><div className="prompt-art"><span>✦</span></div><div><h2>Your arcade identity starts here.</h2><p>A Player Passport keeps verified scores and raid history together. For adults 18 and older. New and returning players use the same sign-in. You can browse the arcade without an account.</p><p>Account data is handled as described in our <a href="/privacy">privacy notice</a>.</p><div className="prompt-actions">{auth.configured ? <button className="action action-lime" onClick={auth.login}>Sign in / Create account <ArrowUpRight size={18} /></button> : <div className="setup-note"><Settings2 size={19} /><span>Privy sign-in is not configured. Add <code>VITE_PRIVY_APP_ID</code> and server credentials to enable player accounts.</span></div>}<ActionLink href="/" tone="light">Browse as Guest</ActionLink></div>{health?.auth.localDemo && <div className="demo-controls"><strong>Local developer demo</strong><span>These identities only work with LOCAL_DEMO_MODE on loopback.</span><div><button onClick={() => auth.setDemoRole("player")}>Enter as test player</button>{health.auth.localDemoAdmin && <button onClick={() => auth.setDemoRole("admin")}>Enter as test admin</button>}</div>{health.auth.localDemoAdmin === false && <span>Curator actions require an allowlisted Privy account in this rehearsal.</span>}</div>}</div></div>;
 }
 
 function WalletSigningCheck({ wallet }: { wallet: string }) {
@@ -988,7 +989,7 @@ function LaunchConsole({ health, refresh }: { health: Health | null; refresh: ()
           </form>
         </section>
         <FundedRaidControls key={auth.identityKey} />
-        <FreePlayAnalytics key={`analytics-${auth.identityKey}`} />
+        <PrivacyRequests key={`privacy-${auth.identityKey}`} />
         <section className="console-panel console-setup-panel">
           <div className="console-panel-heading"><div><span className="section-kicker">SETUP</span><h2>Onchain readiness</h2></div><ShieldCheck size={24} /></div>
           <div className="setup-state"><span className={`setup-indicator ${health?.settlement.ready ? "is-ready" : ""}`} /><strong>{health?.settlement.ready ? "Settlement configured" : "Settlement needs configuration"}</strong></div>
@@ -1128,6 +1129,8 @@ export function App() {
   else if (path.startsWith("/play/")) page = <Player key={route} game={getGame(decodeURIComponent(path.slice(6)), records)} />;
   else if (path === "/raids") page = <RaidIndex raids={raids} />;
   else if (path.startsWith("/raids/")) page = <RaidDetail key={path} id={decodeURIComponent(path.slice(7))} records={records} />;
+  else if (path === "/privacy") page = <PrivacyPolicy />;
+  else if (path === "/privacy/settings") page = <PrivacyControls />;
   else if (path === "/passport") page = <PassportPage health={health} records={records} />;
   else if (path === "/demo") page = <FounderDemo records={records} health={health} loading={loading} registryError={registryError} refresh={refresh} />;
   else if (path === "/launch") page = <CreatorPortal health={health} refresh={refresh} />;

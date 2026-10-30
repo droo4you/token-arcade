@@ -59,6 +59,7 @@ export async function api<T>(
     const error = (payload as { error?: { message?: string; details?: string[]; code?: string } }).error;
     const failure = new ApiError(response.status, error?.message ?? `Request failed (${response.status}).`, error?.details ?? []);
     failure.code = error?.code;
+    if (failure.code === "AGE_CHECK_REQUIRED") window.dispatchEvent(new Event("ta-age-expired"));
     failure.requestId = response.headers.get("X-Request-Id") ?? undefined;
     throw failure;
   }

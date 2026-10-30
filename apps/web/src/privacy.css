@@ -1,0 +1,9 @@
+.privacy-page { max-width: 780px; margin: 3rem auto; padding: 1.5rem; line-height: 1.7; overflow-wrap: anywhere; font-family: system-ui, sans-serif; }
+.privacy-page h1 { font-size: clamp(2rem, 6vw, 3.5rem); line-height: 1.15; }
+.privacy-page h2 { margin-top: 2rem; font-size: 1.5rem; }
+.privacy-page a { text-decoration: underline; }
+.privacy-page button { padding: .8rem 1.2rem; border: 2px solid currentColor; border-radius: .5rem; background: var(--lime, #d7f87e); color: #1a0e20; font: inherit; cursor: pointer; }
+.privacy-page button:disabled { opacity: .5; cursor: not-allowed; }
+.age-screen form { display: grid; gap: .8rem; max-width: 400px; }
+.age-screen input { padding: .8rem; border: 2px solid; border-radius: .5rem; font: inherit; min-width: 0; }
+.privacy-page :focus-visible { outline: 3px solid #8b56ca; outline-offset: 4px; }

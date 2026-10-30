@@ -49,60 +49,18 @@ test("funded raid administration requires admin and claims require player authen
   assert.equal((await api("/api/raids/missing/claim")).status, 401);
 });
 
-test("Free Play summaries support guests and accounts without awarding competitive progress", async () => {
-  const now = new Date().toISOString();
-  const result = { runId: "summary-guest", gameId: "skip-to-10k", gameVersion: "1.1.0", mode: "free", objective: "score", primaryMetric: 123,
-    result: "completed", startedAt: now, finishedAt: now, secondaryMetrics: { earnedGwei: 50, rocksOwned: 3 }, proof: { ignored: true } };
-  const body = { guestId: "12345678-1234-1234-1234-123456789012", result };
-  assert.equal((await api("/api/free-play/summaries", { method: "POST", body })).status, 200);
-  assert.equal((await api("/api/free-play/summaries", { method: "POST", body })).status, 200);
-  const player = store.getOrCreatePassport("local-demo:summary-player");
-  const before = JSON.stringify(player);
-  assert.equal((await api("/api/free-play/summaries", { method: "POST", auth: "summary-player", body: { ...body, result: { ...result, runId: "summary-account" } } })).status, 200);
-  assert.equal(JSON.stringify(store.getPassport(player.playerId)), before);
-  assert.equal((await api("/api/admin/free-play/summaries")).status, 401);
-  assert.equal((await api("/api/admin/free-play/summaries", { auth: "summary-player" })).status, 403);
-  const report = await api("/api/admin/free-play/summaries?gameId=skip-to-10k", { auth: "admin" });
-  assert.equal(report.body.summaries.length, 2);
-  assert.equal(report.body.summaries.find((r: any) => r.runId === "summary-account").playerId, player.playerId);
-  assert.equal(report.body.summaries.find((r: any) => r.runId === "summary-guest").playerId, null);
-  assert.equal(report.body.summaries[0].proof, undefined);
-  assert.equal(report.body.summaries[0].verified, false);
-  assert.equal((await api("/api/admin/free-play/report")).status, 401);
-  assert.equal((await api("/api/admin/free-play/report", { auth: "summary-player" })).status, 403);
-  assert.equal((await api("/api/admin/free-play/report?days=999", { auth: "admin" })).status, 400);
-  const analytics = await api("/api/admin/free-play/report?days=7", { auth: "admin" });
-  assert.equal(analytics.status, 200);
-  const group = analytics.body.groups.find((g: any) => g.gameId === "skip-to-10k");
-  assert.equal(group.runs, 2); assert.equal(group.guests, 1); assert.equal(group.accounts, 1);
-  assert.equal(group.primary.median, 123);
-  assert.equal(group.recent[0].guestId, undefined);
-  for (const patch of [{ mode: "ranked" }, { primaryMetric: "oops" }, { secondaryMetrics: { bad: "value" } }, { gameId: "unknown" }]) {
-    const response = await api("/api/free-play/summaries", { method: "POST", body: { ...body, result: { ...result, ...patch } } });
-    assert.ok(response.status >= 400);
+test("retired guest telemetry refuses stale clients and stores nothing", async () => {
+  for (const path of ["events", "summaries"]) {
+    for (const auth of [undefined, "player"]) {
+      const response = await api(`/api/free-play/${path}`, { method: "POST", auth, body: { guestId: "legacy-id", privateText: "not stored" } });
+      assert.equal(response.status, 410);
+      assert.equal(response.body.error.code, "ANALYTICS_DISABLED");
+    }
   }
-});
-
-test("Free Play lifecycle is idempotent, bounded, and reconciles out-of-order exits", async () => {
-  const now = new Date().toISOString();
-  const run = { runId: "lifecycle-run", gameId: "skip-to-10k", gameVersion: "1.1.0", mode: "free", objective: "score", startedAt: now };
-  const body = { guestId: "abcdef12-1234-1234-1234-123456789012", run };
-  const send = (patch: object, auth?: string) => api("/api/free-play/events", { method: "POST", auth, body: { ...body, ...patch } });
-  assert.equal((await send({ type: "exited", reason: "navigation" })).status, 200);
-  assert.equal((await send({ type: "started", context: { upgrade_arm: 3 } }, "lifecycle-player")).status, 200);
-  assert.equal((await send({ type: "started", context: { upgrade_arm: 99 } }, "lifecycle-player")).status, 200);
-  const stored = store.db.prepare("SELECT json FROM free_play_events WHERE run_id=? AND type='started'").get(run.runId) as { json: string };
-  assert.equal(JSON.parse(stored.json).context.upgrade_arm, 3, "retry cannot overwrite the initial loadout");
-  let report = (await api("/api/admin/free-play/report", { auth: "admin" })).body;
-  let group = report.lifecycle.groups.find((g: any) => g.gameId === run.gameId);
-  assert.equal(group.started, 1); assert.equal(group.exited, 1); assert.equal(group.finished, 0);
-  assert.equal((await api("/api/free-play/summaries", { method: "POST", auth: "lifecycle-player", body: { guestId: body.guestId, result: { ...run, primaryMetric: 99, result: "completed", finishedAt: now } } })).status, 200);
-  report = (await api("/api/admin/free-play/report", { auth: "admin" })).body;
-  group = report.lifecycle.groups.find((g: any) => g.gameId === run.gameId);
-  assert.equal(group.finished, 1); assert.equal(group.exited, 0, "late result takes precedence over exit");
-  const recent = report.groups.flatMap((g: any) => g.recent).find((r: any) => r.runId === run.runId);
-  assert.deepEqual(recent.startContext, { upgrade_arm: 3 });
-  for (const patch of [{ type: "other" }, { type: "started", run: { ...run, mode: "raid" } }, { type: "started", context: { privateText: "not numeric" } }, { type: "exited", reason: "tab_hidden" }]) assert.equal((await send(patch)).status, 400);
+  assert.equal((store.db.prepare("SELECT count(*) AS n FROM free_play_events").get() as any).n, 0);
+  assert.equal((store.db.prepare("SELECT count(*) AS n FROM free_play_summaries").get() as any).n, 0);
+  assert.equal((await api("/api/admin/free-play/report")).status, 401);
+  assert.equal((await api("/api/admin/free-play/report", { auth: "player" })).status, 403);
 });
 
 before(async () => {

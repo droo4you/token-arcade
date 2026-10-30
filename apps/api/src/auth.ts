@@ -1,3 +1,4 @@
+import { ageStatus } from "./privacy.ts";
 import type { IncomingMessage } from "node:http";
 import { createHash } from "node:crypto";
 import { PrivyClient, type User } from "@privy-io/node";
@@ -11,6 +12,7 @@ export interface AuthSettings {
   adminPrivyIds?: string;
   localDemoMode?: boolean;
   localDemoAdminDisabled?: boolean;
+  requireAdultSession?: boolean;
 }
 
 export interface Identity {
@@ -30,6 +32,7 @@ export class AuthError extends Error {
 }
 
 export class ArcadeAuth {
+  private readonly requireAdultSession: boolean;
   private readonly client?: PrivyClient;
   private readonly walletRequests = new Map<string, Promise<string | undefined>>();
   private readonly admins: Set<string>;
@@ -37,6 +40,7 @@ export class ArcadeAuth {
   readonly localDemoAdmin: boolean;
 
   constructor(settings: AuthSettings) {
+    this.requireAdultSession = process.env.NODE_ENV === "production" || settings.requireAdultSession === true;
     this.admins = new Set((settings.adminPrivyIds ?? "").split(",").map((id) => id.trim()).filter(Boolean));
     // A reverse proxy can make a public request appear to come from loopback.
     // Never accept demo bearer identities in a production process, even there.
@@ -101,9 +105,11 @@ export class ArcadeAuth {
       if (!this.localDemoMode || !loopback) throw new AuthError("Local demo identity is disabled");
       const name = token.slice("local-demo:".length);
       if (!/^[a-z][a-z0-9_-]{0,31}$/.test(name)) throw new AuthError("Invalid local demo identity");
+      if (this.requireAdultSession && ageStatus(request) !== "adult") throw new AuthError("Complete the age check before signing in.", 403, "AGE_CHECK_REQUIRED");
       return { id: `local-demo:${name}`, isAdmin: name === "admin" && this.localDemoAdmin, source: "local-demo" };
     }
 
+    if (this.requireAdultSession && ageStatus(request) !== "adult") throw new AuthError("Complete the age check before signing in.", 403, "AGE_CHECK_REQUIRED");
     if (!this.client) throw new AuthError("Privy authentication is not configured", 503, "AUTH_NOT_CONFIGURED");
     try {
       const claims = await this.client.utils().auth().verifyAccessToken(token);
