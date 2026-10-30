@@ -69,6 +69,7 @@
     if (down && (e.code === 'KeyM')) { toggleMute(); return; }
     if (down && e.code === 'KeyR' && G.paused && canRestart()) { G.paused = false; A.resume(); startRun(); return; }
     if (down && (e.code === 'KeyP' || e.code === 'Escape') && G.screen === 'play') { togglePause(); return; }
+    if (down && G.screen === 'title' && window.CJLevelSelect && /^(Arrow(Left|Right|Up|Down)|Key[ADWS])$/.test(e.code)) { e.preventDefault(); window.CJLevelSelect.cycle(/Left|Up|KeyA|KeyW/.test(e.code) ? -1 : 1); return; }
     if (down && G.screen === 'title' && window.CJLevelSelect && /^Digit[1-9]$/.test(e.code)) { const L = window.CJLevelSelect.list[+e.code.slice(5) - 1]; if (L && L.id !== window.CJLevelSelect.level.id) window.CJLevelSelect.go(L.id); return; }
     if (down && e.code === 'KeyR' && G.screen === 'end' && G.lastReplay) { copyReplay(); return; }
     if (down && (e.code === 'Enter' || e.code === 'Space') && (G.screen === 'title' || (G.screen === 'end' && G.t - G.endAt > 0.8))) { e.preventDefault(); startRun(); return; }
@@ -117,7 +118,12 @@
     const p = toLogical(e);
     if (G.screen === 'play' && hitBtn(p, 'mute')) { toggleMute(); return; }
     if (G.paused) { pauseMenuTap(p); return; }
-    if (G.screen === 'title' && G.lvlChip && window.CJLevelSelect) { const c = G.lvlChip; if (p.y > c.y - c.h / 2 - 6 && p.y < c.y + c.h / 2 + 6 && Math.abs(p.x - c.x) < c.w / 2 + 6) { window.CJLevelSelect.cycle(p.x < c.x ? -1 : 1); return; } }
+    if (G.screen === 'title' && G.lvlCards && window.CJLevelSelect) { // level cards + START (only START starts, so browsing never launches a run)
+      const hit = c => p.x > c.x - 2 && p.x < c.x + c.w + 2 && p.y > c.y - 2 && p.y < c.y + c.h + 2;
+      for (const c of G.lvlCards) if (hit(c)) { if (c.locked) { G.lockedFlash = { id: c.id, t: G.t }; A.sfx('empty'); } else if (c.id !== window.CJLevelSelect.level.id) { A.sfx('ui'); window.CJLevelSelect.go(c.id); } return; }
+      if (G.startBtn && hit(G.startBtn)) startRun();
+      return;
+    }
     if (G.screen === 'end' && G.replayBtn && G.lastReplay) { const c = G.replayBtn; if (Math.abs(p.x - c.x) < c.w / 2 + 6 && Math.abs(p.y - c.y) < c.h / 2 + 6) { copyReplay(); return; } }
     if (G.screen !== 'play') { if (G.screen === 'title' || G.t - G.endAt > 0.8) startRun(); return; }
     if (hitBtn(p, 'pause')) { togglePause(); return; }
@@ -674,7 +680,77 @@
     const sg = ctx.createLinearGradient(sx - 70, 0, sx + 70, 0); sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, 'rgba(255,255,255,0.6)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = sg; ctx.fillText('CANYON JUMP', W / 2, y); ctx.restore();
   }
+  /* Free Play start screen: level cards (name, tagline, colour swatch, gap/depth, local best), selected highlight, big START. */
+  const LOCKED_LEVELS = [{ id: 'level-3', name: 'Coming soon', tagline: 'a bigger gap is being surveyed', locked: true }];
+  function levelBest(id) { try { return +localStorage.getItem('canyon-jump.best' + (id === window.CJLevels.DEFAULT ? '' : '.' + id)) || 0; } catch (e) { return 0; } }
+  function swatch(L, x, y, w, h) {
+    ctx.save(); ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.clip();
+    if (L.locked) { ctx.fillStyle = '#2a1a3a'; ctx.fillRect(x, y, w, h); text('?', x + w / 2, y + h / 2 + 1, h * 0.5, 'rgba(255,255,255,0.35)', 'center', false); ctx.restore(); return; }
+    const sk = L.time?.sky || {}, pl = L.palette || {}, g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, sk.zenith || '#335'); g.addColorStop(0.45, sk.mid || '#88a'); g.addColorStop(0.62, sk.horizon || '#ddd'); ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    // two rims and the gap, in the level's mesa/sand colours
+    const rimY = y + h * 0.62, gl = x + w * 0.38, gr = x + w * 0.66;
+    ctx.fillStyle = (pl.mesa && pl.mesa[0]) || pl.sandDark || '#865'; ctx.fillRect(x, rimY, gl - x, h); ctx.fillRect(gr, rimY, x + w - gr, h);
+    ctx.fillStyle = sk.below || '#433'; ctx.beginPath(); ctx.moveTo(gl, rimY); ctx.lineTo(gr, rimY); ctx.lineTo(gr - w * 0.06, y + h); ctx.lineTo(gl + w * 0.06, y + h); ctx.fill();
+    ctx.fillStyle = pl.asphalt || '#333'; ctx.fillRect(x, rimY - 2, gl - x, 3);
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.roundRect(gl - 15, rimY - 9, 12, 6, 2); ctx.fill(); // the (white) car on the ramp
+    ctx.restore();
+  }
+  function drawLevelSelect() {
+    const M = mg(), LS = window.CJLevelSelect, cur = LS.level.id, portrait = G.portrait || W < 640;
+    const size = Math.min(portrait ? 58 : 66, (W - 40) / 7.2), ly = M.t + (portrait ? 46 : 52);
+    logo(ly, size);
+    text('floor it.  send it.  stick it.', W / 2, ly + size * 0.62, T.body + 1, '#fff4e0', 'center', true, 700);
+    const all = [...LS.list, ...LOCKED_LEVELS], n = all.length, gap = 12;
+    const top = ly + size * 0.62 + 34;
+    text('SELECT LEVEL', W / 2, top, 12, '#ffd9e6', 'center', true, 800);
+    const cw = portrait ? Math.min(460, W - M.l - M.r) : Math.min(300, (Math.min(980, W - M.l - M.r) - gap * (n - 1)) / n);
+    const ch = portrait ? 92 : 168, x0 = portrait ? W / 2 - cw / 2 : W / 2 - (cw * n + gap * (n - 1)) / 2, y0 = top + 16;
+    G.lvlCards = [];
+    all.forEach((L, i) => {
+      const x = portrait ? x0 : x0 + i * (cw + gap), y = portrait ? y0 + i * (ch + gap) : y0, sel = L.id === cur, locked = !!L.locked;
+      const shake = G.lockedFlash && G.lockedFlash.id === L.id && G.t - G.lockedFlash.t < 0.35 ? Math.sin((G.t - G.lockedFlash.t) * 60) * 4 : 0;
+      G.lvlCards.push({ id: L.id, locked, x, y, w: cw, h: ch });
+      ctx.save(); ctx.translate(shake, 0); ctx.globalAlpha = locked ? 0.55 : 1;
+      if (sel) { ctx.save(); ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = 18 + 6 * Math.sin(G.t * 4); panel(x, y, cw, ch, 16, 'rgba(40,18,56,0.9)'); ctx.restore(); }
+      else panel(x, y, cw, ch, 16, 'rgba(22,10,36,0.72)');
+      ctx.lineWidth = sel ? 3 : 1.5; ctx.strokeStyle = sel ? '#ffd23f' : 'rgba(255,255,255,0.14)'; ctx.beginPath(); ctx.roundRect(x + 1, y + 1, cw - 2, ch - 2, 15); ctx.stroke();
+      const lvlTag = `LEVEL ${i + 1}`, b = locked ? 0 : levelBest(L.id), stat = L.sim ? `${(L.sim.CANYON_W / 1000).toFixed(L.sim.CANYON_W < 1000 ? 2 : 1)} km gap · ${L.sim.CANYON_DEPTH} m deep` : '';
+      if (portrait) {
+        const sw = ch - 20; swatch(L, x + 10, y + 10, sw * 1.25, sw);
+        const tx = x + 10 + sw * 1.25 + 14;
+        text(lvlTag + (locked ? '  🔒' : ''), tx, y + 18, 11, sel ? '#ffd23f' : '#c8b6e8', 'left', false, 800);
+        text(locked ? '???' : L.name.toUpperCase(), tx, y + 38, 18, '#fff', 'left', false, 900);
+        text(L.tagline, tx, y + 58, 12, '#ffd9e6', 'left', false, 600);
+        text(locked ? 'coming soon' : b ? `BEST ${b.toLocaleString('en-US')}  ·  ${stat}` : `no runs yet  ·  ${stat}`, tx, y + 77, 11, b ? '#5af0ff' : 'rgba(255,233,240,0.7)', 'left', false, 700);
+        if (sel) { ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(x + cw - 20, y + 20, 11, 0, 7); ctx.fill(); text('✓', x + cw - 20, y + 21, 13, '#1a0d26', 'center', false, 900); }
+      } else {
+        swatch(L, x + 12, y + 12, cw - 24, 64);
+        text(lvlTag + (locked ? '  🔒' : ''), x + 14, y + 92, 11, sel ? '#ffd23f' : '#c8b6e8', 'left', false, 800);
+        text(locked ? '???' : L.name.toUpperCase(), x + 14, y + 112, 17, '#fff', 'left', false, 900);
+        text(L.tagline, x + 14, y + 131, 12, '#ffd9e6', 'left', false, 600);
+        text(locked ? 'coming soon' : b ? `BEST ${b.toLocaleString('en-US')}` : 'no runs yet', x + 14, y + 151, 12, b ? '#5af0ff' : 'rgba(255,233,240,0.7)', 'left', false, 800);
+        if (stat) text(stat, x + cw - 14, y + 151, 10, 'rgba(255,233,240,0.7)', 'right', false, 700);
+        if (sel) { ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(x + cw - 24, y + 24, 12, 0, 7); ctx.fill(); text('✓', x + cw - 24, y + 25, 14, '#1a0d26', 'center', false, 900); }
+      }
+      ctx.restore();
+    });
+    const cardsBottom = portrait ? y0 + n * (ch + gap) - gap : y0 + ch;
+    // big START (only START starts a run)
+    const bw = Math.min(portrait ? cw : 340, W - 40), bh = portrait ? 58 : 66, bx = W / 2 - bw / 2, by = cardsBottom + 22, pulse = 0.5 + 0.5 * Math.sin(G.t * 5);
+    G.startBtn = { x: bx, y: by, w: bw, h: bh };
+    ctx.save(); ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = 10 + 14 * pulse; panel(bx, by, bw, bh, bh / 2, '#ffd23f'); ctx.restore();
+    text(`▶  START  ·  ${LS.level.name.toUpperCase()}`, W / 2, by + bh / 2 + 1, bw < 340 ? 17 : 19, '#1a0d26', 'center', false, 900);
+    text(G.touch ? 'tap a card to pick a canyon' : '← / → pick a canyon  ·  ENTER / SPACE to start', W / 2, by + bh + 20, 12, 'rgba(255,233,240,0.8)', 'center', true, 700);
+    // quick controls reminder (only if there's room)
+    const hy = by + bh + 44;
+    if (H - M.b - hy > 70) {
+      const lines = G.touch ? ['ROAD: swipe lanes · hit the ramp above CLEAR speed', 'SKY: joystick to fly · BOOST spends AIR', 'trick, then land past the far rim to cash the combo'] : ['ROAD: ← / → lanes · hit the ramp above the CLEAR line', 'SKY: ↑/↓ pitch · Z boost · C/L roll · X/V flip · SPACE stabilize · land past the far rim'];
+      lines.forEach((ln, i) => text(ln, W / 2, hy + i * 18, portrait ? 11 : 12, '#fff4e0', 'center', true, 600));
+    }
+  }
   function drawTitle() {
+    if (window.CJLevelSelect && window.CJLevelSelect.list.length > 1 && !TA?.embedded) { drawLevelSelect(); return; }
     const M = mg(), narrow = W < 700, size = Math.min(78, (W - 40) / 7.2), ly = M.t + (G.portrait ? H * 0.1 : H * 0.15);
     logo(ly, size);
     const lvl = window.CJLevel || (window.CJLevels && window.CJLevels.get(window.CJLevels.DEFAULT)) || null, LS = window.CJLevelSelect;
