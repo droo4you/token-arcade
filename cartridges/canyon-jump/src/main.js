@@ -154,8 +154,8 @@
     const tapDir = lanes.up(e.pointerId);
     if (!tch || tch.btn || !G.run || G.screen !== 'play') return;
     if (tapDir && G.run.phase === 'road') edges[tapDir] = true;
-    const moved = Math.hypot(tch.x - tch.x0, tch.y - tch.y0);
-    if (G.run.phase === 'sky' && moved < 12 && G.t - tch.t0 < 0.25 && tch.x0 >= W * 0.6) edges.boost = true;
+    // (Removed: a quick tap anywhere on the right 40% of the screen used to fire BOOST, so near-misses on the trick buttons
+    // burned AIR. BOOST now only comes from its button, or Z / J on a keyboard.)
   }
   canvas.addEventListener('pointerdown', onDown); addEventListener('pointermove', onMove); addEventListener('pointerup', onUp); addEventListener('pointercancel', e => { lanes.cancel(e.pointerId); onUp(e); });
   // HUD buttons (logical px), safe-area aware.
