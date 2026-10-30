@@ -1,3 +1,4 @@
+import { ageStatus, ageCookie, adultFromDate, initializePrivacy, prunePrivacyData, requestDeletion, exportPlayerData } from "./privacy.ts";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
@@ -530,7 +531,12 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
   }, auth.localDemoMode);
 
   initRunDiagnostics(store);
+  initializePrivacy(store);
+  const privacyCleanup = setInterval(() => prunePrivacyData(store), 3600_000);
+  privacyCleanup.unref();
   const server = createServer(async (request, response) => {
+    response.setHeader("Referrer-Policy", "no-referrer");
+    response.setHeader("X-Content-Type-Options", "nosniff");
     const requestId = randomUUID();
     const audit: { playerId: string; runId?: string; raidId?: string; action?: string; gameId?: string } = { playerId: "" };
     const record = (event: string, code?: string) => {
@@ -542,6 +548,28 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       const method = request.method ?? "GET";
       if (!path.startsWith("/api/")) return serveStatic(request, response, path, staticRoot);
       response.setHeader("X-Request-Id", requestId);
+      if (path === "/api/privacy/age-session" && method === "GET") return respond(response, 200, { status: ageStatus(request) });
+      if (path === "/api/privacy/age-session" && method === "POST") {
+        if (request.headers.origin && new URL(request.headers.origin).host !== request.headers.host) fail(403, "ORIGIN_DENIED", "Use the age form on this site.");
+        if (ageStatus(request) === "blocked") return respond(response, 403, { error: { code: "AGE_RESTRICTED", message: "Token Arcade is available to adults only." } });
+        const body = await readJson(request);
+        let adult: boolean;
+        try { adult = adultFromDate(body.birthDate); } catch { fail(400, "INVALID_DATE", "Enter a valid date of birth."); }
+        response.setHeader("Set-Cookie", ageCookie(adult ? "adult" : "blocked", process.env.NODE_ENV === "production"));
+        return respond(response, adult ? 200 : 403, adult ? { status: "adult" } : { error: { code: "AGE_RESTRICTED", message: "Token Arcade is available to adults only." } });
+      }
+      if (path === "/api/me/privacy/export" && method === "GET") {
+        const identity = await auth.authenticate(request);
+        return respond(response, 200, exportPlayerData(store, store.getOrCreatePassport(identity.id).playerId));
+      }
+      if (path === "/api/me/privacy/deletion-request" && method === "POST") {
+        const identity = await auth.authenticate(request);
+        return respond(response, 202, { request: requestDeletion(store, store.getOrCreatePassport(identity.id).playerId) });
+      }
+      if (path === "/api/admin/privacy/requests" && method === "GET") {
+        requireAdmin(await auth.authenticate(request));
+        return respond(response, 200, { requests: store.db.prepare("SELECT * FROM privacy_requests ORDER BY requested_at").all() });
+      }
       if (method === "POST" && /^\/api\/runs\/[^/]+\/diagnostics$/.test(path)) {
         const identity = await auth.authenticate(request);
         const player = store.getOrCreatePassport(identity.id);
@@ -582,60 +610,10 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (!saved) fail(404, "NOT_FOUND", "Raid not found");
         return respond(response, 200, await fundedRaids.claim(publicRaid(saved), store.getOrCreatePassport(identity.id)));
       }
-      if (method === "POST" && path === "/api/free-play/events") {
-        const body = await readJson(request);
-        const guestId = requiredString(body.guestId, "guestId", 36);
-        if (!/^[a-f0-9-]{36}$/i.test(guestId)) fail(400, "INVALID_INPUT", "Invalid guest ID");
-        if (body.type !== "started" && body.type !== "exited") fail(400, "INVALID_INPUT", "Unknown lifecycle event");
-        const run = body.run;
-        if (!isRecord(run) || run.mode !== "free") fail(400, "INVALID_INPUT", "Free Play only");
-        const runId = requiredString(run.runId, "runId", 100);
-        const gameId = requiredString(run.gameId, "gameId", 64);
-        const gameVersion = requiredString(run.gameVersion, "gameVersion", 80);
-        const game = store.getGame(gameId);
-        if (!game || game.status !== "published") fail(404, "NOT_FOUND", "Game not found");
-        if (!game.manifest.supportedObjectives.includes(run.objective as GameObjective)) fail(400, "INVALID_INPUT", "Unknown objective");
-        const startedAt = isoDate(run.startedAt, "startedAt");
-        const context = body.context ?? {};
-        if (!isRecord(context) || Object.keys(context).length > 32 || Object.entries(context).some(([key, value]) => !/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key) || typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > 1e12)) fail(400, "INVALID_INPUT", "Invalid start context");
-        if (body.type === "exited" && !["navigation", "restart", "pagehide", "error"].includes(String(body.reason))) fail(400, "INVALID_INPUT", "Unknown exit reason");
-        const identity = request.headers.authorization ? await auth.authenticate(request) : null;
-        const playerId = identity ? store.getOrCreatePassport(identity.id).playerId : null;
-        const cutoff = new Date(Date.now() - 60_000).toISOString();
-        const recent = store.db.prepare("SELECT COUNT(*) AS n FROM free_play_events WHERE received_at > ? AND (guest_id = ? OR player_id = ?)").get(cutoff, guestId, playerId) as { n: number };
-        if (recent.n >= 120) fail(429, "RATE_LIMITED", "Too many lifecycle events");
-        const observation = { runId, gameId, gameVersion, objective: run.objective, startedAt, context: body.type === "started" ? context : {}, ...(body.type === "exited" ? { reason: body.reason } : {}) };
-        store.db.prepare("INSERT OR IGNORE INTO free_play_events VALUES (?,?,?,?,?,?,?)").run(runId, body.type, gameId, playerId, guestId, new Date().toISOString(), JSON.stringify(observation));
-        return respond(response, 200, { recorded: true, verified: false });
-      }
-      if (method === "POST" && path === "/api/free-play/summaries") {
-        const body = await readJson(request);
-        const guestId = requiredString(body.guestId, "guestId", 36);
-        if (!/^[a-f0-9-]{36}$/i.test(guestId)) fail(400, "INVALID_INPUT", "Invalid guest ID");
-        const candidate = body.result;
-        if (!isRecord(candidate) || candidate.mode !== "free") fail(400, "INVALID_INPUT", "Expected a Free Play result");
-        const gameId = requiredString(candidate.gameId, "gameId", 64);
-        const game = store.getGame(gameId);
-        if (!game || game.status !== "published") fail(404, "NOT_FOUND", "Game not found");
-        const runId = requiredString(candidate.runId, "runId", 100);
-        const gameVersion = requiredString(candidate.gameVersion, "gameVersion", 80);
-        if (!game.manifest.supportedObjectives.includes(candidate.objective as GameObjective)) fail(400, "INVALID_INPUT", "Unknown objective");
-        const checked = validateRunResultShape(candidate as unknown as GameRunConfig, candidate);
-        if (!checked.valid) fail(400, "INVALID_INPUT", checked.reason);
-        const metrics = checked.result.secondaryMetrics ?? {};
-        if (Object.keys(metrics).length > 50 || Object.entries(metrics).some(([key, value]) => !/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key) || Math.abs(value) > 1e12) || Math.abs(checked.result.primaryMetric) > 1e12) fail(400, "INVALID_INPUT", "Metrics exceed summary limits");
-        const identity = request.headers.authorization ? await auth.authenticate(request) : null;
-        const playerId = identity ? store.getOrCreatePassport(identity.id).playerId : null;
-        const now = new Date().toISOString();
-        const cutoff = new Date(Date.now() - 60_000).toISOString();
-        const recent = store.db.prepare("SELECT COUNT(*) AS n FROM free_play_summaries WHERE received_at > ? AND (guest_id = ? OR player_id = ?)").get(cutoff, guestId, playerId) as { n: number };
-        if (recent.n >= 30) fail(429, "RATE_LIMITED", "Too many run summaries; try again later");
-        // Store only bounded summary fields, never input proofs or client-supplied identity.
-        const summary = { runId, gameId, gameVersion, mode: "free", verified: false, objective: candidate.objective,
-          result: checked.result.result, primaryMetric: checked.result.primaryMetric, secondaryMetrics: metrics,
-          startedAt: isoDate(candidate.startedAt, "startedAt"), finishedAt: isoDate(candidate.finishedAt, "finishedAt") };
-        store.db.prepare("INSERT OR IGNORE INTO free_play_summaries VALUES (?,?,?,?,?,?)").run(runId, gameId, playerId, guestId, now, JSON.stringify(summary));
-        return respond(response, 200, { recorded: true, verified: false });
+      if (method === "POST" && ["/api/free-play/events", "/api/free-play/summaries"].includes(path)) {
+        // Old clients must not keep collecting after the privacy release.
+        request.resume();
+        return respond(response, 410, { error: { code: "ANALYTICS_DISABLED", message: "Free Play telemetry is disabled." } });
       }
       if (method === "GET" && path === "/api/admin/free-play/report") {
         requireAdmin(await auth.authenticate(request));
@@ -1236,6 +1214,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
     void payouts.tick(publicRaid);
   });
   server.on("close", () => clearInterval(payoutTimer));
+  server.on("close", () => clearInterval(privacyCleanup));
   return server;
 }
 
