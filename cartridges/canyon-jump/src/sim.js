@@ -472,18 +472,23 @@
     // Level recover block (Grand Canyon): pull-up authority from a lower speed, and a cap on how fast the nose can fall
     // when you are not pushing it down. Absent on Snake River, so the base sim is unchanged.
     const RC = s.cfg.recover;
-    let recovering;
-    if (RC) {
-      // Latched: engages only once a real dive starts (nose <= engage), releases when the nose is back above `until`.
+    // Assist strength 0..1. Base sim: on/off. Level recover block: latched on/off (v4), or with RC.blend a smooth ramp
+    // from 0 at `until` to 1 at `engage` (no latch, no bang-bang: the v4 latch made a 2 Hz nose sawtooth in long glides).
+    let ak;
+    if (RC && RC.blend) {
+      const u = Math.max(0, Math.min(1, (RC.until - g) / (RC.until - RC.engage)));
+      ak = sy > 0.15 && V >= RC.v ? u * u * (3 - 2 * u) : 0;
+    } else if (RC) {
       if (s.rcv) s.rcv = g <= RC.until; else s.rcv = RC.engage == null ? g <= RC.until : g <= RC.engage;
-      recovering = s.rcv && sy > 0.15 && V >= RC.v;
-    } else recovering = g <= C.DIVE_RECOVER_GAM && sy > 0.15 && V >= C.DIVE_RECOVER_V;
-    s.pIn = lerpRate(s.pIn, sy, recovering ? C.PITCH_RESP * C.DIVE_RECOVER_PITCH_K : C.PITCH_RESP, dt);
-    const L = liftAccel(V, s.pIn, recovering ? C.G_LIMIT * C.DIVE_RECOVER_G_K : C.G_LIMIT), Lv = L * (1 - C.TRICK_DIP * (1 - Math.cos(s.rot || 0)) / 2);
+      ak = s.rcv && sy > 0.15 && V >= RC.v ? 1 : 0;
+    } else ak = g <= C.DIVE_RECOVER_GAM && sy > 0.15 && V >= C.DIVE_RECOVER_V ? 1 : 0;
+    const recovering = ak > 0;
+    s.pIn = lerpRate(s.pIn, sy, ak === 1 ? C.PITCH_RESP * C.DIVE_RECOVER_PITCH_K : ak === 0 ? C.PITCH_RESP : C.PITCH_RESP * (1 + ak * (C.DIVE_RECOVER_PITCH_K - 1)), dt);
+    const L = liftAccel(V, s.pIn, ak === 1 ? C.G_LIMIT * C.DIVE_RECOVER_G_K : ak === 0 ? C.G_LIMIT : C.G_LIMIT * (1 + ak * (C.DIVE_RECOVER_G_K - 1))), Lv = L * (1 - C.TRICK_DIP * (1 - Math.cos(s.rot || 0)) / 2);
     s.gLoad = L / C.G_SKY;
     g += (Lv - C.G_SKY * Math.cos(g)) / Math.max(V, 12) * dt;
     // Extra flight-path authority while recovering: high-speed nosedives otherwise turn too slowly (÷V).
-    if (recovering) g += sy * (RC ? RC.rate : C.DIVE_RECOVER_RATE) * dt;
+    if (recovering) g += sy * (RC ? RC.rate : C.DIVE_RECOVER_RATE) * (ak === 1 ? 1 : ak) * dt;
     if (RC && sy >= 0 && g < s.gam) g = Math.max(g, s.gam - RC.maxDrop * dt);
     // Committed dive (stick forward, nose below the horizon): the car tucks and parasitic drag drops, so a dive banks real speed.
     const tuck = s.pIn < 0 && g < 0 ? -s.pIn * C.DIVE_TUCK : 0;

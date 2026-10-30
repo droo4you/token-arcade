@@ -120,3 +120,11 @@ test('ceiling float is dead: a stick-back hover from the ceiling cannot reach th
   for (let k = 0; k < 1200; k++) S.step(s, { pitch: 1 });
   assert.ok(s.y < GC.air.ceil - 40, 'still floating at ' + s.y.toFixed(0));
 });
+test('no nose sawtooth: a long stick-back glide settles smoothly (assist blends, no on/off limit cycle)', () => {
+  for (const V of [40, 45, 55]) {
+    const s = S.newRun(1); Object.assign(s, { phase: 'sky', z: S.C.ROAD_LEN + 300, y: GC.air.ceil, m: V, gam: 0, sky: [], drafts: [], skyChunk: 1e9 });
+    let flips = 0, prev = 0, maxRate = 0;
+    for (let k = 0; k < 120 * 20 && !s.over; k++) { const g0 = s.gam; S.step(s, { pitch: 1 }); if (k < 240) continue; const r = (s.gam - g0) * 120; if (Math.sign(r) !== Math.sign(prev) && Math.abs(r - prev) > 0.05) flips++; prev = r; maxRate = Math.max(maxRate, Math.abs(r)); }
+    assert.ok(flips <= 2 && maxRate < 0.3, `V${V}: ${flips} pitch reversals, max ${(maxRate * 57.3).toFixed(0)}°/s`);
+  }
+});

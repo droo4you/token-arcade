@@ -76,7 +76,7 @@
       // Thin air: above 50 m the car bleeds up to 12 m/s² extra, so floating high and safe is the slow line.
       thin: { y: 50, span: 100, k: 12, vFloor: 50 },
       // Dive recovery (see README): pull-up authority from 38 m/s (base sim: 70); latched: engages at nose <= -0.2 rad (a real dive), releases at -0.1 (base: only below -13°), and hands-off the nose can fall at most 0.35 rad/s.
-      recover: { v: 38, engage: -0.2, until: -0.1, rate: 1.6, maxDrop: 0.35 },
+      recover: { v: 38, engage: -0.24, until: -0.14, blend: true, rate: 1.6, maxDrop: 0.35 },
       // Far-wall lip grace: clip the far wall within 4 m of the lip and you scrape up onto the rim at 80% speed.
       lipGrace: { depth: 4, reach: 6, keep: 0.8 },
       gust: { vx: 4, rate: 0.6, from: 0.3, to: 0.75 },
