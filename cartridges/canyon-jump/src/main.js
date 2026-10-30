@@ -84,29 +84,28 @@
   const touches = new Map(); let stick = null; const lanes = window.CJInput.create();
   const TRICK_KEYS = ['rollLeft', 'rollRight', 'flipFront', 'flipBack'];
   /* Portrait-first control cluster: stick bottom-left; Stabilize spans a clean 2×2; Boost sits clear to the right. */
+  /* Touch controls (logical px, safe-area aware). Right thumb: one right-aligned column, BOOST on top, then the ROLL row and
+     the FLIP row. Left thumb: joystick bottom-left with STABILIZE above it. The gap between them is where trick popups and
+     the combo pot live, so nothing covers the car or the sky ahead. */
   const BTN = () => {
     const padR = 10 + (G.safe?.r || 0), padB = 10 + (G.safe?.b || 0), padL = 10 + (G.safe?.l || 0);
     const narrow = W < 520 || G.portrait;
-    const tr = narrow ? 30 : 34, gap = narrow ? 10 : 12, boostR = narrow ? 46 : 50, stickR = narrow ? 44 : 50;
-    const boostX = W - padR - boostR, boostY = H - padB - boostR;
-    // 2×2 sits left of Boost with a fixed clear gutter (no overlap).
-    const gutter = gap + 6;
-    const gridHalf = 2 * tr + gap / 2;
-    const cx = boostX - boostR - gutter - gridHalf;
-    const cy = boostY; // vertically center the 2×2 on Boost
-    const stabH = narrow ? 48 : 54;
-    const stabW = 4 * tr + gap + 8; // spans the 2×2
-    const stabY = cy - gridHalf - gap - 12 - stabH / 2; // extra air so Stabilize never kisses the ROLL row
+    const tr = narrow ? 30 : 34, gap = narrow ? 10 : 12, boostR = narrow ? 44 : 48, stickR = narrow ? 44 : 50;
+    const cx2 = W - padR - tr, cx1 = cx2 - 2 * tr - gap; // right / left column of the 2×2
+    const flipY = H - padB - tr, rollY = flipY - 2 * tr - gap;
+    const boostX = W - padR - boostR, boostY = rollY - tr - gap - boostR;
     const stickX = padL + stickR + 8, stickY = H - padB - stickR - 6;
+    const stabH = narrow ? 46 : 50, stabW = narrow ? 150 : 164;
+    const stabX = Math.max(padL + stabW / 2, stickX), stabY = stickY - stickR - 8 - gap - stabH / 2;
     return {
       boost: { x: boostX, y: boostY, r: boostR },
-      stab: { x: cx, y: stabY, w: stabW, h: stabH, pill: true },
-      rollLeft: { x: cx - tr - gap / 2, y: cy - tr - gap / 2, r: tr },
-      rollRight: { x: cx + tr + gap / 2, y: cy - tr - gap / 2, r: tr },
-      flipFront: { x: cx - tr - gap / 2, y: cy + tr + gap / 2, r: tr },
-      flipBack: { x: cx + tr + gap / 2, y: cy + tr + gap / 2, r: tr },
+      stab: { x: stabX, y: stabY, w: stabW, h: stabH, pill: true },
+      rollLeft: { x: cx1, y: rollY, r: tr }, rollRight: { x: cx2, y: rollY, r: tr },
+      flipFront: { x: cx1, y: flipY, r: tr }, flipBack: { x: cx2, y: flipY, r: tr },
       stick: { x: stickX, y: stickY, r: stickR + 8 },
       _stickR: stickR,
+      // free lane between the thumbs (popups / combo pot)
+      mid: { l: stickX + stickR + 8 + 6, r: cx1 - tr - 6, top: Math.min(boostY - boostR, stabY - stabH / 2) },
     };
   };
   const inBtn = (p, B) => B.pill ? Math.abs(p.x - B.x) < B.w / 2 + 8 && Math.abs(p.y - B.y) < B.h / 2 + 8 : Math.hypot(p.x - B.x, p.y - B.y) < B.r * 1.15;
@@ -154,8 +153,11 @@
   }
   canvas.addEventListener('pointerdown', onDown); addEventListener('pointermove', onMove); addEventListener('pointerup', onUp); addEventListener('pointercancel', e => { lanes.cancel(e.pointerId); onUp(e); });
   // HUD buttons (logical px), safe-area aware.
-  function hudBtns() { const m = 12 + (G.safe?.r || 0), t = 12 + (G.safe?.t || 0); return { pause: { x: W - m - 40, y: t, w: 40, h: 40 }, mute: { x: W - m - 88, y: t, w: 40, h: 40 } }; }
-  const hitBtn = (p, k) => { const b = hudBtns()[k]; return p.x > b.x - 6 && p.x < b.x + b.w + 6 && p.y > b.y - 6 && p.y < b.y + b.h + 6; };
+  // Top strip: one row (score · AIR · sound · pause), then a one-line readout and a thin speed bar. ~11% of a phone screen.
+  function hudGeom() { const t = 8 + (G.safe?.t || 0), rowH = 36, infoY = t + rowH + 12, barY = infoY + 11; return { t, rowH, infoY, barY, bottom: barY + 7 }; }
+  function hudBtns() { const m = 10 + (G.safe?.r || 0), g = hudGeom(), z = g.rowH; return { pause: { x: W - m - z, y: g.t, w: z, h: z }, mute: { x: W - m - 2 * z - 6, y: g.t, w: z, h: z } }; }
+  // hit area padded to >= 44 css px in both orientations
+  const hitBtn = (p, k) => { const b = hudBtns()[k], pd = G.portrait ? 8 : 14; return p.x > b.x - pd && p.x < b.x + b.w + pd && p.y > b.y - pd && p.y < b.y + b.h + pd; };
   const canRestart = () => !TA?.active;
   function pauseItems() {
     const items = [['resume', 'RESUME'], ...(canRestart() ? [['restart', 'RESTART']] : []), ['mute', A.muted ? 'SOUND: OFF' : 'SOUND: ON']];
@@ -247,7 +249,7 @@
       G.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - speed * 0.3, life: life * (0.7 + Math.random() * 0.5), max: life, c: colors[i % colors.length], s: 2 + Math.random() * 3.5, g: grav ?? 300, glow });
     }
   }
-  function popup(text, color, big, sub, key) { const cs = G.carScreenLast || { x: W / 2, y: H * 0.7 }; if (key) G.popups = G.popups.filter(p => p.key !== key); G.popups.push({ key, text, color, x: Math.max(80, Math.min(W - 80, cs.x + (Math.random() - 0.5) * 60)), y: cs.y - 60, t: G.t, big, sub }); }
+  function popup(text, color, big, sub, key) { if (key) G.popups = G.popups.filter(p => p.key !== key); G.popups.push({ key, text, color, dx: (Math.random() - 0.5) * 16, t: G.t, big, sub }); }
   function sparks(x, y, n) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = 250 + Math.random() * 450; G.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 120, life: 0.5, max: 0.5, c: i % 2 ? '#ffd23f' : '#fff4c0', s: 2, g: 600, streak: true, glow: true }); } }
   function dustRing(x, y, k) { for (let i = 0; i < 34; i++) { const a = (i / 34) * Math.PI * 2, v = 160 + Math.random() * 120; G.particles.push({ x: x + Math.cos(a) * k * 0.6, y: y + 4, vx: Math.cos(a) * v * 1.4, vy: Math.sin(a) * v * 0.25 - 20, life: 0.9, max: 0.9, c: i % 3 ? '#e8b087' : '#fff0dc', s: 5 + Math.random() * 6, g: -30, soft: true }); } }
   function handleEvents(s) {
@@ -364,7 +366,7 @@
     if (!R3() && s.phase === 'road' && G.screen === 'play' && !s.over && G.carScreenLast && Math.random() < s.v / 90) {
       const cs = G.carScreenLast; G.particles.push({ x: cs.x + (Math.random() - 0.5) * cs.k * 2, y: cs.y + cs.k * 0.3, vx: (Math.random() - 0.5) * 60, vy: 20 + Math.random() * 40, life: 0.5, max: 0.5, c: '#f4b07a', s: 3 + Math.random() * 4, g: -60 });
     }
-    G.popups = G.popups.filter(p => G.t - p.t < 1.1);
+    G.popups = G.popups.filter(p => G.t - p.t < 0.85);
     A.drive(s.phase, s.v, s.m, G.screen === 'play' && !s.over && !G.paused, s.y || 0, s.phase === 'sky' ? Math.max(0, -Math.sin(s.gam || 0)) : 0);
     // Ground-proximity tone: beeps faster as impact nears while diving steeply (or with a trick still spinning).
     if (G.screen === 'play' && s.phase === 'sky' && !s.over && !G.paused) { const w = landWarn(s); if (w && G.t - (G.beepT || 0) > (w === 'pull' ? 0.16 : 0.3)) { G.beepT = G.t; A.sfx('beep', w === 'pull' ? 1 : 0); } }
@@ -473,112 +475,98 @@
   const T = { label: 11, body: 14, value: 24 };
   function mg() { return { l: 12 + G.safe.l, r: 12 + G.safe.r, t: 12 + G.safe.t, b: 12 + G.safe.b }; }
   function chip(x, y, w, h, r = 12) { panel(x, y, w, h, r, 'rgba(22,10,36,0.74)'); ctx.strokeStyle = 'rgba(255,255,255,0.09)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5, r); ctx.stroke(); }
-  function meter(x, y, w, h, value, max, mark, colorLow, colorHigh, label, sub, extra) {
-    chip(x - 12, y - 32, w + 24, h + 44, 12);
-    const f = Math.max(0, Math.min(1, value / max)), m = mark / max, ok = value >= mark;
-    ctx.fillStyle = '#1a0d26'; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2); ctx.fill();
-    const g = ctx.createLinearGradient(x, 0, x + w, 0);
-    g.addColorStop(0, ok ? '#38e8c8' : '#ff3b5c'); g.addColorStop(1, ok ? colorHigh : colorLow);
-    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, Math.max(h, w * f), h, h / 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 2, Math.max(0, w * f - 6), h * 0.3, h * 0.15); ctx.fill();
-    if (mark) { const mx = x + w * m; ctx.fillStyle = '#fff'; ctx.fillRect(mx - 1.5, y - 6, 3, h + 12); ctx.beginPath(); ctx.moveTo(mx - 6, y - 11); ctx.lineTo(mx + 6, y - 11); ctx.lineTo(mx, y - 5); ctx.fill(); }
-    if (extra) { const ex = x + w * Math.min(1, extra.at / max), hit = value >= extra.at || extra.done;
-      // Closing in (within MACH_NEAR): the bar glows white and pulses faster the closer you get, and the mark reads the gap.
-      const near = !hit && extra.near && value >= extra.at - extra.near, k = near ? 1 - (extra.at - value) / extra.near : 0;
-      if (near) { const pulse = 0.55 + 0.45 * Math.sin(G.t * (10 + k * 18)); ctx.save(); ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 8 + k * 18 * pulse;
-        ctx.strokeStyle = `rgba(255,255,255,${0.35 + 0.6 * k * pulse})`; ctx.lineWidth = 2 + k * 2; ctx.beginPath(); ctx.roundRect(x - 3, y - 3, w + 6, h + 6, (h + 6) / 2); ctx.stroke(); ctx.restore(); }
-      ctx.fillStyle = hit || near ? '#ffffff' : 'rgba(255,255,255,0.55)'; ctx.fillRect(ex - (near ? 1.5 : 1), y - (near ? 7 : 4), near ? 3 : 2, h + (near ? 14 : 8));
-      text(near ? `${extra.label}  −${Math.max(1, Math.ceil((extra.at - value) * 3.6))} km/h` : extra.label, ex, y + h + 9, near ? 10 : 9, hit || near ? '#ffffff' : 'rgba(255,233,240,0.75)', 'center', false, 800); }
-    text(label, x, y - 16, T.body, '#fff', 'left', true, 800);
-    if (sub && sub.text) text(sub.text, x + w, y - 16, w < 300 ? 10 : 12, sub.color, 'right', true, 800);
-  }
   function iconBtn(b, kind) {
-    chip(b.x, b.y, b.w, b.h, 10); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
+    soft(b.x, b.y, b.w, b.h, 10, 0.42); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
     const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
     if (kind === 'pause') { ctx.fillRect(cx - 8, cy - 10, 5, 20); ctx.fillRect(cx + 3, cy - 10, 5, 20); return; }
     ctx.beginPath(); ctx.moveTo(cx - 11, cy - 4); ctx.lineTo(cx - 6, cy - 4); ctx.lineTo(cx, cy - 10); ctx.lineTo(cx, cy + 10); ctx.lineTo(cx - 6, cy + 4); ctx.lineTo(cx - 11, cy + 4); ctx.closePath(); ctx.fill();
     if (A.muted) { ctx.strokeStyle = '#ff5a78'; ctx.beginPath(); ctx.moveTo(cx + 4, cy - 6); ctx.lineTo(cx + 12, cy + 6); ctx.moveTo(cx + 12, cy - 6); ctx.lineTo(cx + 4, cy + 6); ctx.stroke(); }
     else { ctx.beginPath(); ctx.arc(cx + 2, cy, 6, -0.9, 0.9); ctx.stroke(); ctx.beginPath(); ctx.arc(cx + 2, cy, 11, -0.9, 0.9); ctx.stroke(); }
   }
+  function soft(x, y, w, h, r = 10, a = 0.38) { panel(x, y, w, h, r, `rgba(22,10,36,${a})`); }
+  /* Thin speed bar: fill, a small tick at `mark` (stall / clear line) and the Mach 0.5 tick that glows as you close in. */
+  function thinBar(x, y, w, h, v, max, mark, extra) {
+    const f = Math.max(0, Math.min(1, v / max)), ok = v >= mark;
+    ctx.fillStyle = 'rgba(26,13,38,0.55)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2); ctx.fill();
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, ok ? '#38e8c8' : '#ff3b5c'); g.addColorStop(1, ok ? '#5af0ff' : '#ff7a1a');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, Math.max(h, w * f), h, h / 2); ctx.fill();
+    if (mark) { ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(x + w * mark / max - 1, y - 2, 2, h + 4); }
+    if (extra) {
+      const ex = x + w * Math.min(1, extra.at / max), hit = v >= extra.at || extra.done, near = !hit && extra.near && v >= extra.at - extra.near;
+      if (near) { const k = 1 - (extra.at - v) / extra.near, pulse = 0.55 + 0.45 * Math.sin(G.t * (10 + k * 18)); ctx.save(); ctx.shadowColor = '#fff'; ctx.shadowBlur = 6 + 12 * k * pulse;
+        ctx.strokeStyle = `rgba(255,255,255,${0.35 + 0.6 * k * pulse})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(x - 2, y - 2, w + 4, h + 4, (h + 4) / 2); ctx.stroke(); ctx.restore(); }
+      ctx.fillStyle = hit || near ? '#fff' : 'rgba(255,255,255,0.6)'; ctx.fillRect(ex - 1.5, y - 4, 3, h + 8);
+    }
+  }
   function drawHud(s) {
-    const r = G.screen === 'title' ? S.score(s) : RES.final(G, S, s), M = mg(), narrow = W < 760, hb = hudBtns();
-    // score (left)
-    const sw = narrow ? 128 : 170; chip(M.l, M.t, sw, 52);
-    text('SCORE', M.l + 12, M.t + 15, T.label, '#ffb3c6', 'left', false, 800);
-    text(r.total.toLocaleString('en-US'), M.l + 12, M.t + 36, narrow ? 20 : T.value, '#fff', 'left');
-    // buttons (right)
+    const r = G.screen === 'title' ? S.score(s) : RES.final(G, S, s), M = mg(), narrow = W < 760, hb = hudBtns(), HG = hudGeom();
+    const rowY = HG.t, rh = HG.rowH;
+    // row 1, left: score
+    const sw = narrow ? 104 : 140; soft(M.l, rowY, sw, rh, 10, 0.42);
+    text('SCORE', M.l + 10, rowY + 10, 9, '#ffb3c6', 'left', false, 800);
+    text(r.total.toLocaleString('en-US'), M.l + 10, rowY + rh / 2 + 6, narrow ? 18 : 21, '#fff', 'left');
+    // row 1, right: sound + pause (small icons), AIR pips left of them
     iconBtn(hb.pause, 'pause'); iconBtn(hb.mute, 'mute');
-    // AIR cans (no cap): the first few as icons, then a ×N count, in a fixed-width chip so it never jumps around.
-    // Right of score on wide screens, under the buttons on narrow ones.
-    const K = narrow ? 3 : 5, cw = narrow ? 18 : 22, more = s.air > K, aw = 40 + K * cw + (narrow ? 34 : 44), ah = narrow ? 38 : 52;
-    const ax = narrow ? W - M.r - aw : hb.mute.x - aw - 10, ay = narrow ? M.t + 50 : M.t, ap = G.airPulse || 0;
-    chip(ax, ay, aw, ah);
-    if (ap > 0) { ctx.save(); ctx.globalAlpha = ap * 0.8; ctx.strokeStyle = '#5af0ff'; ctx.lineWidth = 2 + ap * 3; ctx.beginPath(); ctx.roundRect(ax + 1, ay + 1, aw - 2, ah - 2, 12); ctx.stroke(); ctx.restore(); }
-    text('AIR', ax + 10, ay + ah / 2, T.label, '#5af0ff', 'left', false, 800);
-    const iw = narrow ? 13 : 15, ih = narrow ? 19 : 22;
+    const K = narrow ? 3 : 5, cw = narrow ? 13 : 15, iw = narrow ? 9 : 11, ih = narrow ? 15 : 18, more = s.air > K;
+    const aw = 30 + K * cw + 30, ax = hb.mute.x - 6 - aw, ay = rowY, ap = G.airPulse || 0;
+    soft(ax, ay, aw, rh, 10, 0.42);
+    if (ap > 0) { ctx.save(); ctx.globalAlpha = ap * 0.8; ctx.strokeStyle = '#5af0ff'; ctx.lineWidth = 2 + ap * 3; ctx.beginPath(); ctx.roundRect(ax + 1, ay + 1, aw - 2, rh - 2, 10); ctx.stroke(); ctx.restore(); }
+    text('AIR', ax + 8, ay + rh / 2 + 1, 10, '#5af0ff', 'left', false, 800);
     for (let i = 0; i < K; i++) {
-      const x = ax + 36 + i * cw, y = ay + (ah - ih) / 2 + 2, on = i < s.air;
-      if (!on && s.air > 0) break; // only the empty slot outline shows when you're out of cans
-      ctx.fillStyle = on ? '#5af0ff' : 'rgba(90,240,255,0.14)'; ctx.beginPath(); ctx.roundRect(x, y, iw, ih, 5); ctx.fill();
-      if (on) { ctx.fillStyle = '#fff'; ctx.fillRect(x + iw / 2 - 2.5, y - 3, 5, 4); ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(x + 3, y + 4, 3, ih - 10); }
+      const x = ax + 32 + i * cw, y = ay + (rh - ih) / 2 + 2, on = i < s.air;
+      if (!on && s.air > 0) break;
+      ctx.fillStyle = on ? '#5af0ff' : 'rgba(90,240,255,0.14)'; ctx.beginPath(); ctx.roundRect(x, y, iw, ih, 3); ctx.fill();
+      if (on) { ctx.fillStyle = '#fff'; ctx.fillRect(x + iw / 2 - 2, y - 3, 4, 3); }
       if (!on) break;
     }
-    // Count: always shown once you have more than the icons can show, or none at all (×0, dimmed).
-    if (more || s.air === 0) { const sc = 1 + ap * 0.25, cx = ax + aw - 12; ctx.save(); ctx.translate(cx, ay + ah / 2 + 1); ctx.scale(sc, sc);
-      text(`×${s.air > 999 ? '999+' : s.air}`, 0, 0, narrow ? 17 : 20, s.air ? '#ffffff' : 'rgba(255,255,255,0.4)', 'right', true, 900); ctx.restore(); }
+    if (more || s.air === 0) { const sc = 1 + ap * 0.25; ctx.save(); ctx.translate(ax + aw - 8, ay + rh / 2 + 1); ctx.scale(sc, sc);
+      text(`×${s.air > 999 ? '999+' : s.air}`, 0, 0, narrow ? 14 : 16, s.air ? '#fff' : 'rgba(255,255,255,0.4)', 'right', true, 900); ctx.restore(); }
     if (G.screen === 'end') return;
-    // centre strip: progress / altitude
-    const pw = narrow ? W - M.l - M.r : Math.min(340, W * 0.34), px = W / 2 - pw / 2, py = narrow ? M.t + (G.portrait ? 96 : 60) : M.t;
-    const mw = Math.min(460, W - M.l - M.r - 24), mx = W / 2 - mw / 2;
+    // row 2: one-line readout + thin speed bar (centred, capped width on wide screens)
+    const bw = narrow ? W - M.l - M.r : Math.min(560, W * 0.46), bx = W / 2 - bw / 2, fs = narrow ? 12 : 13;
+    const line = (parts, color) => { soft(bx, HG.infoY - 10, bw, 20, 10, 0.3); text(parts.filter(Boolean).join('  ·  '), W / 2, HG.infoY + 1, fs, color || '#fff', 'center', true, 800); };
+    const vNow = (s.phase === 'sky' ? s.m : s.v) || 0, machNear = !s.counts.mach && vNow >= MACH_MARK.at - MACH_MARK.near && vNow < MACH_MARK.at ? `MACH −${Math.max(1, Math.ceil((MACH_MARK.at - vNow) * 3.6))}` : null;
     const touchSky = G.touch && s.phase === 'sky';
-    const my = touchSky && (narrow || G.portrait) ? py + 86 : H - M.b - 22;
     if (s.phase === 'road') {
-      const left = Math.max(0, Math.ceil(C.ROAD_LEN - s.z));
-      chip(px, py, pw, 44);
-      text(`CANYON IN ${left.toLocaleString('en-US')} m`, W / 2, py + 15, T.body, left < 300 ? '#ffd23f' : '#fff', 'center', true, 800);
-      const bx = px + 14, bw = pw - 28, f = Math.min(1, s.z / C.ROAD_LEN);
-      ctx.fillStyle = '#1a0d26'; ctx.fillRect(bx, py + 29, bw, 6); ctx.fillStyle = '#ffd23f'; ctx.fillRect(bx, py + 29, bw * f, 6);
-      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(bx + bw * f, py + 32, 5, 0, 7); ctx.fill();
-      const ok = s.v >= C.CLEAR_V, pulse = left < 400 ? 0.6 + 0.4 * Math.sin(G.t * 12) : 1;
-      meter(mx, my, mw, 14, s.v, SPEED_MAX, C.CLEAR_V, '#ff7a1a', '#5af0ff', `${KMH(s.v)} km/h`,
-        { text: ok ? 'WILL CLEAR ✓' : `CLEAR ${KMH(C.CLEAR_V)} km/h`, color: ok ? `rgba(90,240,200,${pulse})` : `rgba(255,210,63,${pulse})` }, MACH_MARK);
+      const left = Math.max(0, Math.ceil(C.ROAD_LEN - s.z)), ok = s.v >= C.CLEAR_V;
+      line([`${KMH(s.v)} km/h`, `CANYON ${left.toLocaleString('en-US')} m`, ok ? 'WILL CLEAR ✓' : `CLEAR ${KMH(C.CLEAR_V)}`], left < 300 ? '#ffd23f' : '#fff');
+      thinBar(bx, HG.barY, bw, 6, s.v, SPEED_MAX, C.CLEAR_V, MACH_MARK);
     } else if (s.phase === 'sky' || (s.over && s.phase !== 'fall')) {
       const farRim = C.ROAD_LEN + C.CANYON_W, toRim = Math.ceil(farRim - s.z);
-      chip(px, py, pw, 44);
-      text(toRim > 0 ? `FAR RIM IN ${toRim} m` : `+${Math.floor(s.z - farRim).toLocaleString('en-US')} m PAST THE RIM`, W / 2, py + 15, T.body, toRim > 0 ? '#ffd23f' : '#5af0ff', 'center', true, 800);
-      const band = s.y < 0 ? 'IN THE GORGE' : ({ bird: 'BIRDS', plane: 'PLANES', balloon: 'BALLOONS', satellite: 'SATELLITES', heli: 'HELICOPTERS', condor: 'CONDORS' })[S.zoneAt(s, s.y)];
-      const deg = Math.round((s.gam || 0) * 57.3);
-      text(`ALT ${Math.round(s.y)} m  ·  ${deg > 0 ? '▲' : deg < 0 ? '▼' : '■'} ${Math.abs(deg)}°  ·  ${band}`, W / 2, py + 32, T.label, s.y < 0 ? '#ff9fb0' : '#ffd9e6', 'center', false, 700);
-      // Thermal cue (levels with updrafts): THERMAL AHEAD with a side arrow while one is lined up, UPDRAFT +N m/s while riding it.
+      const band = s.y < 0 ? 'GORGE' : ({ bird: 'BIRDS', plane: 'PLANES', balloon: 'BALLOONS', satellite: 'SATELLITES', heli: 'HELICOPTERS', condor: 'CONDORS' })[S.zoneAt(s, s.y)];
+      if (band !== G.bandLast) { G.bandLast = band; G.bandAt = G.t; } // the traffic band shows for 1.6 s when it changes
+      const deg = Math.round((s.gam || 0) * 57.3), stall = s.m < C.V_STALL + 6 && !s.over, blink = Math.floor(G.t * 6) % 2;
+      const status = s.stabT > 0 ? 'STABILIZING' : stall ? (blink ? 'STALL: DIVE!' : ' ') : null;
+      line([`${KMH(s.m)} km/h${s.counts.mach ? ' ✓' : ''}`, machNear, toRim > 0 ? `RIM ${toRim.toLocaleString('en-US')} m` : `+${Math.floor(s.z - farRim).toLocaleString('en-US')} m PAST`,
+        `ALT ${Math.round(s.y)}`, `${deg > 0 ? '▲' : deg < 0 ? '▼' : '■'}${Math.abs(deg)}°`, G.t - G.bandAt < 1.6 ? band : null, status],
+        stall ? '#ff9fb0' : s.y < 0 ? '#ffc4cf' : toRim > 0 ? '#fff' : '#5af0ff');
+      thinBar(bx, HG.barY, bw, 6, s.m, SPEED_MAX, C.V_STALL, s.counts.mach ? { ...MACH_MARK, done: true } : MACH_MARK);
+      // Thermal cue: a small chip just under the strip while one is lined up / being ridden.
       if (s.drafts && s.drafts.length && !s.over) {
         const w = S.updraftAt(s, s.x, s.y, s.z), fwd = Math.max(10, s.m * Math.cos(s.gam || 0));
         const ahead = w > 0 ? null : s.drafts.filter(d => d.z > s.z && (d.z - s.z) / fwd < 2.5 && s.y < d.top && d.gain < (d.max || s.cfg.updraft.maxGain)).sort((a, b) => a.z - b.z)[0];
-        const ty2 = py + (s.cmb && s.cmb.pot > 0 ? 100 : 66), pulse = 0.75 + 0.25 * Math.sin(G.t * 8);
-        if (w > 0) { ctx.globalAlpha = pulse; chip(W / 2 - 92, ty2 - 14, 184, 28, 14); text(`▲ UPDRAFT +${Math.round(w)} m/s`, W / 2, ty2, T.body, '#ffd8a8', 'center', false, 800); ctx.globalAlpha = 1; }
-        else if (ahead) { const dx = ahead.x - s.x, arrow = Math.abs(dx) < ahead.r * 0.5 ? '▲' : dx < 0 ? '◀' : '▶'; chip(W / 2 - 92, ty2 - 14, 184, 28, 14); text(`${arrow} THERMAL ${Math.round(ahead.z - s.z)} m`, W / 2, ty2, T.body, '#ffc080', 'center', false, 800); }
+        const ty2 = HG.bottom + 16, pulse = 0.75 + 0.25 * Math.sin(G.t * 8);
+        if (w > 0) { ctx.globalAlpha = pulse; soft(W / 2 - 80, ty2 - 11, 160, 22, 11, 0.45); text(`▲ UPDRAFT +${Math.round(w)} m/s`, W / 2, ty2 + 1, 12, '#ffd8a8', 'center', false, 800); ctx.globalAlpha = 1; }
+        else if (ahead) { const dx = ahead.x - s.x, arrow = Math.abs(dx) < ahead.r * 0.5 ? '▲' : dx < 0 ? '◀' : '▶'; soft(W / 2 - 80, ty2 - 11, 160, 22, 11, 0.45); text(`${arrow} THERMAL ${Math.round(ahead.z - s.z)} m`, W / 2, ty2 + 1, 12, '#ffc080', 'center', false, 800); }
       }
-      // Combo pot: unbanked until a clean landing.
+      // Combo pot (unbanked until a clean landing): small chip in the popup lane, under the trick popups.
+      const lane = popLane();
       if (s.cmb && s.cmb.pot > 0 && !(s.over && s.reason === 'landed')) {
-        const cp = G.comboPulse || 0, cy = py + 64 + (narrow ? 4 : 0), lost = s.over;
-        ctx.save(); ctx.translate(W / 2, cy); ctx.scale(1 + cp * 0.18, 1 + cp * 0.18);
-        chip(-96, -17, 192, 34, 17);
-        text(`COMBO ${fmtPts(s.cmb.pot)} × ${fmtMult(s.cmb.mult)}`, 0, 1, 17, lost ? '#8a7a96' : '#ffd23f', 'center', true, 900);
+        const cp = G.comboPulse || 0, cy = lane.comboY, lost = s.over, cwid = Math.min(176, lane.w);
+        ctx.save(); ctx.translate(lane.x, cy); ctx.scale(1 + cp * 0.12, 1 + cp * 0.12);
+        soft(-cwid / 2, -13, cwid, 26, 13, 0.5);
+        text(`COMBO ${fmtPts(s.cmb.pot)} × ${fmtMult(s.cmb.mult)}`, 0, 1, 13, lost ? '#8a7a96' : '#ffd23f', 'center', true, 900);
         ctx.restore();
-        if (lost) { ctx.strokeStyle = '#ff3b5c'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(W / 2 - 90, cy); ctx.lineTo(W / 2 + 90, cy); ctx.stroke(); }
+        if (lost) { ctx.strokeStyle = '#ff3b5c'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(lane.x - cwid / 2 + 6, cy); ctx.lineTo(lane.x + cwid / 2 - 6, cy); ctx.stroke(); }
       }
-      const stall = s.m < C.V_STALL + 6 && !s.over, blink = Math.floor(G.t * 6) % 2;
       const warn = !s.over && landWarn(s);
-      const status = s.stabT > 0 ? 'STABILIZING…' : s.trick > 0 ? (s.trickKind === 'roll' ? (s.trickDir < 0 ? 'ROLL ←…' : 'ROLL →…') : (s.trickDir < 0 ? 'BACK FLIP…' : 'FRONT FLIP…')) : stall ? (blink ? 'STALL: DIVE!' : '') : s.gam > 0.05 ? '▲ CLIMBING' : s.gam < -0.05 ? '▼ DIVING' : 'LEVEL';
-      meter(mx, my, mw, 14, s.m, SPEED_MAX, C.V_STALL, '#ff7a1a', '#5af0ff', `${KMH(s.m)} km/h${s.counts.mach ? '  ·  MACH 0.5 ✓' : ''}`,
-        { text: status, color: s.stabT > 0 ? '#e8f6ff' : stall ? '#ff5a78' : s.gam < -0.05 ? '#5af0ff' : '#ffd23f' }, s.counts.mach ? { ...MACH_MARK, done: true } : MACH_MARK);
       if (warn && s.stabT <= 0) { const big = warn === 'pull', wy = H * (G.portrait ? 0.42 : 0.4); ctx.globalAlpha = 0.55 + 0.45 * Math.sin(G.t * 20);
         text(big ? 'PULL UP!' : 'LEVEL OUT!', W / 2, wy, big ? 34 : 28, big ? '#ff3b5c' : '#ffd23f'); ctx.globalAlpha = 1;
-        // hint the thrusters (they're the fix for both warnings)
-        const ready = s.stabCd <= 0, key = G.touch ? 'tap STABILIZE ▶' : 'SPACE / SHIFT = STABILIZE';
+        const ready = s.stabCd <= 0, key = G.touch ? '◀ tap STABILIZE' : 'SPACE / SHIFT = STABILIZE';
         text(ready ? key : `stabilize in ${s.stabCd.toFixed(1)} s`, W / 2, wy + (big ? 30 : 26), T.body + 1, ready ? '#e8f6ff' : 'rgba(232,246,255,0.6)', 'center', true, 800); }
       if (!s.over) attitude(s);
       const flipReady = s.trick <= 0 && s.t - s.lastTrickEnd >= C.TRICK_CD && S.agl(s) > C.TRICK_MIN_AGL;
-      if (G.touch && !s.over) {
+      if (touchSky && !s.over) {
         const b = BTN(), ready = flipReady && s.stabT <= 0;
         btn(b.boost, s.gam <= C.DIVE_BOOST_GAM && s.air > 0 ? 'DIVE' : 'BOOST', '#5af0ff', s.air > 0 && s.boostCd <= 0, s.air > 99 ? '99+' : `${s.air}`, 'boost');
         btn(b.rollLeft, 'ROLL←', '#ff4fd8', ready, null, 'rollLeft'); btn(b.rollRight, 'ROLL→', '#ff4fd8', ready, null, 'rollRight');
@@ -589,21 +577,29 @@
     } else if (s.phase === 'fall') {
       text('↓', W / 2, H - 60, 40, '#ff5a78');
     }
-    if (G.touch && s.phase === 'road' && G.run && G.run.t < 4) text('tap or swipe left / right', W / 2, my - 52, T.body, '#fff', 'center', true, 700);
-    // popups: pop in, float, fade
-    for (const p of G.popups) {
-      const a = (G.t - p.t) / 1.1, sc = a < 0.12 ? 0.5 + a / 0.12 * 0.7 : a < 0.22 ? 1.2 - (a - 0.12) * 2 : 1;
-      ctx.save(); ctx.globalAlpha = Math.max(0, 1 - a * a); ctx.translate(p.x, p.y - a * 46); ctx.scale(sc, sc);
-      text(p.text, 0, 0, p.big ? 22 : 15, p.color);
-      if (p.sub) text(p.sub, 0, 22, 14, '#ff4fd8', 'center', true, 900);
+    if (G.touch && s.phase === 'road' && G.run && G.run.t < 4) text('tap or swipe left / right', W / 2, H * 0.78, T.body, '#fff', 'center', true, 700);
+    // trick / pickup popups: in the lane between the thumbs (or lower-middle on desktop), small, quick fade
+    const lane = popLane();
+    G.popups.forEach((p, i) => {
+      const a = (G.t - p.t) / 0.85, sc = a < 0.1 ? 0.6 + a / 0.1 * 0.5 : a < 0.2 ? 1.1 - (a - 0.1) : 1, k = G.popups.length - 1 - i;
+      ctx.save(); ctx.globalAlpha = Math.max(0, 1 - a * a * a); ctx.translate(lane.x + p.dx, lane.popY - k * 34 - a * 18); ctx.scale(sc, sc);
+      text(p.text, 0, 0, p.big ? 18 : 13, p.color, 'center', true, 900);
+      if (p.sub) text(p.sub, 0, 16, 11, '#ff4fd8', 'center', true, 900);
       ctx.restore();
-    }
+    });
     ctx.globalAlpha = 1;
     if (G.banner && G.t - G.banner.t < G.banner.dur && G.screen === 'play') {
-      const a = (G.t - G.banner.t) / G.banner.dur, sc = a < 0.1 ? 0.6 + a * 4 : 1, bs = Math.min(44, W / 11);
-      ctx.globalAlpha = a > 0.8 ? (1 - a) * 5 : 1; ctx.save(); ctx.translate(W / 2, G.portrait ? H * 0.3 : H * 0.24); ctx.scale(sc, sc);
-      text(G.banner.text, 0, 0, bs, G.banner.color); text(G.banner.sub, 0, bs * 0.85, T.body + 2, '#fff4e0', 'center', true, 700); ctx.restore(); ctx.globalAlpha = 1;
+      const a = (G.t - G.banner.t) / G.banner.dur, sc = a < 0.1 ? 0.6 + a * 4 : 1, bs = Math.min(40, W / 12);
+      ctx.globalAlpha = a > 0.8 ? (1 - a) * 5 : 1; ctx.save(); ctx.translate(W / 2, G.portrait ? H * 0.3 : H * 0.28); ctx.scale(sc, sc);
+      text(G.banner.text, 0, 0, bs, G.banner.color); text(G.banner.sub, 0, bs * 0.85, T.body + 1, '#fff4e0', 'center', true, 700); ctx.restore(); ctx.globalAlpha = 1;
     }
+  }
+  /* Where popups and the combo pot go: the free lane between the thumbs on touch, lower-middle otherwise. */
+  function popLane() {
+    if (G.touch && G.run && G.run.phase === 'sky') { const m = BTN().mid, w = Math.max(120, m.r - m.l), bottom = H - 10 - (G.safe?.b || 0);
+      return { x: (m.l + m.r) / 2, w, comboY: bottom - 20, popY: bottom - 58 }; }
+    const bottom = H - mg().b;
+    return { x: W / 2, w: 240, comboY: bottom - 24, popY: bottom - 66 };
   }
   /* Telegraph: anything you'll reach within ~1.6 s near your line gets a pulsing marker; off-screen ones pin to the edge. */
   function drawWarnings(cam, s) {
@@ -611,8 +607,8 @@
     for (const th of S.threats(s)) {
       const p = cam.p(th.x, th.y, th.o.z), urgent = th.tt < 0.8, pulse = 0.55 + 0.45 * Math.sin(G.t * (urgent ? 22 : 12));
       let x = p ? p.x : W / 2, y = p ? p.y : H / 2;
-      const off = !p || x < 30 || x > W - 30 || y < 70 || y > H - 70;
-      x = Math.max(30, Math.min(W - 30, x)); y = Math.max(70, Math.min(H - 70, y));
+      const yTop = hudGeom().bottom + 22, off = !p || x < 30 || x > W - 30 || y < yTop || y > H - 70;
+      x = Math.max(30, Math.min(W - 30, x)); y = Math.max(yTop, Math.min(H - 70, y));
       const r = off ? 18 : Math.max(18, Math.min(60, (p ? p.k : 10) * th.o.r * 1.2));
       ctx.globalAlpha = pulse; ctx.lineWidth = urgent ? 4 : 3; ctx.strokeStyle = urgent ? '#ff3b5c' : '#ffd23f';
       ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
@@ -793,5 +789,5 @@
     audio(muted) { A.setMuted(muted); },
     destroy() { G.destroyed = true; cancelAnimationFrame(G.raf); A.destroy(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); removeEventListener('resize', resize); },
   });
-  window.__cj = { G, S, startRun, update, get run() { return G.run; }, get playback() { return PLAYBACK; } };
+  window.__cj = { G, S, startRun, update, get run() { return G.run; }, get playback() { return PLAYBACK; }, BTN, hudBtns, hudGeom, popLane, get W() { return W; }, get H() { return H; } };
 })();
