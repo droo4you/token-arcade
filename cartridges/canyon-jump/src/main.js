@@ -84,8 +84,8 @@
   const touches = new Map(); let stick = null; const lanes = window.CJInput.create();
   const TRICK_KEYS = ['rollLeft', 'rollRight', 'flipFront', 'flipBack'];
   /* Portrait-first control cluster: stick bottom-left; Stabilize spans a clean 2×2; Boost sits clear to the right. */
-  /* Touch controls (logical px, safe-area aware). Right thumb: one right-aligned column, BOOST on top, then the ROLL row and
-     the FLIP row. Left thumb: joystick bottom-left with STABILIZE above it. The gap between them is where trick popups and
+  /* Touch controls (logical px, safe-area aware). Right thumb: one right-aligned column, BOOST on top, STABILIZE under it, then
+     the ROLL row and the FLIP row. Left thumb: just the joystick (a drifting left thumb can't hit anything). The gap between them is where trick popups and
      the combo pot live, so nothing covers the car or the sky ahead. */
   const BTN = () => {
     const padR = 10 + (G.safe?.r || 0), padB = 10 + (G.safe?.b || 0), padL = 10 + (G.safe?.l || 0);
@@ -93,10 +93,10 @@
     const tr = narrow ? 30 : 34, gap = narrow ? 10 : 12, boostR = narrow ? 44 : 48, stickR = narrow ? 44 : 50;
     const cx2 = W - padR - tr, cx1 = cx2 - 2 * tr - gap; // right / left column of the 2×2
     const flipY = H - padB - tr, rollY = flipY - 2 * tr - gap;
-    const boostX = W - padR - boostR, boostY = rollY - tr - gap - boostR;
+    const colL = cx1 - tr, colW = cx2 + tr - colL; // the right column's width (the 2×2)
+    const stabH = narrow ? 44 : 48, stabW = colW, stabX = colL + colW / 2, stabY = rollY - tr - gap - 6 - stabH / 2; // +6: hit areas (pill +8, circles ×1.15) never overlap
+    const boostX = W - padR - boostR, boostY = stabY - stabH / 2 - gap - 6 - boostR;
     const stickX = padL + stickR + 8, stickY = H - padB - stickR - 6;
-    const stabH = narrow ? 46 : 50, stabW = narrow ? 150 : 164;
-    const stabX = Math.max(padL + stabW / 2, stickX), stabY = stickY - stickR - 8 - gap - stabH / 2;
     return {
       boost: { x: boostX, y: boostY, r: boostR },
       stab: { x: stabX, y: stabY, w: stabW, h: stabH, pill: true },
@@ -105,7 +105,7 @@
       stick: { x: stickX, y: stickY, r: stickR + 8 },
       _stickR: stickR,
       // free lane between the thumbs (popups / combo pot)
-      mid: { l: stickX + stickR + 8 + 6, r: cx1 - tr - 6, top: Math.min(boostY - boostR, stabY - stabH / 2) },
+      mid: { l: stickX + stickR + 8 + 6, r: colL - 6, top: boostY - boostR },
     };
   };
   const inBtn = (p, B) => B.pill ? Math.abs(p.x - B.x) < B.w / 2 + 8 && Math.abs(p.y - B.y) < B.h / 2 + 8 : Math.hypot(p.x - B.x, p.y - B.y) < B.r * 1.15;
@@ -562,7 +562,7 @@
       const warn = !s.over && landWarn(s);
       if (warn && s.stabT <= 0) { const big = warn === 'pull', wy = H * (G.portrait ? 0.42 : 0.4); ctx.globalAlpha = 0.55 + 0.45 * Math.sin(G.t * 20);
         text(big ? 'PULL UP!' : 'LEVEL OUT!', W / 2, wy, big ? 34 : 28, big ? '#ff3b5c' : '#ffd23f'); ctx.globalAlpha = 1;
-        const ready = s.stabCd <= 0, key = G.touch ? '◀ tap STABILIZE' : 'SPACE / SHIFT = STABILIZE';
+        const ready = s.stabCd <= 0, key = G.touch ? 'tap STABILIZE ▶' : 'SPACE / SHIFT = STABILIZE';
         text(ready ? key : `stabilize in ${s.stabCd.toFixed(1)} s`, W / 2, wy + (big ? 30 : 26), T.body + 1, ready ? '#e8f6ff' : 'rgba(232,246,255,0.6)', 'center', true, 800); }
       if (!s.over) attitude(s);
       const flipReady = s.trick <= 0 && s.t - s.lastTrickEnd >= C.TRICK_CD && S.agl(s) > C.TRICK_MIN_AGL;
@@ -625,9 +625,10 @@
     ctx.fillStyle = firing ? 'rgba(232,246,255,0.9)' : 'rgba(22,10,36,0.78)'; ctx.beginPath(); ctx.roundRect(x, y, b.w, b.h, b.h / 2); ctx.fill();
     if (!ready && !firing) { ctx.save(); ctx.beginPath(); ctx.roundRect(x, y, b.w, b.h, b.h / 2); ctx.clip(); ctx.fillStyle = 'rgba(232,246,255,0.22)'; ctx.fillRect(x, y, b.w * (1 - cd / maxCd), b.h); ctx.restore(); }
     ctx.lineWidth = 4 + pulse * 3; ctx.strokeStyle = pulse ? `rgba(255,255,255,${0.7 + pulse * 0.3})` : col; ctx.beginPath(); ctx.roundRect(x, y, b.w, b.h, b.h / 2); ctx.stroke();
-    text('STABILIZE', b.x - 16, b.y - 1, 17, firing ? '#1a0d26' : col, 'center', false, 900);
-    const free = s.air <= 0; ctx.fillStyle = free ? '#ffb35a' : '#5af0ff'; ctx.beginPath(); ctx.arc(x + b.w - 30, b.y, 17, 0, 7); ctx.fill();
-    text(free ? 'SLOW' : '−1', x + b.w - 30, b.y + 1, free ? 9 : 13, '#1a0d26', 'center', false, 900);
+    const br = Math.min(17, b.h / 2 - 5), bcx = x + b.w - br - 7, fsz = b.w < 150 ? 13 : 16;
+    text('STABILIZE', (x + 8 + bcx - br) / 2, b.y - 1, fsz, firing ? '#1a0d26' : col, 'center', false, 900);
+    const free = s.air <= 0; ctx.fillStyle = free ? '#ffb35a' : '#5af0ff'; ctx.beginPath(); ctx.arc(bcx, b.y, br, 0, 7); ctx.fill();
+    text(free ? 'SLOW' : '−1', bcx, b.y + 1, free ? 8 : 12, '#1a0d26', 'center', false, 900);
     ctx.globalAlpha = 1;
   }
   /* Landing-attitude tick near touchdown: the car's nose angle against level, green inside the clean window. */
