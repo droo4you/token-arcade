@@ -116,8 +116,25 @@ export class ArcadeStore {
           (Date.parse(raid.endsAt) > Date.now() || (raid.funding && !raid.finalResult)));
         if (!liveRun && !liveRaid) {
           const origin = prior.manifest.entry.origin;
-          this.saveGame({ ...prior, manifest: { ...prior.manifest, ...game.manifest,
+          this.saveGame({ ...prior, manifest: { ...prior.manifest, ...game.manifest, version: "2.0.0",
             entry: { kind: "iframe", origin, url: new URL("/emonad-cabinet/v/2.0.0/", origin).href } },
+            economy: prior.economy?.status === "enabled" ? prior.economy : game.economy, legacyImportRevision: 5 });
+        }
+        continue;
+      }
+      // Presentation release of the same Mood Swings rules. Keep 2.0.0 playable
+      // until issued runs and nonfinal raids finish, then point at 2.1.0.
+      if (prior?.manifest.id === "emonad-cabinet" && prior.manifest.version === "2.0.0" &&
+          prior.manifest.adapterId === "mood-swings" && prior.review?.approvedBy === "platform:legacy-import" && prior.manifest.entry?.kind === "iframe") {
+        const liveRun = (this.db.prepare("SELECT json FROM run_sessions WHERE game_id = ? AND consumed_at IS NULL").all(prior.manifest.id) as JsonRow[])
+          .some(row => Date.parse((JSON.parse(row.json) as GameRunConfig).expiresAt ?? "") > Date.now());
+        const liveRaid = this.listRaids().some(raid => raid.gameId === prior.manifest.id &&
+          raid.status !== "settled" && raid.status !== "cancelled" &&
+          (Date.parse(raid.endsAt) > Date.now() || (raid.funding && !raid.finalResult)));
+        if (!liveRun && !liveRaid) {
+          const origin = prior.manifest.entry.origin;
+          this.saveGame({ ...prior, manifest: { ...prior.manifest, ...game.manifest,
+            entry: { kind: "iframe", origin, url: new URL("/emonad-cabinet/v/2.1.0/", origin).href } },
             economy: prior.economy?.status === "enabled" ? prior.economy : game.economy, legacyImportRevision: 5 });
         }
         continue;

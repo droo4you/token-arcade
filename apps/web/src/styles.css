@@ -167,3 +167,11 @@
 .raid-share-link input { width: 100%; min-width: 0; min-height: 44px; padding: 10px; border: 2px solid var(--ink); border-radius: 8px; background: #fff; color: #1a0e20; font: inherit; }
 
 .free-play-analytics{grid-column:1/-1;min-width:0}.analytics-table-scroll{overflow-x:auto;margin:18px 0}.free-play-analytics table{width:100%;border-collapse:collapse;font-size:14px}.free-play-analytics th,.free-play-analytics td{text-align:left;padding:10px;border-bottom:1px solid var(--line);white-space:nowrap}.free-play-analytics caption{text-align:left;font-weight:700;padding:10px 0}.free-play-analytics pre{max-width:320px;white-space:pre-wrap}.free-play-analytics summary{cursor:pointer;padding:8px 0}
+@media(max-width:760px){
+  .player-portrait .player-heading{display:none}
+  .player-portrait .back-link{margin:8px 0}
+  .player-portrait{padding-bottom:16px}
+  .player-portrait .player-foot{margin-top:8px}
+  .player-portrait .cartridge-mount{min-height:0}
+  .player-portrait .cartridge-frame.cartridge-portrait{max-width:none;height:calc(100dvh - 112px);min-height:0}
+}

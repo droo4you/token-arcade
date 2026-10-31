@@ -11,13 +11,13 @@ export function launchCabinets(origin = "http://127.0.0.1:8788"): GameRecord[] {
   ] as const;
   return definitions.map((item): GameRecord => ({
     manifest: {
-      id: item.id, name: item.name, description: item.description, version: item.id === "emonad-cabinet" ? "2.0.0" : "1.1.0", developer: "droo4you",
+      id: item.id, name: item.name, description: item.description, version: item.id === "emonad-cabinet" ? "2.1.0" : "1.1.0", developer: "droo4you",
       adapterId: item.skeleton, skeletonId: item.skeleton,
       supportedModes: item.id === "emonad-cabinet" || item.id === "two-places" || item.id === "skip-to-10k" || item.id === "coindle" ? ["free", "ranked", "raid"] : ["free"],
       supportedObjectives: item.id === "two-places" ? ["completion_time", "score"] : item.id === "coindle" ? ["coins_solved", "guesses"] : [item.objective],
       ...(item.id === "emonad-cabinet" ? { playGuide: { free: "Keep Emonad's mood up. Keep your best Mood, Good Vibes and cosmetic unlocks.", ranked: "One verified run. Peak Mood wins, then most Good Vibes.", raid: "Best of three attempts on one shared seed. Community Good Vibes are a separate display-only goal.", scoring: "Peak Mood. Euphoria is identical in every mode. Cosmetics never change gameplay.", tieBreak: "Most Good Vibes, then acceptance time and run ID." } } : {}),
       communityOptional: true, minicoinOptional: true,
-      entry: { kind: "iframe", origin: new URL(origin).origin, url: new URL(`/${item.id}/v/${item.id === "emonad-cabinet" ? "2.0.0" : "1.1.0"}/`, origin).href },
+      entry: { kind: "iframe", origin: new URL(origin).origin, url: new URL(`/${item.id}/v/${item.id === "emonad-cabinet" ? "2.1.0" : "1.1.0"}/`, origin).href },
       presentation: { genre: item.genre, palette: item.palette, glyph: item.glyph },
       ...(item.id === "two-places" ? { playGuide: {
         free: "Unlock levels in order, continue your adventure or replay any unlocked level. Sign in to sync progress across devices.",

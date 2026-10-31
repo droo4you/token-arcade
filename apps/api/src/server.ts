@@ -28,6 +28,7 @@ function requestedSkipRules(board: unknown) {
 }
 
 import { twoRules, twoLevelRules, twoRaidRules } from "./twoPlacesBoards.ts";
+import { moodGameVersion } from "./moodVerification.ts";
 function requestedTwoRules(level: unknown = 0) {
   if (!Number.isSafeInteger(level) || Number(level) < 0 || Number(level) >= twoRules.LEVEL_COUNT) fail(400, "INVALID_LEVEL", "Choose a level from 1 to 20");
   return normalizeRunRules(twoLevelRules(level));
@@ -329,7 +330,7 @@ function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid"
   const skipV2 = rules?.format === skipRules.FORMAT;
   let results = store.listAcceptedResults(gameId, mode, raidId).filter((item) =>
     (objective === undefined || item.result.objective === objective) &&
-    (gameVersion === undefined || item.result.gameVersion === gameVersion) &&
+    (gameVersion === undefined || ((gameId === "emonad-cabinet" && moodGameVersion(gameVersion)) ? moodGameVersion(item.result.gameVersion) : item.result.gameVersion === gameVersion)) &&
     (skipV2 && mode === "raid" ? item.result.gameVersion === "1.1.0" && item.result.rules?.format === skipRules.FORMAT : JSON.stringify(item.result.rules ?? {}) === JSON.stringify(rules ?? {})));
   if (skipV2 && mode === "raid") results = skipRaidResults(results);
   const best = new Map<string, AcceptedResult>();
@@ -339,7 +340,7 @@ function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid"
       return b.result.primaryMetric - a.result.primaryMetric || (b.result.secondaryMetrics?.rescued ?? 0) - (a.result.secondaryMetrics?.rescued ?? 0)
         || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
     }
-    if (a.result.gameId === "emonad-cabinet" && a.result.gameVersion === "2.0.0" && b.result.gameVersion === "2.0.0") {
+    if (a.result.gameId === "emonad-cabinet" && moodGameVersion(a.result.gameVersion) && moodGameVersion(b.result.gameVersion)) {
       return b.result.primaryMetric - a.result.primaryMetric || (b.result.secondaryMetrics?.goodVibes ?? 0) - (a.result.secondaryMetrics?.goodVibes ?? 0)
         || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
     }
@@ -388,7 +389,7 @@ function updatePassport(store: ArcadeStore, passport: Passport, result: GameRunR
   const wasFirstRaid = raid ? !store.hasAcceptedRaid(passport.playerId, raid.id) : false;
   const bestScores = { ...passport.bestScores };
   const key = result.gameId === "skrumpey-slide" && result.gameVersion === "1.4.0" ? `${result.gameId}@${result.gameVersion}:${result.objective}` : result.rules?.format === twoRules.FORMAT
-    ? `${result.gameId}@${result.gameVersion}:${result.objective}${result.mode === "ranked" ? `_level_${Number(result.rules.level) + 1}` : "_raid"}` : result.rules?.format === skipRules.FORMAT ? `${result.gameId}@${result.gameVersion}:${result.objective}_${result.rules.board}` : result.gameId === "emonad-cabinet" && result.gameVersion === "2.0.0" ? `${result.gameId}@${result.gameVersion}:${result.objective}` : `${result.gameId}:${result.objective}`;
+    ? `${result.gameId}@${result.gameVersion}:${result.objective}${result.mode === "ranked" ? `_level_${Number(result.rules.level) + 1}` : "_raid"}` : result.rules?.format === skipRules.FORMAT ? `${result.gameId}@${result.gameVersion}:${result.objective}_${result.rules.board}` : result.gameId === "emonad-cabinet" && moodGameVersion(result.gameVersion) ? `${result.gameId}@2.0.0:${result.objective}` : `${result.gameId}:${result.objective}`;
   const prior = bestScores[key];
   const lowerIsBetter = result.objective === "completion_time" || result.objective === "guesses";
   if (prior === undefined || (lowerIsBetter ? result.primaryMetric < prior : result.primaryMetric > prior)) bestScores[key] = result.primaryMetric;
@@ -499,8 +500,8 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
       const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id).filter(item => item.result.gameVersion === "1.4.0");
       return { skrumpeyGoal: { rescued: runs.reduce((sum, item) => sum + (item.result.secondaryMetrics?.rescued ?? 0), 0), runs: runs.length, participants: new Set(runs.map(item => item.playerId)).size } };
     }
-    if (raid.gameId === "emonad-cabinet" && raid.gameVersion === "2.0.0") {
-      const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id).filter(item => item.result.gameVersion === "2.0.0");
+    if (raid.gameId === "emonad-cabinet" && moodGameVersion(raid.gameVersion)) {
+      const runs = store.listAcceptedResults(raid.gameId, "raid", raid.id).filter(item => moodGameVersion(item.result.gameVersion));
       return { moodGoal: { goodVibes: runs.reduce((sum, item) => sum + (item.result.secondaryMetrics?.goodVibes ?? 0), 0), runs: runs.length, participants: new Set(runs.map(item => item.playerId)).size } };
     }
     if (raid.rules?.format === skipRules.FORMAT) {
@@ -1132,7 +1133,7 @@ export function createArcadeServer(options: ApiOptions = {}): Server {
         if (method === "POST" && path === "/api/admin/raids") {
           const body = await readJson(request);
           const raid = validateRaidInput(body);
-          if (store.getGame(raid.gameId)?.manifest.adapterId === "mood-swings") raid.gameVersion = "2.0.0";
+          if (store.getGame(raid.gameId)?.manifest.adapterId === "mood-swings") raid.gameVersion = store.getGame(raid.gameId)!.manifest.version;
           if (store.getGame(raid.gameId)?.manifest.adapterId === "skrumpey-slide") raid.gameVersion = store.getGame(raid.gameId)!.manifest.version;
           const adapterId = store.getGame(raid.gameId)?.manifest.adapterId ?? "";
           const defaults = adapterId === "skip-to-10k-v2" ? SKIP_RAID_RULES : adapterId === "coindle-v2" ? RAPID_RAID_RULES : adapters.get(adapterId)?.rankedRules;

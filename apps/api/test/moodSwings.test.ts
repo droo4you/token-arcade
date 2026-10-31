@@ -72,6 +72,7 @@ test("Mood verifier rejects forged metrics, wrong seed/version, partial and exte
   const verifier = createMoodVerifier(); assert.equal((await verifier.verify(config, result)).valid, true);
   for (const changed of [ { primaryMetric: result.primaryMetric + 1 }, { secondaryMetrics: { ...result.secondaryMetrics, goodVibes: 999 } }, { proof: proof(inputs, "wrong") }, { proof: proof(inputs.slice(0,-1)) }, { proof: proof([...inputs,195]) }, { proof: {v:1,seed:config.seed,steps:NaN,track:"AAAA"} } ]) assert.equal((await verifier.verify(config, {...result,...changed})).valid,false);
   assert.equal((await verifier.verify({...config,gameVersion:"1.0.0"},result)).valid,false);
+  assert.equal((await verifier.verify({...config,gameVersion:"2.1.0"},{...result,gameVersion:"2.1.0"})).valid,true);
   assert.equal((await verifier.verify({...config,startedAt:new Date().toISOString()},result)).valid,false);
 });
 test("Mood raid uses three attempts and one seed; best Mood then Good Vibes ranks separately from its goal", async () => {
@@ -116,5 +117,26 @@ test("Mood migration preserves old history and waits for live v1 sessions and ra
     store.saveRaid(raid);store.close();store=new ArcadeStore(file,false);assert.equal(store.getGame(old.manifest.id)?.manifest.version,'1.0.0');
     store.saveRaid({...raid,status:'cancelled'});store.close();store=new ArcadeStore(file,false);
     const migrated=store.getGame(old.manifest.id)!;assert.equal(migrated.manifest.version,'2.0.0');assert.equal(migrated.manifest.entry?.url,'https://cart.example/emonad-cabinet/v/2.0.0/');assert.equal(migrated.status,'paused');assert.equal(store.listAcceptedResults(old.manifest.id,'ranked')[0].result.primaryMetric,999999);
+  }finally{store.close();rmSync(dir,{recursive:true,force:true});}
+});
+test("Mood presentation release waits for a live 2.0.0 session, then serves 2.1.0", () => {
+  const dir=mkdtempSync(join(tmpdir(),'mood-presentation-')),file=join(dir,'arcade.sqlite');let store=new ArcadeStore(file,false);
+  try{
+    const game=store.getGame('emonad-cabinet')!;
+    assert.equal(game.manifest.version,'2.1.0');
+    const origin=game.manifest.entry?.origin??'https://cart.example';
+    game.manifest={...game.manifest,version:'2.0.0',entry:{kind:'iframe',origin,url:new URL('/emonad-cabinet/v/2.0.0/',origin).href}};
+    store.saveGame(game);
+    const passport=store.getOrCreatePassport('presentation');
+    const config:GameRunConfig={gameId:'emonad-cabinet',gameVersion:'2.0.0',runId:'live-2',mode:'ranked',objective:'score',startedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+100000).toISOString()};
+    store.createSession({config,playerId:passport.playerId});
+    store.close();store=new ArcadeStore(file,false);
+    assert.equal(store.getGame('emonad-cabinet')?.manifest.version,'2.0.0');
+    store.acceptResult(store.getSession('live-2')!,{...config,result:'completed',primaryMetric:40,finishedAt:new Date().toISOString()},p=>p);
+    store.close();store=new ArcadeStore(file,false);
+    const next=store.getGame('emonad-cabinet')!;
+    assert.equal(next.manifest.version,'2.1.0');
+    assert.match(next.manifest.entry?.url??'',/\/emonad-cabinet\/v\/2\.1\.0\/$/);
+    assert.equal(store.listAcceptedResults('emonad-cabinet','ranked')[0].result.primaryMetric,40);
   }finally{store.close();rmSync(dir,{recursive:true,force:true});}
 });
