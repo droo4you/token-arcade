@@ -160,7 +160,7 @@
   canvas.addEventListener('pointerdown', onDown); addEventListener('pointermove', onMove); addEventListener('pointerup', onUp); addEventListener('pointercancel', e => { lanes.cancel(e.pointerId); onUp(e); });
   // HUD buttons (logical px), safe-area aware.
   // Top strip: one row (score · AIR · sound · pause), then a one-line readout and a thin speed bar. ~11% of a phone screen.
-  function hudGeom() { const t = 8 + (G.safe?.t || 0), rowH = 36, infoY = t + rowH + 12, barY = infoY + 11; return { t, rowH, infoY, barY, bottom: barY + 7 }; }
+  function hudGeom() { const t = 8 + (G.safe?.t || 0), rowH = 36, infoY = t + rowH + 10, barY = infoY; return { t, rowH, infoY, barY, bottom: infoY + 6 }; }
   function hudBtns() { const m = 10 + (G.safe?.r || 0), g = hudGeom(), z = g.rowH; return { pause: { x: W - m - z, y: g.t, w: z, h: z }, mute: { x: W - m - 2 * z - 6, y: g.t, w: z, h: z } }; }
   // hit area padded to >= 44 css px in both orientations
   const hitBtn = (p, k) => { const b = hudBtns()[k], pd = G.portrait ? 8 : 14; return p.x > b.x - pd && p.x < b.x + b.w + pd && p.y > b.y - pd && p.y < b.y + b.h + pd; };
@@ -507,46 +507,33 @@
   function drawHud(s) {
     const r = G.screen === 'title' ? S.score(s) : RES.final(G, S, s), M = mg(), narrow = W < 760, hb = hudBtns(), HG = hudGeom();
     const rowY = HG.t, rh = HG.rowH;
-    // row 1, left: score
-    const sw = narrow ? 104 : 140; soft(M.l, rowY, sw, rh, 10, 0.42);
-    text('SCORE', M.l + 10, rowY + 10, 9, '#ffb3c6', 'left', false, 800);
-    text(r.total.toLocaleString('en-US'), M.l + 10, rowY + rh / 2 + 6, narrow ? 18 : 21, '#fff', 'left');
-    // row 1, right: sound + pause (small icons), AIR pips left of them
+    // Top strip = SCORE (left) + SPEED (centre), big and high-contrast; sound + pause icons right. Everything else is contextual.
+    const sw = narrow ? 116 : 150; soft(M.l, rowY, sw, rh, 10, 0.55);
+    text('SCORE', M.l + 10, rowY + 9, 9, '#ffb3c6', 'left', false, 800);
+    text(r.total.toLocaleString('en-US'), M.l + 10, rowY + rh / 2 + 8, narrow ? 21 : 24, '#fff', 'left', true, 900);
     iconBtn(hb.pause, 'pause'); iconBtn(hb.mute, 'mute');
-    const K = narrow ? 3 : 5, cw = narrow ? 13 : 15, iw = narrow ? 9 : 11, ih = narrow ? 15 : 18, more = s.air > K;
-    const aw = 30 + K * cw + 30, ax = hb.mute.x - 6 - aw, ay = rowY, ap = G.airPulse || 0;
-    soft(ax, ay, aw, rh, 10, 0.42);
-    if (ap > 0) { ctx.save(); ctx.globalAlpha = ap * 0.8; ctx.strokeStyle = '#5af0ff'; ctx.lineWidth = 2 + ap * 3; ctx.beginPath(); ctx.roundRect(ax + 1, ay + 1, aw - 2, rh - 2, 10); ctx.stroke(); ctx.restore(); }
-    text('AIR', ax + 8, ay + rh / 2 + 1, 10, '#5af0ff', 'left', false, 800);
-    for (let i = 0; i < K; i++) {
-      const x = ax + 32 + i * cw, y = ay + (rh - ih) / 2 + 2, on = i < s.air;
-      if (!on && s.air > 0) break;
-      ctx.fillStyle = on ? '#5af0ff' : 'rgba(90,240,255,0.14)'; ctx.beginPath(); ctx.roundRect(x, y, iw, ih, 3); ctx.fill();
-      if (on) { ctx.fillStyle = '#fff'; ctx.fillRect(x + iw / 2 - 2, y - 3, 4, 3); }
-      if (!on) break;
-    }
-    if (more || s.air === 0) { const sc = 1 + ap * 0.25; ctx.save(); ctx.translate(ax + aw - 8, ay + rh / 2 + 1); ctx.scale(sc, sc);
-      text(`×${s.air > 999 ? '999+' : s.air}`, 0, 0, narrow ? 14 : 16, s.air ? '#fff' : 'rgba(255,255,255,0.4)', 'right', true, 900); ctx.restore(); }
     if (G.screen === 'end') return;
-    // row 2: one-line readout + thin speed bar (centred, capped width on wide screens)
-    const bw = narrow ? W - M.l - M.r : Math.min(560, W * 0.46), bx = W / 2 - bw / 2, fs = narrow ? 12 : 13;
-    const line = (parts, color) => { soft(bx, HG.infoY - 10, bw, 20, 10, 0.3); text(parts.filter(Boolean).join('  ·  '), W / 2, HG.infoY + 1, fs, color || '#fff', 'center', true, 800); };
-    const vNow = (s.phase === 'sky' ? s.m : s.v) || 0, machNear = !s.counts.mach && vNow >= MACH_MARK.at - MACH_MARK.near && vNow < MACH_MARK.at ? `MACH −${Math.max(1, Math.ceil((MACH_MARK.at - vNow) * 3.6))}` : null;
-    const touchSky = G.touch && s.phase === 'sky';
+    const touchSky = G.touch && s.phase === 'sky', inSky = s.phase === 'sky' || (s.over && s.phase !== 'fall'), ap = G.airPulse || 0;
+    const vNow = (s.phase === 'sky' ? s.m : s.v) || 0, stall = s.phase === 'sky' && s.m < C.V_STALL + 6 && !s.over, blink = Math.floor(G.t * 6) % 2;
+    const farRim = C.ROAD_LEN + C.CANYON_W, toRim = Math.ceil(farRim - s.z);
+    if (s.phase === 'road' || inSky) {
+      const spw = narrow ? 128 : 160, spx = W / 2 - spw / 2, okRoad = s.phase === 'road' && s.v >= C.CLEAR_V;
+      soft(spx, rowY, spw, rh, 10, 0.55);
+      const vc = stall ? (blink ? '#ff5a78' : '#fff') : okRoad || s.counts.mach ? '#7dffd6' : '#fff';
+      text(`${KMH(vNow)}`, W / 2 + (narrow ? 18 : 22), rowY + rh / 2 + 8, narrow ? 24 : 27, vc, 'right', true, 900);
+      text('km/h', W / 2 + (narrow ? 22 : 26), rowY + rh / 2 + 7, 11, 'rgba(255,255,255,0.75)', 'left', false, 800);
+      // one tiny line under the speed: distance left (or the stall order while stalling)
+      const sub = stall ? 'STALL: DIVE!' : s.phase === 'road' ? `CANYON ${Math.max(0, Math.ceil(C.ROAD_LEN - s.z)).toLocaleString('en-US')} m` : toRim > 0 ? `RIM ${toRim.toLocaleString('en-US')} m` : `+${Math.floor(s.z - farRim).toLocaleString('en-US')} m`;
+      text(sub, W / 2, HG.infoY, 10, stall ? '#ff9fb0' : 'rgba(255,255,255,0.8)', 'center', true, 800);
+      // Mach 0.5: a brief flash under the strip when it is crossed (G.machT decays 1 -> 0)
+      if (G.machT > 0.35) { ctx.globalAlpha = Math.min(1, (G.machT - 0.35) * 4); text('MACH 0.5 ✓', W / 2, HG.bottom + 46, 18, '#ffffff', 'center', true, 900); ctx.globalAlpha = 1; }
+      // AIR: on touch it lives on the BOOST button badge; without the button it sits bottom-right, where boost is on the keyboard
+      if (!touchSky && !s.over && s.phase !== 'road') { const t2 = `AIR ×${s.air > 999 ? '999+' : s.air}`, aw = 78, ax = W - M.r - aw, ay = H - M.b - 30;
+        soft(ax, ay, aw, 26, 13, 0.5); if (ap > 0) { ctx.save(); ctx.globalAlpha = ap * 0.8; ctx.strokeStyle = '#5af0ff'; ctx.lineWidth = 2 + ap * 3; ctx.beginPath(); ctx.roundRect(ax, ay, aw, 26, 13); ctx.stroke(); ctx.restore(); }
+        text(t2, ax + aw / 2, ay + 14, 13, s.air ? '#5af0ff' : 'rgba(90,240,255,0.4)', 'center', true, 900); }
+    }
     if (s.phase === 'road') {
-      const left = Math.max(0, Math.ceil(C.ROAD_LEN - s.z)), ok = s.v >= C.CLEAR_V;
-      line([`${KMH(s.v)} km/h`, `CANYON ${left.toLocaleString('en-US')} m`, ok ? 'WILL CLEAR ✓' : `CLEAR ${KMH(C.CLEAR_V)}`], left < 300 ? '#ffd23f' : '#fff');
-      thinBar(bx, HG.barY, bw, 6, s.v, SPEED_MAX, C.CLEAR_V, MACH_MARK);
-    } else if (s.phase === 'sky' || (s.over && s.phase !== 'fall')) {
-      const farRim = C.ROAD_LEN + C.CANYON_W, toRim = Math.ceil(farRim - s.z);
-      const band = s.y < 0 ? 'GORGE' : ({ bird: 'BIRDS', plane: 'PLANES', balloon: 'BALLOONS', satellite: 'SATELLITES', heli: 'HELICOPTERS', condor: 'CONDORS' })[S.zoneAt(s, s.y)];
-      if (band !== G.bandLast) { G.bandLast = band; G.bandAt = G.t; } // the traffic band shows for 1.6 s when it changes
-      const deg = Math.round((s.gam || 0) * 57.3), stall = s.m < C.V_STALL + 6 && !s.over, blink = Math.floor(G.t * 6) % 2;
-      const status = s.stabT > 0 ? 'STABILIZING' : stall ? (blink ? 'STALL: DIVE!' : ' ') : null;
-      line([`${KMH(s.m)} km/h${s.counts.mach ? ' ✓' : ''}`, machNear, toRim > 0 ? `RIM ${toRim.toLocaleString('en-US')} m` : `+${Math.floor(s.z - farRim).toLocaleString('en-US')} m PAST`,
-        `ALT ${Math.round(s.y)}`, `${deg > 0 ? '▲' : deg < 0 ? '▼' : '■'}${Math.abs(deg)}°`, G.t - G.bandAt < 1.6 ? band : null, status],
-        stall ? '#ff9fb0' : s.y < 0 ? '#ffc4cf' : toRim > 0 ? '#fff' : '#5af0ff');
-      thinBar(bx, HG.barY, bw, 6, s.m, SPEED_MAX, C.V_STALL, s.counts.mach ? { ...MACH_MARK, done: true } : MACH_MARK);
+    } else if (inSky) {
       // Thermal cue: a small chip just under the strip while one is lined up / being ridden.
       if (s.drafts && s.drafts.length && !s.over) {
         const w = S.updraftAt(s, s.x, s.y, s.z), fwd = Math.max(10, s.m * Math.cos(s.gam || 0));
