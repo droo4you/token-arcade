@@ -81,6 +81,13 @@ export function getCoinTypeFamily(type: CoinType): string {
 export const MAX_GUESSES = 6;
 export const TOTAL_CATEGORIES = 6;
 
+/**
+ * Visual stamp only. The cartridge adapter and Rapid Fire rules stay 1.1.0
+ * (`arcade/main.tsx` register version, `rapid-fire-v2`). Do not treat this
+ * as a ruleset or board version.
+ */
+export const VISUAL_VERSION = "1.1.1";
+
 // ── Hermes API ─────────────────────────────────────────────────────
 export const HERMES_BASE_URL = "https://hermes.pyth.network";
 export const BENCHMARKS_BASE_URL = "https://benchmarks.pyth.network";

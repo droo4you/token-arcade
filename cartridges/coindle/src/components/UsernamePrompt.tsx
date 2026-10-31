@@ -43,7 +43,7 @@ export default function UsernamePrompt({
         style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
       >
         <h2
-          className="mb-1 text-lg font-bold"
+          className="mb-1 text-lg font-medium"
           style={{ color: "var(--text)" }}
         >
           Set your username
@@ -59,7 +59,7 @@ export default function UsernamePrompt({
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          placeholder="Enter a name..."
+          placeholder="Enter a name"
           maxLength={16}
           className="mb-3 w-full rounded-xl px-4 py-2.5 text-sm font-medium"
           style={{
@@ -73,10 +73,10 @@ export default function UsernamePrompt({
         <div className="flex gap-2">
           <button
             onClick={handleSubmit}
-            className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white"
+            className="flex-1 rounded-xl py-2.5 text-sm font-medium text-white"
             style={{ background: "var(--accent)" }}
           >
-            Set Name
+            Set name
           </button>
           <button
             onClick={handleSkip}

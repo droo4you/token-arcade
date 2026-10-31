@@ -15,7 +15,7 @@ export default function Header() {
     <header className="mx-auto w-full max-w-lg space-y-3">
       {/* Top row: logo + theme toggle */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+        <h1 className="text-2xl font-semibold sm:text-3xl">
           <span style={{ color: "var(--accent)" }}>Coin</span>
           <span style={{ color: "var(--text)" }}>dle</span>
         </h1>
@@ -54,7 +54,7 @@ export default function Header() {
       {/* Subtitle */}
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
         Guess the mystery crypto — powered by{" "}
-        <span className="font-semibold" style={{ color: "var(--accent)" }}>
+        <span className="font-medium" style={{ color: "var(--accent)" }}>
           Pyth
         </span>
       </p>
@@ -71,7 +71,7 @@ export default function Header() {
         >
           <button
             onClick={() => switchMode("daily")}
-            className="flex-1 py-2 text-xs font-semibold transition-all"
+            className="flex-1 py-2 text-xs font-medium transition-colors"
             style={{
               background:
                 mode === "daily" ? "var(--accent)" : "transparent",
@@ -82,7 +82,7 @@ export default function Header() {
           </button>
           <button
             onClick={() => switchMode("freeplay")}
-            className="flex-1 py-2 text-xs font-semibold transition-all"
+            className="flex-1 py-2 text-xs font-medium transition-colors"
             style={{
               background:
                 mode === "freeplay" ? "var(--accent)" : "transparent",
@@ -103,7 +103,7 @@ export default function Header() {
         >
           <button
             onClick={() => setDifficulty("easy")}
-            className="px-3 py-2 text-xs font-semibold transition-all"
+            className="px-3 py-2 text-xs font-medium transition-colors"
             style={{
               background:
                 difficulty === "easy" ? "var(--accent)" : "transparent",
@@ -114,7 +114,7 @@ export default function Header() {
           </button>
           <button
             onClick={() => setDifficulty("hard")}
-            className="px-3 py-2 text-xs font-semibold transition-all"
+            className="px-3 py-2 text-xs font-medium transition-colors"
             style={{
               background:
                 difficulty === "hard" ? "var(--accent)" : "transparent",

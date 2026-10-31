@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 
 export default function InfoModal() {
   const [open, setOpen] = useState(false);
@@ -38,18 +39,18 @@ export default function InfoModal() {
             {/* Close button */}
             <button
               onClick={() => setOpen(false)}
-              className="absolute right-4 top-4 text-lg"
+              className="absolute right-4 top-4"
               style={{ color: "var(--text-muted)" }}
               aria-label="Close"
             >
-              ✕
+              <X size={18} strokeWidth={1.5} />
             </button>
 
             <h2
-              className="mb-4 text-xl font-bold"
+              className="mb-4 text-xl font-medium"
               style={{ color: "var(--text)" }}
             >
-              How to Play
+              How to play
             </h2>
 
             <div className="space-y-4 text-sm" style={{ color: "var(--text)" }}>
@@ -60,30 +61,30 @@ export default function InfoModal() {
 
               {/* Color legend */}
               <div className="space-y-2">
-                <h3 className="font-semibold" style={{ color: "var(--accent)" }}>
-                  Color Clues
+                <h3 className="font-medium" style={{ color: "var(--accent)" }}>
+                  Color clues
                 </h3>
                 <div className="flex items-center gap-2">
-                  <span className="cell-green inline-block h-6 w-6 rounded" />
+                  <span className="cell-green inline-block h-6 w-6 rounded-lg" />
                   <span><strong>Green</strong> — exact match</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="cell-yellow inline-block h-6 w-6 rounded" />
+                  <span className="cell-yellow inline-block h-6 w-6 rounded-lg" />
                   <span><strong>Yellow</strong> — close (adjacent/±1)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="cell-red inline-block h-6 w-6 rounded" />
+                  <span className="cell-red inline-block h-6 w-6 rounded-lg" />
                   <span><strong>Red</strong> — not close</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="cell-purple inline-block h-6 w-6 rounded" />
+                  <span className="cell-purple inline-block h-6 w-6 rounded-lg" />
                   <span><strong>Purple</strong> — hint used</span>
                 </div>
               </div>
 
               {/* Categories */}
               <div className="space-y-2">
-                <h3 className="font-semibold" style={{ color: "var(--accent)" }}>
+                <h3 className="font-medium" style={{ color: "var(--accent)" }}>
                   Categories
                 </h3>
                 <table
@@ -134,8 +135,8 @@ export default function InfoModal() {
 
               {/* Arrows */}
               <div className="space-y-1">
-                <h3 className="font-semibold" style={{ color: "var(--accent)" }}>
-                  Directional Arrows
+                <h3 className="font-medium" style={{ color: "var(--accent)" }}>
+                  Directional arrows
                 </h3>
                 <p>
                   Numeric categories (Year, Ticker, Price, FDV) show
@@ -146,8 +147,8 @@ export default function InfoModal() {
 
               {/* Price tiers */}
               <div className="space-y-1">
-                <h3 className="font-semibold" style={{ color: "var(--accent)" }}>
-                  Price Tiers
+                <h3 className="font-medium" style={{ color: "var(--accent)" }}>
+                  Price tiers
                 </h3>
                 <div
                   className="grid grid-cols-2 gap-x-4 gap-y-0.5 rounded-lg p-2 text-xs"
@@ -168,8 +169,8 @@ export default function InfoModal() {
 
               {/* FDV buckets */}
               <div className="space-y-1">
-                <h3 className="font-semibold" style={{ color: "var(--accent)" }}>
-                  FDV Buckets
+                <h3 className="font-medium" style={{ color: "var(--accent)" }}>
+                  FDV buckets
                 </h3>
                 <div
                   className="flex flex-wrap gap-1.5 rounded-lg p-2 text-xs"
@@ -179,7 +180,7 @@ export default function InfoModal() {
                     (b) => (
                       <span
                         key={b}
-                        className="rounded px-2 py-0.5"
+                        className="rounded-lg px-2 py-0.5 font-mono text-xs tabular-nums"
                         style={{
                           background: "var(--bg-surface-3)",
                           color: "var(--text)",
@@ -194,8 +195,8 @@ export default function InfoModal() {
 
               {/* Modes */}
               <div className="space-y-1">
-                <h3 className="font-semibold" style={{ color: "var(--accent)" }}>
-                  Game Modes
+                <h3 className="font-medium" style={{ color: "var(--accent)" }}>
+                  Game modes
                 </h3>
                 <p>
                   <strong>Daily</strong> — same coin for everyone, resets at
@@ -221,8 +222,8 @@ export default function InfoModal() {
                   border: "1px solid var(--border-light)",
                 }}
               >
-                <h3 className="mb-1 font-semibold" style={{ color: "var(--accent)" }}>
-                  Powered by Pyth Network
+                <h3 className="mb-1 font-medium" style={{ color: "var(--accent)" }}>
+                  Powered by Pyth
                 </h3>
                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                   All price data comes from{" "}

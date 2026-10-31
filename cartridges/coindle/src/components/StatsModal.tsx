@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import { useGameContext } from "@/context/GameContext";
-import { MAX_GUESSES } from "@/lib/constants";
 
 export default function StatsModal() {
   const [open, setOpen] = useState(false);
@@ -35,7 +35,7 @@ export default function StatsModal() {
           onClick={() => setOpen(false)}
         >
           <div
-            className="relative w-full max-w-sm rounded-2xl p-6 shadow-xl"
+            className="relative w-full max-w-sm rounded-2xl p-6"
             style={{
               background: "var(--bg-surface)",
               border: "1px solid var(--border)",
@@ -45,15 +45,15 @@ export default function StatsModal() {
             {/* Close button */}
             <button
               onClick={() => setOpen(false)}
-              className="absolute right-3 top-3 text-lg leading-none"
+              className="absolute right-3 top-3"
               style={{ color: "var(--text-muted)" }}
               aria-label="Close"
             >
-              ✕
+              <X size={18} strokeWidth={1.5} />
             </button>
 
             <h2
-              className="mb-4 text-center text-lg font-bold"
+              className="mb-4 text-center text-lg font-medium"
               style={{ color: "var(--text)" }}
             >
               Statistics
@@ -69,13 +69,13 @@ export default function StatsModal() {
               ].map((s) => (
                 <div key={s.label}>
                   <div
-                    className="text-2xl font-bold"
+                    className="font-mono text-2xl font-medium tabular-nums"
                     style={{ color: "var(--text)" }}
                   >
                     {s.value}
                   </div>
                   <div
-                    className="text-[10px] uppercase tracking-wide"
+                    className="text-xs"
                     style={{ color: "var(--text-muted)" }}
                   >
                     {s.label}
@@ -86,10 +86,10 @@ export default function StatsModal() {
 
             {/* Guess distribution */}
             <h3
-              className="mb-3 text-center text-sm font-semibold"
+              className="mb-3 text-center text-sm font-medium"
               style={{ color: "var(--text)" }}
             >
-              Guess Distribution
+              Guess distribution
             </h3>
 
             <div className="space-y-1.5">
@@ -101,7 +101,7 @@ export default function StatsModal() {
                 return (
                   <div key={i} className="flex items-center gap-2">
                     <span
-                      className="w-3 text-right text-xs font-semibold"
+                      className="w-3 text-right font-mono text-xs tabular-nums"
                       style={{ color: "var(--text-muted)" }}
                     >
                       {i + 1}
@@ -119,7 +119,7 @@ export default function StatsModal() {
                       }}
                     >
                       <span
-                        className="text-[10px] font-bold"
+                        className="font-mono text-xs font-medium tabular-nums"
                         style={{
                           color: count > 0 ? "white" : "var(--text-dim)",
                         }}
@@ -138,7 +138,7 @@ export default function StatsModal() {
                 className="mt-4 text-center text-xs"
                 style={{ color: "var(--text-dim)" }}
               >
-                Complete a daily puzzle to see your stats!
+                Complete a daily puzzle to see your stats
               </p>
             )}
           </div>

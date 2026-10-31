@@ -12,10 +12,10 @@ export async function GET() {
       iconUrl: "https://coindle.xyz/icon-1024.png",
       imageUrl: "https://coindle.xyz/og-image.png",
       splashImageUrl: "https://coindle.xyz/image.png",
-      splashBackgroundColor: "#1A1F2B",
+      splashBackgroundColor: "#141311",
       subtitle: "Daily crypto guessing game",
       description:
-        "Guess today's cryptocurrency powered by Pyth price feeds. 141 coins, live prices, 6 guesses. New puzzle every day!",
+        "Guess today's cryptocurrency powered by Pyth price feeds. 141 coins, live prices, 6 guesses. New puzzle every day.",
       primaryCategory: "games",
       tags: ["crypto", "wordle", "pyth", "daily", "game"],
     },

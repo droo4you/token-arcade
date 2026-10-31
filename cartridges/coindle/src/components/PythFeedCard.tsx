@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { Coin, CachedPrices } from "@/lib/types";
 import type { LivePrices } from "@/hooks/useLivePrices";
 import { PRICE_TIER_LABELS, HERMES_BASE_URL } from "@/lib/constants";
+import LiveDot from "./LiveDot";
+import Sparkline from "./Sparkline";
 
 interface PythFeedCardProps {
   secretCoin: Coin;
@@ -48,18 +50,17 @@ export default function PythFeedCard({
         border: "1px solid var(--border-light)",
       }}
     >
-      {/* Header — always visible */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex w-full items-center gap-2 text-left"
       >
-        <span className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
-          ⓘ Pyth Price Feed
+        <span className="text-sm font-medium" style={{ color: "var(--accent)" }}>
+          Pyth price feed
         </span>
         <span
           className="ml-auto text-xs transition-transform"
           style={{
-            color: "var(--text-dim)",
+            color: "var(--text-muted)",
             transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
           }}
         >
@@ -67,22 +68,19 @@ export default function PythFeedCard({
         </span>
       </button>
 
-      {/* Expanded content */}
       {expanded && (
         <div className="mt-3 space-y-3">
-          {/* Feed ID */}
+          <Sparkline ticker={secretCoin.ticker} color="var(--accent)" />
+
           <div>
-            <div
-              className="mb-1 text-[10px] font-semibold uppercase tracking-wider"
-              style={{ color: "var(--text-dim)" }}
-            >
-              Pyth Feed ID
+            <div className="mb-1 text-xs" style={{ color: "var(--text-muted)" }}>
+              Pyth feed ID
             </div>
             <a
               href={hermesUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block rounded-lg px-2.5 py-1 font-mono text-[11px] transition-colors"
+              className="inline-block rounded-lg px-2.5 py-1 font-mono text-xs transition-colors"
               style={{
                 background: "var(--bg-surface-2)",
                 color: "var(--accent)",
@@ -95,117 +93,85 @@ export default function PythFeedCard({
             </a>
           </div>
 
-          {/* Price breakdown */}
           <div
             className="grid grid-cols-2 gap-2 rounded-xl p-3"
             style={{ background: "var(--bg-surface-2)" }}
           >
-            {/* Cached price (used for game logic) */}
             {priceData && (
               <div>
-                <div
-                  className="text-[10px] font-semibold uppercase tracking-wider"
-                  style={{ color: "var(--text-dim)" }}
-                >
-                  Cached Price
+                <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  Cached price
                 </div>
-                <div
-                  className="text-sm font-bold"
-                  style={{ color: "var(--text)" }}
-                >
+                <div className="font-mono text-sm font-medium tabular-nums" style={{ color: "var(--text)" }}>
                   {formatPrice(priceData.price)}
                 </div>
-                <div
-                  className="text-[10px]"
-                  style={{ color: "var(--text-muted)" }}
-                >
+                <div className="text-xs" style={{ color: "var(--text-muted)" }}>
                   Used for game logic
                 </div>
               </div>
             )}
 
-            {/* Live price */}
             {livePrice && (
               <div>
-                <div
-                  className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider"
-                  style={{ color: "var(--text-dim)" }}
-                >
-                  <span
-                    className="inline-block h-1.5 w-1.5 rounded-full"
-                    style={{ background: "#22c55e" }}
-                  />
-                  Live Price
+                <div className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                  <LiveDot />
+                  Live price
                 </div>
-                <div
-                  className="text-sm font-bold"
-                  style={{ color: "var(--text)" }}
-                >
+                <div className="font-mono text-sm font-medium tabular-nums" style={{ color: "var(--text)" }}>
                   {formatPrice(livePrice.price)}
                   {livePrice.change24h != null && (
                     <span
-                      className="ml-1.5 text-xs font-semibold"
-                      style={{
-                        color:
-                          livePrice.change24h >= 0 ? "#22c55e" : "#f87171",
-                      }}
+                      className="ml-1.5 text-xs"
+                      style={{ color: livePrice.change24h >= 0 ? "var(--up)" : "var(--down)" }}
                     >
                       {livePrice.change24h >= 0 ? "+" : ""}
                       {livePrice.change24h.toFixed(1)}%
                     </span>
                   )}
                 </div>
-                <div
-                  className="text-[10px]"
-                  style={{ color: "var(--text-muted)" }}
-                >
+                <div className="text-xs" style={{ color: "var(--text-muted)" }}>
                   Refreshed every 30s
                 </div>
               </div>
             )}
           </div>
 
-          {/* How it maps to the game */}
           <div>
-            <div
-              className="mb-1 text-[10px] font-semibold uppercase tracking-wider"
-              style={{ color: "var(--text-dim)" }}
-            >
-              How Pyth Powers This Round
+            <div className="mb-1 text-xs" style={{ color: "var(--text-muted)" }}>
+              How Pyth powers this round
             </div>
             <div className="space-y-1">
               {priceData && (
                 <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
-                  <span className="cell-green inline-block h-3.5 w-3.5 rounded" />
+                  <span className="cell-green inline-block h-3.5 w-3.5 rounded-lg" />
                   <span>
                     Price tier: <strong style={{ color: "var(--text)" }}>{PRICE_TIER_LABELS[priceData.tier]}</strong> (Tier {priceData.tier})
                   </span>
                 </div>
               )}
               <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
-                <span className="cell-green inline-block h-3.5 w-3.5 rounded" />
+                <span className="cell-green inline-block h-3.5 w-3.5 rounded-lg" />
                 <span>
                   FDV bucket: <strong style={{ color: "var(--text)" }}>{secretCoin.fdvBucket}</strong>
                 </span>
               </div>
               <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
                 <span
-                  className="inline-block h-3.5 w-3.5 rounded"
-                  style={{ background: "#22c55e" }}
+                  className="inline-block h-3.5 w-3.5 rounded-lg"
+                  style={{ background: "var(--up)" }}
                 />
                 <span>
-                  Live display + 24h change from <strong style={{ color: "var(--text)" }}>Pyth Hermes</strong>
+                  Live display and 24h change from <strong style={{ color: "var(--text)" }}>Pyth Hermes</strong>
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Verify link */}
           <a
             href={hermesUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors"
+            className="flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-medium transition-colors"
             style={{
               background: "var(--accent-soft)",
               color: "var(--accent)",

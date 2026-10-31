@@ -6,6 +6,7 @@ import GameBoard from "@/components/GameBoard";
 import RapidFire from "@/components/RapidFire";
 import ModePicker from "@/components/ModePicker";
 import "@/app/globals.css";
+import { VISUAL_VERSION } from "@/lib/constants";
 import { resetArcadeRound, setArcadePaused, setHostedArcade } from "@/lib/arcade";
 import { setArcadeMuted, setArcadeAudioPaused, destroyArcadeAudio } from "@/lib/sounds";
 
@@ -24,7 +25,10 @@ function showGame(): void {
     root.render(
       <React.StrictMode>
         <main className="flex min-h-screen flex-col items-center px-4 pb-8 pt-6 sm:pt-10">
-          <h1 className="mb-5 text-2xl font-black tracking-tight">Coindle</h1>
+          <h1 className="mb-5 text-2xl font-semibold">
+            <span style={{ color: "var(--accent)" }}>Coin</span>
+            <span style={{ color: "var(--text)" }}>dle</span>
+          </h1>
           <RapidFire runId={runId} raid={runConfig.mode === "raid"}
             onBegin={() => window.TokenArcade?.beginRun() ?? false}
             onComplete={(solved, guesses, skips) => window.TokenArcade?.complete({ primaryMetric: solved, secondaryMetrics: { guesses, skips }, result: "completed" })} />
@@ -42,6 +46,7 @@ function showGame(): void {
           <div className="mt-6 w-full"><GameBoard /></div>
           <footer className="mt-auto pt-8 text-center text-xs" style={{ color: "var(--text-dim)" }}>
             Built for the Pyth Community Hackathon 2026
+            <span className="font-mono tabular-nums"> · {VISUAL_VERSION}</span>
           </footer>
         </main>
       </GameProvider>
@@ -52,7 +57,7 @@ function hideGame(): void { root?.unmount(); root = null; resetArcadeRound(); se
 
 if (window.TokenArcade?.embedded) {
   window.TokenArcade.register({
-    version: "1.1.0",
+    version: "1.1.0", // rules version; visual stamp is VISUAL_VERSION and does not change Rapid Fire rules
     capabilities: { pause: true, mute: true, touch: true, keyboard: true, orientation: "any" },
     mount(config) {
       const run = config as { mode: string; runId?: string; objective?: string };

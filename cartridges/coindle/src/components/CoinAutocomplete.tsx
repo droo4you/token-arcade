@@ -109,8 +109,8 @@ export default function CoinAutocomplete({
         onFocus={() => query.length > 0 && setOpen(true)}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        placeholder="Search coin name or ticker..."
-        className="w-full rounded-xl px-4 py-3 text-sm font-medium outline-none transition-all placeholder:font-normal"
+        placeholder="Search coins"
+        className="w-full rounded-xl px-4 py-3 text-sm font-medium outline-none transition-colors placeholder:font-normal"
         style={{
           background: "var(--bg-surface-2)",
           color: "var(--text)",
@@ -121,7 +121,7 @@ export default function CoinAutocomplete({
       {open && filtered.length > 0 && (
         <div
           ref={dropdownRef}
-          className="autocomplete-dropdown absolute left-0 right-0 top-full z-50 mt-1 rounded-xl shadow-lg"
+          className="autocomplete-dropdown absolute left-0 right-0 top-full z-50 mt-1 rounded-xl"
           style={{
             background: "var(--bg-surface)",
             border: "1px solid var(--border)",
@@ -153,7 +153,7 @@ export default function CoinAutocomplete({
                     (e.target as HTMLImageElement).style.display = "none";
                   }}
                 />
-                <span className="font-semibold">{coin.ticker}</span>
+                <span className="font-medium">{coin.ticker}</span>
                 <span style={{ color: "var(--text-muted)" }}>{coin.name}</span>
                 {guessed && (
                   <span className="ml-auto text-xs" style={{ color: "var(--text-dim)" }}>

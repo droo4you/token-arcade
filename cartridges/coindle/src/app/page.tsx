@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { GameProvider } from "@/context/GameContext";
+import { VISUAL_VERSION } from "@/lib/constants";
 import Header from "@/components/Header";
 import GameBoard from "@/components/GameBoard";
 import UsernamePrompt from "@/components/UsernamePrompt";
@@ -30,6 +31,7 @@ export default function Home() {
           style={{ color: "var(--text-dim)" }}
         >
           Built for the Pyth Community Hackathon 2026
+          <span className="font-mono tabular-nums"> · {VISUAL_VERSION}</span>
         </footer>
       </main>
 

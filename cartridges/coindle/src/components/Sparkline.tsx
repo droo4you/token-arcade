@@ -6,14 +6,15 @@ import {
   LineChart,
   Line,
   YAxis,
+  CartesianGrid,
+  ReferenceLine,
 } from "recharts";
 import { gameApiUrl } from "@/lib/arcade";
 
 type SparklineProps = ({ ticker: string; runId?: never; puzzle?: never } | { ticker?: never; runId: string; puzzle: number }) & {
-  /** Ticker symbol to fetch history for (e.g. "BTC") */
   /** Chart height in pixels */
   height?: number;
-  /** Line color — defaults to a neutral glow */
+  /** Line color */
   color?: string;
 };
 
@@ -22,17 +23,23 @@ interface PricePoint {
   price: number;
 }
 
+function formatPrice(p: number): string {
+  if (p >= 1000) return `$${p.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  if (p >= 1) return `$${p.toFixed(2)}`;
+  if (p >= 0.01) return `$${p.toFixed(4)}`;
+  return `$${p.toPrecision(3)}`;
+}
+
 /**
- * 90-day price shape for Daily and server-issued Rapid Fire hints.
- * Shows ONLY the price shape — no axes, no labels, no numbers.
- * Players use the chart silhouette as a hint to identify the coin.
+ * 90-day price shape. The line is the one rich moment: faint grid, a baseline
+ * at the start price, start and end prices, and a flat end dot. No fill.
  */
 export default function Sparkline({
   ticker,
   runId,
   puzzle,
-  height = 80,
-  color = "#8b5cf6",
+  height = 112,
+  color = "var(--accent)",
 }: SparklineProps) {
   const [data, setData] = useState<PricePoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,11 +77,11 @@ export default function Sparkline({
   if (loading) {
     return (
       <div
-        className="flex animate-pulse items-center justify-center rounded-lg"
+        className="flex items-center justify-center rounded-lg"
         style={{ height, background: "var(--bg-surface-2)" }}
       >
-        <span className="text-xs" style={{ color: "var(--text-dim)" }}>
-          Loading chart...
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Loading chart
         </span>
       </div>
     );
@@ -86,32 +93,52 @@ export default function Sparkline({
         className="flex items-center justify-center rounded-lg"
         style={{ height, background: "var(--bg-surface-2)" }}
       >
-        <span className="text-xs" style={{ color: "var(--text-dim)" }}>
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
           Chart unavailable
         </span>
       </div>
     );
   }
 
+  const start = data[0].price;
+  const end = data[data.length - 1].price;
+  const last = data.length - 1;
+
   return (
-    <div
-      className="overflow-hidden rounded-lg"
-      style={{ height, width: "100%", minWidth: 0 }}
-    >
-      <ResponsiveContainer width="100%" height={height - 8}>
-        <LineChart data={data}>
-          {/* Hidden Y-axis just to auto-scale — not rendered */}
-          <YAxis domain={["dataMin", "dataMax"]} hide />
-          <Line
-            type="monotone"
-            dataKey="price"
-            stroke={color}
-            strokeWidth={2}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+    <div className="w-full min-w-0">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <span className="font-mono text-xs tabular-nums" style={{ color: "var(--text)" }}>
+          {formatPrice(start)}
+        </span>
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+          90 days
+        </span>
+        <span className="font-mono text-xs tabular-nums" style={{ color: "var(--text)" }}>
+          {formatPrice(end)}
+        </span>
+      </div>
+      <div className="overflow-hidden" style={{ height, width: "100%", minWidth: 0 }}>
+        <ResponsiveContainer width="100%" height={height}>
+          <LineChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+            <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.55} />
+            <ReferenceLine y={start} stroke="var(--text-dim)" strokeOpacity={0.45} />
+            <YAxis domain={["dataMin", "dataMax"]} hide />
+            <Line
+              type="monotone"
+              dataKey="price"
+              stroke={color}
+              strokeWidth={1.75}
+              isAnimationActive={false}
+              activeDot={false}
+              dot={(props) => {
+                const { cx, cy, index } = props as { cx?: number; cy?: number; index?: number };
+                if (cx == null || cy == null || index !== last) return <g key={index ?? "dot"} />;
+                return <circle key="end" cx={cx} cy={cy} r={3} fill={color} />;
+              }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

@@ -50,12 +50,12 @@ export default function ReportButton({ coin }: { coin: Coin }) {
       style={{ background: "var(--bg-surface-2)", border: "1px solid var(--border)" }}
     >
       {sent ? (
-        <p className="text-center text-xs font-semibold" style={{ color: "var(--result-green)" }}>
-          Thanks! We&apos;ll review this.
+        <p className="text-center text-xs font-medium" style={{ color: "var(--up)" }}>
+          Thanks. We&apos;ll review this.
         </p>
       ) : (
         <>
-          <p className="mb-2 text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+          <p className="mb-2 text-xs font-medium" style={{ color: "var(--text-muted)" }}>
             What&apos;s incorrect about {coin.ticker}?
           </p>
           <div className="mb-2 flex flex-wrap gap-1.5">
@@ -89,7 +89,7 @@ export default function ReportButton({ coin }: { coin: Coin }) {
           <div className="flex gap-2">
             <button
               onClick={handleSubmit}
-              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-white"
               style={{ background: "var(--accent)" }}
             >
               Submit
