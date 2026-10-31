@@ -375,14 +375,45 @@ function init() {
   const proj = new THREE.Vector3();
   const stats = { frames: 0, cpuMs: 0, calls: 0, tris: 0, tier: 1, level: '', pr: 1, buf: '', mpx: 0, fps: 0, frameMs: 0, log: [], start: sl, fixed: gov.fixed, floatRT };
   let lastWall = 0, emaMs = 16.7;
+  /* ---------- shader pre-warm (render-only) ----------
+     three.js compiles a program the first time a material is drawn. Mid-run that showed up as hitches: the speed streaks
+     (first drawn at launch), a shadow-depth variant for the rim props (first in the shadow frustum ~50 m before the
+     ramp), pickup / fx materials. warm() makes every object visible and un-culled, compiles the scene, and renders one
+     frame with a scene-wide shadow camera into a 1x1 target, so every colour and depth program exists before the run.
+     It reruns whenever the lighting setup changes (shadows toggled), which the governor only allows outside a run. */
+  const plainDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }); // textured opaque casters share the plain shadow program (no runtime 'uv' depth compile)
+  let warmKey = null; const warmRT = new THREE.WebGLRenderTarget(1, 1);
+  function warm() {
+    let n = 0; scene.traverse(o => { if (o.material) n++; });
+    const key = String(shadowOn) + '|' + tier + '|' + n; if (warmKey === key) return; warmKey = key;
+    const t0 = performance.now(), saved = [];
+    scene.traverse(o => { saved.push([o, o.visible, o.frustumCulled, o.isInstancedMesh ? o.count : -1]); o.visible = true; o.frustumCulled = false; if (o.castShadow && o.material && !Array.isArray(o.material) && o.material.map && !(o.material.alphaTest > 0) && !o.customDepthMaterial) o.customDepthMaterial = plainDepth; if (o.isInstancedMesh && o.count === 0) o.count = 1; });
+    const sc = sun.shadow.camera, box = [sc.left, sc.right, sc.top, sc.bottom, sc.far];
+    try {
+      renderer.compile(scene, camera);
+      sc.left = sc.bottom = -4000; sc.right = sc.top = 4000; sc.far = 8000; sc.updateProjectionMatrix();
+      const prev = renderer.getRenderTarget(); renderer.setRenderTarget(warmRT); renderer.shadowMap.needsUpdate = true; renderer.render(scene, camera); renderer.setRenderTarget(prev);
+      if (composer) composer.render(0); // post passes (bloom mips, grade, output)
+    } catch (e) { console.warn('[canyon-jump] warm-up failed', e); }
+    [sc.left, sc.right, sc.top, sc.bottom, sc.far] = box; sc.updateProjectionMatrix();
+    for (const [o, v, f, c] of saved) { o.visible = v; o.frustumCulled = f; if (c >= 0) o.count = c; }
+    stats.warmMs = Math.round(performance.now() - t0); stats.programs = renderer.info.programs.length;
+    stats.log.push(`warm-up ${stats.warmMs} ms, ${stats.programs} programs`);
+  }
   function render(s, view, G, W, H) {
     if (dead) { api.ready = false; fail(dead); return null; }
     const t0 = performance.now(); renderer.info.reset();
-    if (lastWall) { const ms = t0 - lastWall; govern(ms); emaMs += (Math.min(ms, 1000) - emaMs) * 0.05; } lastWall = t0;
+    // Quality is frozen during a run: the governor only judges on the title / results screens, the first 10 s of the
+    // road, and after the run ends (a tier change mid-run re-allocates targets and can recompile shaders: a hitch).
+    const inRun = G.screen === 'play' && !s.over, govOpen = !inRun || (s.phase === 'road' && (s.t || 0) < 10);
+    if (lastWall) { const ms = t0 - lastWall; if (govOpen) govern(ms); else { gov.buf.length = 0; gov.acc = 0; } emaMs += (Math.min(ms, 1000) - emaMs) * 0.05; } lastWall = t0;
     stats.frameMs = emaMs; stats.fps = 1000 / emaMs; stats.gov = gov.fps ? Math.round(gov.fps) : null;
     const t = G.t, dt = lastT == null ? 1 / 60 : clamp(t - lastT, 0, 0.1); lastT = t;
     const cw = canvas.clientWidth || W, ch = canvas.clientHeight || H;
-    if (cw !== cssW || ch !== cssH || gov.lv !== tier) { cssW = cw; cssH = ch; applyLevel(gov.lv, cw, ch); }
+    // A pending tier change that would toggle shadows (a full lit-material recompile) waits until the run is over.
+    const shadowFlip = (LEVELS[gov.lv].shadow > 0) !== (LEVELS[Math.max(0, tier)].shadow > 0) && tier >= 0;
+    if (cw !== cssW || ch !== cssH || (gov.lv !== tier && !(inRun && shadowFlip))) { cssW = cw; cssH = ch; applyLevel(inRun && shadowFlip ? tier : gov.lv, cw, ch); }
+    if (!inRun) warm();
     const L = LEVELS[tier], q = L.post ? 1 : 0; G.q = tier >= 2 ? 1 : 0; api.post = !!composer;
     // car
     const onGround = s.phase === 'road' || (s.over && s.reason === 'road') || (s.over && s.reason === 'landed');
