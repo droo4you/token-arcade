@@ -91,7 +91,7 @@
   const BTN = () => {
     const padR = 10 + (G.safe?.r || 0), padB = 10 + (G.safe?.b || 0), padL = 10 + (G.safe?.l || 0);
     const narrow = W < 520 || G.portrait;
-    const tr = narrow ? 30 : 34, gap = narrow ? 10 : 12, boostR = narrow ? 44 : 48, stickR = narrow ? 44 : 50;
+    const tr = narrow ? 33 : 36, gap = narrow ? 10 : 12, boostR = narrow ? 44 : 48, stickR = narrow ? 44 : 50;
     const cx2 = W - padR - tr, cx1 = cx2 - 2 * tr - gap; // right / left column of the 2×2
     const flipY = H - padB - tr, rollY = flipY - 2 * tr - gap;
     const colL = cx1 - tr, colW = cx2 + tr - colL; // the right column's width (the 2×2)
@@ -569,8 +569,8 @@
           const cnt = `×${s.air > 99 ? '99+' : s.air}`, cw2 = tw(cnt, 16, 900), gw2 = 11 + 5 + cw2, gx2 = b.boost.x - gw2 / 2, cy2 = b.boost.y + b.boost.r * 0.3;
           if (ap > 0) { ctx.save(); ctx.globalAlpha = ap; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 + ap * 3; ctx.beginPath(); ctx.arc(b.boost.x, b.boost.y, b.boost.r + 3, 0, 7); ctx.stroke(); ctx.restore(); }
           tank(gx2, cy2 - 8, 11, 17, '#5af0ff'); text(cnt, gx2 + gw2, cy2 + 1, 16, '#fff', 'right', true, 900); ctx.globalAlpha = 1; }
-        btn(b.rollLeft, 'ROLL←', '#ff4fd8', ready, null, 'rollLeft'); btn(b.rollRight, 'ROLL→', '#ff4fd8', ready, null, 'rollRight');
-        btn(b.flipFront, 'FLIP↓', '#ffd23f', ready, null, 'flipFront'); btn(b.flipBack, 'FLIP↑', '#ffd23f', ready, null, 'flipBack');
+        trickBtn(b.rollLeft, 'rollL', '#ff4fd8', ready, 'rollLeft'); trickBtn(b.rollRight, 'rollR', '#ff4fd8', ready, 'rollRight');
+        trickBtn(b.flipFront, 'flipF', '#ffd23f', ready, 'flipFront'); trickBtn(b.flipBack, 'flipB', '#ffd23f', ready, 'flipBack');
         stabBtn(b.stab, s);
         drawStick();
       }
@@ -646,6 +646,33 @@
     ctx.globalAlpha = 1;
   }
   const clampA = g => Math.max(-1.2, Math.min(0.9, g));
+  /* Trick buttons: dark solid disc, coloured ring, bold white icon (canvas-drawn vector). */
+  function trickBtn(b, kind, color, on, flashKey) {
+    const pressed = G.btnFlash && G.btnFlash.k === flashKey && G.t - G.btnFlash.t < 0.12, r = b.r * (pressed ? 0.94 : 1);
+    ctx.save(); ctx.globalAlpha = on ? 1 : 0.72;
+    ctx.fillStyle = pressed ? color : 'rgba(14,6,24,0.84)'; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, 7); ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = color; ctx.stroke();
+    const ink = pressed ? '#1a0d26' : '#ffffff', k = r / 33; ctx.translate(b.x, b.y); ctx.scale(k, k);
+    ctx.strokeStyle = ink; ctx.fillStyle = ink; ctx.lineWidth = 3.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const head = (x, y, ang) => { ctx.beginPath(); ctx.moveTo(x + Math.cos(ang) * 9, y + Math.sin(ang) * 9); ctx.lineTo(x + Math.cos(ang + 2.4) * 8, y + Math.sin(ang + 2.4) * 8); ctx.lineTo(x + Math.cos(ang - 2.4) * 8, y + Math.sin(ang - 2.4) * 8); ctx.closePath(); ctx.fill(); };
+    if (kind === 'rollL' || kind === 'rollR') {
+      // car seen from behind (small box + wheels) inside a 3/4 rotation arrow; right = clockwise
+      ctx.fillRect(-7, -3, 14, 7); ctx.fillRect(-4, -8, 8, 5); ctx.fillRect(-8, 4, 4, 3); ctx.fillRect(4, 4, 4, 3);
+      const R = 16, cw = kind === 'rollR', a0 = -Math.PI * 0.95, a1 = a0 + Math.PI * 1.45;
+      ctx.beginPath(); if (cw) ctx.arc(0, 0, R, a0, a1); else ctx.arc(0, 0, R, -Math.PI - a0, -Math.PI - a1, true); ctx.stroke();
+      const ae = cw ? a1 : -Math.PI - a1, tang = ae + (cw ? Math.PI / 2 : -Math.PI / 2);
+      head(Math.cos(ae) * R, Math.sin(ae) * R, tang);
+    } else {
+      // car in side view (facing right) inside an arc: front flip = nose-down (clockwise), back flip = nose-up (counter-clockwise)
+      ctx.beginPath(); ctx.roundRect(-9, -1, 18, 6, 2); ctx.fill(); ctx.beginPath(); ctx.roundRect(-5, -6, 9, 6, 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(-5, 6, 2.6, 0, 7); ctx.arc(5, 6, 2.6, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(9, 2); ctx.lineTo(12, 2); ctx.stroke(); // nose marker
+      const R = 17, fwd = kind === 'flipF', a0 = Math.PI * 0.85, a1 = Math.PI * 2.25;
+      ctx.beginPath(); if (fwd) ctx.arc(0, 0, R, a0, a1); else ctx.arc(0, 0, R, Math.PI - a0, Math.PI - a1, true); ctx.stroke();
+      const ae = fwd ? a1 : Math.PI - a1; head(Math.cos(ae) * R, Math.sin(ae) * R, ae + (fwd ? Math.PI / 2 : -Math.PI / 2));
+    }
+    ctx.restore();
+  }
   function btn(b, label, color, on, badge, flashKey) {
     const pressed = G.btnFlash && G.btnFlash.k === (flashKey || label.toLowerCase()) && G.t - G.btnFlash.t < 0.12;
     ctx.globalAlpha = on ? 0.95 : 0.35; ctx.fillStyle = pressed ? color : 'rgba(22,10,36,0.72)'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * (pressed ? 0.94 : 1), 0, 7); ctx.fill();
