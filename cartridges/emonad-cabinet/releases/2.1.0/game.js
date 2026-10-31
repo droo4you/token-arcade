@@ -184,7 +184,9 @@
   function syncChrome() {
     const narrow = matchMedia('(max-width: 760px)').matches;
     $('game-title').hidden = embedded && !narrow;
+    if (narrow && !syncChrome.howtoTouched) $('howto').open = false;
   }
+  $('howto').addEventListener('toggle', () => { syncChrome.howtoTouched = true; });
   function metrics() {
     const vw = window.innerWidth, vh = window.innerHeight;
     const fill = vw <= 520;
@@ -289,19 +291,24 @@
       ctx.beginPath(); ctx.arc(sunX, sunY, 22 * Math.max(0.9, m.scale), 0, Math.PI * 2); ctx.fill();
     }
     const speeds = [0.012, 0.028, 0.05];
+    const resultUp = !$('over').hidden;
+    const hudClear = $('hud').hidden ? 28 : 132;
     for (let layer = 0; layer < 3; layer++) {
       const drift = reduced ? 0 : s.cam.x * speeds[layer] + visualT * (10 + layer * 8);
       const span = m.vw + 320;
       for (let i = 0; i < 4; i++) {
         let x = ((i * (span / 3.2) - drift) % span + span) % span - 120;
-        const y = 36 + layer * Math.max(48, m.vh * 0.16) + (i % 2) * 18;
+        const y = hudClear + layer * Math.max(64, (m.vh - hudClear) * 0.2) + (i % 2) * 16;
         const center = m.vw / 2;
         x += (x + 40 < center ? -1 : 1) * part * (150 + layer * 70);
+        ctx.save();
+        ctx.globalAlpha = alpha * (resultUp ? 0.28 : 1);
         paintCloud(clouds[(i + layer * 2) % 4], x, y, (0.72 + layer * 0.22) * Math.max(0.85, m.scale), pal.cloud, pal.shade);
+        ctx.restore();
       }
     }
     const raining = tier === 0 || s.rain > 0 || (s.over && s.dying < 0.55);
-    if (raining) {
+    if (raining && !resultUp) {
       ctx.strokeStyle = pal.rain; ctx.lineWidth = 1.5; ctx.lineCap = 'butt';
       const drops = s.over ? 56 : 34;
       for (let i = 0; i < drops; i++) {
@@ -346,9 +353,10 @@
     const kind = progress.avatar;
     const body = kind === 'skrumpey' ? '#e8a9cb' : kind === 'molandak' ? '#b1a1df' : '#d7e4c8';
     const shade = kind === 'skrumpey' ? '#c484aa' : kind === 'molandak' ? '#8878c0' : '#a9bfb4';
+    const look = 1.8;
     ctx.save();
     ctx.translate(x, y + 11);
-    ctx.scale(sx, sy);
+    ctx.scale(sx * look, sy * look);
     ctx.translate(0, -11);
     if (kind === 'skrumpey') {
       ctx.fillStyle = body;
@@ -435,15 +443,27 @@
     const dpr = canvas.width / Math.max(1, m.vw);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, m.vw, m.vh);
+    const resultUp = !$('over').hidden;
     paintSky(m, pal, s, tier, 1);
+    if (resultUp) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = '#101c2e';
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(0, 0, m.vw, m.vh);
+      ctx.globalAlpha = 1;
+      return;
+    }
     ctx.setTransform(dpr * m.scale, 0, 0, dpr * m.scale, dpr * m.ox, dpr * m.oy);
     if (!active && !sheetUp) { ctx.globalAlpha = 1; return; }
     const sx = x => x - s.cam.x, sy = y => s.cam.y - y;
     const juice = reduced ? 0 : Math.max(0, 1 - (performance.now() - catchAt) / 180);
-    ctx.strokeStyle = pal.trail; ctx.lineWidth = 2; ctx.globalAlpha = 0.55; ctx.lineJoin = 'miter'; ctx.lineCap = 'butt';
-    ctx.beginPath();
-    s.trail.forEach((p, i) => { if (!i) ctx.moveTo(sx(p.x), sy(p.y)); else ctx.lineTo(sx(p.x), sy(p.y)); });
-    ctx.stroke(); ctx.globalAlpha = 1;
+    const tail = s.trail.slice(-7);
+    if (tail.length > 1) {
+      ctx.strokeStyle = pal.trail; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.18; ctx.lineJoin = 'round'; ctx.lineCap = 'butt';
+      ctx.beginPath();
+      tail.forEach((p, i) => { if (!i) ctx.moveTo(sx(p.x), sy(p.y)); else ctx.lineTo(sx(p.x), sy(p.y)); });
+      ctx.stroke(); ctx.globalAlpha = 1;
+    }
     for (const p of s.pickups) {
       const x = sx(p.x), y = sy(p.y);
       if (x < -40 || x > 430 || y < -40 || y > 900) continue;
@@ -460,7 +480,7 @@
       const squashY = miss ? 0.82 : juice > 0 ? 1 - 0.32 * juice : falling ? 1.18 : 1;
       emonad(hx, hy, tier, miss, squashX, squashY);
     }
-    if (s.shield) { ctx.strokeStyle = '#b6e2ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(hx, hy, 16, 0, Math.PI * 2); ctx.stroke(); }
+    if (s.shield) { ctx.strokeStyle = '#b6e2ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(hx, hy, 28, 0, Math.PI * 2); ctx.stroke(); }
     const py = sy(s.base);
     const dip = 3 * juice;
     ctx.save();

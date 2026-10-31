@@ -125,7 +125,10 @@ p { line-height: 1.5; font-size: 16px; margin: 8px 0; }
   margin: 0 0 8px;
   font-size: 14px;
   letter-spacing: 0;
+  list-style: none;
+  cursor: pointer;
 }
+.howto-label::-webkit-details-marker { display: none; }
 .mark-chevron {
   width: 8px;
   height: 8px;
@@ -134,6 +137,7 @@ p { line-height: 1.5; font-size: 16px; margin: 8px 0; }
   transform: rotate(-45deg);
   flex: none;
 }
+.howto[open] .mark-chevron { transform: rotate(45deg); }
 .legend { display: flex; flex-direction: column; gap: 8px; }
 .legend-line { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .legend-item { display: flex; flex-direction: column; gap: 0; min-width: 0; }
@@ -143,14 +147,17 @@ p { line-height: 1.5; font-size: 16px; margin: 8px 0; }
 
 .hud {
   position: absolute;
-  top: 16px;
-  left: 16px;
-  right: 16px;
+  top: 8px;
+  left: 8px;
+  right: 8px;
   pointer-events: none;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px 16px;
   align-items: start;
+  padding: 8px 12px;
+  border-radius: var(--r-2);
+  background: #172b46d8;
 }
 .score, .run-vibes { display: flex; flex-direction: column; gap: 0; }
 .score span, .run-vibes span, .euphoria span { font-size: 12px; letter-spacing: 0; color: var(--paper); }
@@ -243,7 +250,7 @@ p { line-height: 1.5; font-size: 16px; margin: 8px 0; }
 .cap i.right { transform: rotate(-135deg); }
 @media (pointer: coarse) { .keys { display: none; } }
 
-.result { justify-content: center; }
+.result { justify-content: center; background: #172b46ee; }
 .tier-line {
   font-family: var(--sans);
   letter-spacing: 0;
