@@ -29,7 +29,7 @@ test("real cartridge replays pass issued HTTP sessions and update isolated Cabin
       assert.equal(issued.status, 201, JSON.stringify(issued.body));
       const config = issued.body.run as GameRunConfig;
       assert.equal(config.gameId, gameId);
-      assert.equal(config.gameVersion, gameId === "emonad-cabinet" ? "2.0.0" : "1.1.0");
+      assert.equal(config.gameVersion, gameId === "emonad-cabinet" ? "2.1.0" : "1.1.0");
       assert.ok(config.seed, "the API issues the simulation seed");
       let proof: unknown;
       let primaryMetric: number;

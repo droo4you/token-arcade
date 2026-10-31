@@ -12,10 +12,14 @@ export const moodSim = createRequire(import.meta.url)("../../../cartridges/emona
   encode(inputs: number[]): string;
   decode(track: unknown, steps: unknown): number[];
 };
+/** 2.1.0 is the presentation release of the unchanged 2.0.0 rules. */
+export function moodGameVersion(version: string | undefined): boolean {
+  return version === moodSim.VERSION || version === "2.1.0";
+}
 export function createMoodVerifier(gameId = "emonad-cabinet"): GameVerifier {
   return { gameId, async verify(config, result) {
     const no = (reason: string) => ({ valid: false, reason });
-    if (config.gameVersion !== moodSim.VERSION || !config.seed || result.objective !== "score" || result.result !== "completed" ||
+    if (!moodGameVersion(config.gameVersion) || !config.seed || result.objective !== "score" || result.result !== "completed" ||
         config.rules?.viewportWidth !== 390 || config.rules?.viewportHeight !== 844) return no("Mood Swings requires its issued version, seed and playfield");
     const p = result.proof as { v?: unknown; seed?: unknown; track?: unknown; steps?: unknown } | undefined;
     if (!p || p.v !== 1 || p.seed !== config.seed) return no("Invalid Mood Swings input proof");

@@ -20,6 +20,11 @@ test("separate Cartridge origin serves reviewed assets and excludes server/sourc
     assert.equal(mood.status, 200);
     assert.match(await mood.text(), /Good Vibes/);
     assert.match(await (await fetch(`${origin}/emonad-cabinet/v/2.0.0/sim.js`)).text(), /Mood Swings 2.0.0/);
+    const moodNext = await fetch(`${origin}/emonad-cabinet/v/2.1.0/`);
+    assert.equal(moodNext.status, 200);
+    assert.match(await moodNext.text(), /How to play/);
+    assert.doesNotMatch(await (await fetch(`${origin}/emonad-cabinet/v/2.1.0/`)).text(), /MiniCoin coming soon/);
+    assert.match(await (await fetch(`${origin}/emonad-cabinet/v/2.1.0/sim.js`)).text(), /Mood Swings 2.0.0/);
     assert.equal((await fetch(`${origin}/emonad-cabinet/v/1.0.0/`)).status, 200, "old build remains available");
     assert.equal((await fetch(`${origin}/skrumpey-slide/v/2.0.0/`)).status, 404);
     const slide = await fetch(`${origin}/skrumpey-slide/v/1.0.0/`);
