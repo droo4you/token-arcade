@@ -30,14 +30,11 @@ export default function CountdownTimer() {
 
   return (
     <div className="text-center">
-      <p
-        className="text-[10px] uppercase tracking-wide"
-        style={{ color: "var(--text-dim)" }}
-      >
-        Next Coindle in
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        Next puzzle in
       </p>
       <p
-        className="font-mono text-xl font-bold tabular-nums"
+        className="font-mono text-xl font-medium tabular-nums"
         style={{ color: "var(--text)" }}
       >
         {timeLeft}

@@ -2,11 +2,17 @@
 
 /* ═══════════════════════════════════════════════════════════
    COINDLE THEME SYSTEM
-   Light: Beige + Green monochrome
-   Dark:  Charcoal + Navy monochrome
+   Light: Beige + Green
+   Dark:  Warm charcoal + green (tightened, not grey, not blue)
+   Radii: 8 tiles, 12 controls, 16 cards
+   Motion: one curve, cubic-bezier(.2, 0, 0, 1)
    ═══════════════════════════════════════════════════════════ */
 
 :root {
+  --font-bricolage: "Bricolage Grotesque";
+  --font-plex: "IBM Plex Mono";
+  --ease: cubic-bezier(.2, 0, 0, 1);
+
   /* ── Light Mode (default) ── Warm beige + green accents ── */
   --bg:          #F5F0E8;
   --bg-surface:  #FFFDF7;
@@ -25,51 +31,70 @@
   --border:      #D6CFC2;
   --border-light:#E8E2D6;
 
-  /* Game result colors */
+  /* Game result colors, toned to the beige world.
+     Purple is the hint tile only. */
   --result-green:    #2D8C56;
   --result-green-bg: #D4EDDA;
-  --result-yellow:   #C89B2A;
-  --result-yellow-bg:#FDF3D0;
-  --result-red:      #C45042;
-  --result-red-bg:   #F8D7DA;
-  --result-purple:   #8B5CF6;
-  --result-purple-bg:#EDE9FE;
+  --result-yellow:   #A8894E;
+  --result-yellow-bg:#F3EBD4;
+  --result-red:      #A86B62;
+  --result-red-bg:   #F4E4DF;
+  --result-purple:   #6E4C78;
+  --result-purple-bg:#E9DFEF;
 
-  /* Directional arrows */
-  --arrow-up:   var(--result-green);
-  --arrow-down: var(--result-red);
+  --up:   #2D8C56;
+  --down: #A86B62;
+
+  --rank-1: #A6842E;
+  --rank-2: #8A8175;
+  --rank-3: #A86B4A;
+
+  --arrow-up:   var(--up);
+  --arrow-down: var(--down);
 }
 
 .dark {
-  /* ── Dark Mode ── Charcoal + dark navy accents ── */
-  --bg:          #1A1D23;
-  --bg-surface:  #22262E;
-  --bg-surface-2:#2A2F38;
-  --bg-surface-3:#343A45;
+  /* Warm charcoal. Surfaces step up; they do not wash out to grey. */
+  --bg:          #141311;
+  --bg-surface:  #1C1B18;
+  --bg-surface-2:#25241F;
+  --bg-surface-3:#302E28;
 
-  --text:        #E8E6E1;
-  --text-muted:  #9B97A0;
-  --text-dim:    #6B6774;
+  --text:        #F3EEE4;
+  --text-muted:  #B3A89A;
+  --text-dim:    #7D7568;
 
-  --accent:      #5B8DEF;
-  --accent-hover:#7BA4F7;
-  --accent-soft: #1E2A42;
-  --accent-muted:#2E3E5E;
+  --accent:      #3E9A62;
+  --accent-hover:#4CAF72;
+  --accent-soft: #1A2C22;
+  --accent-muted:#2C4A38;
 
-  --border:      #3A3F4A;
-  --border-light:#2E333C;
+  --border:      #3A362E;
+  --border-light:#2C2923;
 
-  --result-green:    #4ADE80;
-  --result-green-bg: #1A3A2A;
-  --result-yellow:   #FACC15;
-  --result-yellow-bg:#3A3418;
-  --result-red:      #F87171;
-  --result-red-bg:   #3A1A1A;
-  --result-purple:   #A78BFA;
-  --result-purple-bg:#2D2250;
+  --result-green:    #2F7A4E;
+  --result-green-bg: #173024;
+  --result-yellow:   #8A7644;
+  --result-yellow-bg:#2A2618;
+  --result-red:      #8A5E58;
+  --result-red-bg:   #2A1C1A;
+  --result-purple:   #6E527C;
+  --result-purple-bg:#261E2C;
 
-  --arrow-up:   var(--result-green);
-  --arrow-down: var(--result-red);
+  --up:   #5EAE78;
+  --down: #C9A39A;
+
+  --rank-1: #C6A15A;
+  --rank-2: #A69C8E;
+  --rank-3: #C4896A;
+
+  --arrow-up:   var(--up);
+  --arrow-down: var(--down);
+}
+
+@theme inline {
+  --font-sans: var(--font-bricolage), "Bricolage Grotesque", sans-serif;
+  --font-mono: var(--font-plex), "IBM Plex Mono", ui-monospace, monospace;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -79,8 +104,17 @@
 body {
   background-color: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: var(--font-bricolage), "Bricolage Grotesque", sans-serif;
+  font-weight: 400;
+  transition: background-color 200ms var(--ease), color 200ms var(--ease);
+}
+
+strong, b {
+  font-weight: 600;
+}
+
+.font-mono {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -92,7 +126,7 @@ body {
   border: 1px solid var(--border-light);
   border-radius: 16px;
   padding: 16px;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  transition: background-color 200ms var(--ease), border-color 200ms var(--ease);
 }
 
 .bento-card-flush {
@@ -100,16 +134,40 @@ body {
   border: 1px solid var(--border-light);
   border-radius: 16px;
   overflow: hidden;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  transition: background-color 200ms var(--ease), border-color 200ms var(--ease);
 }
 
 /* ═══════════════════════════════════════════════════════════
    HORIZONTAL CARD FLIP ANIMATION
-   Each category cell flips horizontally to reveal the result.
-   Staggered via cell-delay-N classes.
+   120ms stagger. One easing curve, no overshoot.
    ═══════════════════════════════════════════════════════════ */
 
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tile-value {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.15;
+  font-weight: 500;
+  text-align: center;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 375px) {
+  .tile-value {
+    font-size: 12px;
+  }
+}
+
 .flip-card {
+  min-width: 0;
   perspective: 600px;
 }
 
@@ -117,7 +175,7 @@ body {
   position: relative;
   width: 100%;
   height: 100%;
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 420ms var(--ease);
   transform-style: preserve-3d;
 }
 
@@ -130,25 +188,25 @@ body {
   position: absolute;
   inset: 0;
   backface-visibility: hidden;
-  border-radius: 12px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 6px 4px;
+  padding: 4px 2px;
+  overflow: hidden;
 }
 
 .flip-card-back {
   transform: rotateY(180deg);
 }
 
-/* Stagger delays for each cell in a row */
 .cell-delay-0 { transition-delay: 0ms; }
-.cell-delay-1 { transition-delay: 200ms; }
-.cell-delay-2 { transition-delay: 400ms; }
-.cell-delay-3 { transition-delay: 600ms; }
-.cell-delay-4 { transition-delay: 800ms; }
-.cell-delay-5 { transition-delay: 1000ms; }
+.cell-delay-1 { transition-delay: 120ms; }
+.cell-delay-2 { transition-delay: 240ms; }
+.cell-delay-3 { transition-delay: 360ms; }
+.cell-delay-4 { transition-delay: 480ms; }
+.cell-delay-5 { transition-delay: 600ms; }
 
 /* ═══════════════════════════════════════════════════════════
    RESULT CELL COLORS
@@ -176,65 +234,13 @@ body {
 
 .cell-empty {
   background-color: var(--bg-surface-2);
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border);
 }
 
 .cell-unavailable {
   background-color: var(--bg-surface-2);
   color: var(--text-muted);
-  border: 1px dashed var(--border);
-}
-
-/* ═══════════════════════════════════════════════════════════
-   WIN / LOSE ARROW ANIMATIONS
-   ═══════════════════════════════════════════════════════════ */
-
-@keyframes winArrow {
-  0% {
-    opacity: 0;
-    transform: translate(-20px, 20px) scale(0.8);
-  }
-  50% {
-    opacity: 1;
-    transform: translate(0, 0) scale(1.05);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(10px, -10px) scale(1);
-  }
-}
-
-@keyframes loseArrow {
-  0% {
-    opacity: 0;
-    transform: translate(-20px, -20px) scale(0.8);
-  }
-  50% {
-    opacity: 1;
-    transform: translate(0, 0) scale(1.05);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(10px, 10px) scale(1);
-  }
-}
-
-.win-arrow {
-  animation: winArrow 0.8s ease-out forwards;
-}
-
-.lose-arrow {
-  animation: loseArrow 0.8s ease-out forwards;
-}
-
-@keyframes coinBounce {
-  0% { opacity: 0; transform: translateY(40px) scale(0); }
-  60% { opacity: 1; transform: translateY(-8px) scale(1.1); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.coin-bounce {
-  animation: coinBounce 0.6s ease-out forwards;
+  border: 1px solid var(--border);
 }
 
 /* ═══════════════════════════════════════════════════════════

@@ -108,7 +108,7 @@ export default function RapidFire({ runId, raid, onBegin, onComplete }: {
   );
   if (phase === "ending" || phase === "done") return (
     <section data-testid="rapid-end" className="mx-auto w-full max-w-md rounded-2xl p-6 text-center" style={card}>
-      <p className="text-xs font-bold tracking-widest" style={{ color: "var(--accent)" }}>TIME!</p>
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>Time</p>
       <p className="mt-2 text-6xl font-black" data-testid="rapid-final">{state?.solved ?? "…"}</p>
       <p className="text-sm" style={{ color: "var(--text-muted)" }}>coins solved · {state?.totalGuesses ?? "…"} guesses</p>
       <p className="mt-4 text-sm" style={{ color: "var(--text-dim)" }}>{phase === "ending" ? "Closing the window…" : "Sent to the arcade for verification. Your rank appears below."}</p>
@@ -126,7 +126,7 @@ export default function RapidFire({ runId, raid, onBegin, onComplete }: {
       {reveal && (() => { const coin = coinByTicker(reveal.ticker); return (
         <div key={reveal.key} data-testid="rapid-reveal" className="mb-3 flex items-center gap-3 rounded-xl p-3" style={{ background: reveal.solved ? "var(--result-green-bg)" : "var(--result-red-bg)", color: reveal.solved ? "var(--result-green)" : "var(--result-red)" }}>
           {coin && <img src={coin.logoUrl} alt="" className="h-8 w-8 rounded-full" />}
-          <div className="text-sm font-bold">{reveal.solved ? "Solved!" : "Missed:"} {coin?.name} ({reveal.ticker})</div>
+          <div className="text-sm font-medium">{reveal.solved ? "Solved" : "Missed"} {coin?.name} ({reveal.ticker})</div>
         </div>); })()}
       <div className="mb-2 flex items-center justify-between text-sm" style={{ color: "var(--text-muted)" }}>
         <span>Coin #{state?.puzzle ?? 1}</span>

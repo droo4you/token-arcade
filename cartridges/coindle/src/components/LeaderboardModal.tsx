@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { X } from "lucide-react";
 import { getDailyPuzzleNumber } from "@/lib/daily";
 
 interface DailyEntry {
@@ -39,7 +40,8 @@ export default function LeaderboardModal() {
       .catch(() => setLoading(false));
   }, [open]);
 
-  const medals = ["🥇", "🥈", "🥉"];
+  const rankColor = (index: number) =>
+    index === 0 ? "var(--rank-1)" : index === 1 ? "var(--rank-2)" : index === 2 ? "var(--rank-3)" : "var(--text-muted)";
 
   return (
     <>
@@ -70,15 +72,15 @@ export default function LeaderboardModal() {
             style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold" style={{ color: "var(--text)" }}>
+              <h2 className="text-lg font-medium" style={{ color: "var(--text)" }}>
                 Leaderboard
               </h2>
               <button
                 onClick={() => setOpen(false)}
-                className="text-xl"
-                style={{ color: "var(--text-dim)" }}
+                style={{ color: "var(--text-muted)" }}
+                aria-label="Close"
               >
-                ×
+                <X size={18} strokeWidth={1.5} />
               </button>
             </div>
 
@@ -88,13 +90,13 @@ export default function LeaderboardModal() {
                 <button
                   key={t}
                   onClick={() => setTab(t)}
-                  className="flex-1 rounded-xl py-2 text-sm font-semibold transition-colors"
+                  className="flex-1 rounded-xl py-2 text-sm font-medium transition-colors"
                   style={{
                     background: tab === t ? "var(--accent)" : "var(--bg-surface-2)",
                     color: tab === t ? "white" : "var(--text-muted)",
                   }}
                 >
-                  {t === "today" ? "Today" : "All Time"}
+                  {t === "today" ? "Today" : "All time"}
                 </button>
               ))}
             </div>
@@ -116,13 +118,13 @@ export default function LeaderboardModal() {
                       className="flex items-center gap-3 rounded-xl px-3 py-2"
                       style={{ background: "var(--bg-surface-2)" }}
                     >
-                      <span className="w-6 text-center text-sm font-bold" style={{ color: "var(--text-muted)" }}>
-                        {medals[i] ?? `${i + 1}`}
+                      <span className="w-6 text-center font-mono text-sm tabular-nums" style={{ color: rankColor(i) }}>
+                        {i + 1}
                       </span>
-                      <span className="flex-1 text-sm font-semibold" style={{ color: "var(--text)" }}>
+                      <span className="flex-1 text-sm font-medium" style={{ color: "var(--text)" }}>
                         {e.username}
                       </span>
-                      <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>
+                      <span className="font-mono text-sm tabular-nums" style={{ color: "var(--accent)" }}>
                         {e.guesses}/6
                       </span>
                     </div>
@@ -141,17 +143,17 @@ export default function LeaderboardModal() {
                     className="flex items-center gap-3 rounded-xl px-3 py-2"
                     style={{ background: "var(--bg-surface-2)" }}
                   >
-                    <span className="w-6 text-center text-sm font-bold" style={{ color: "var(--text-muted)" }}>
-                      {medals[i] ?? `${i + 1}`}
+                    <span className="w-6 text-center font-mono text-sm tabular-nums" style={{ color: rankColor(i) }}>
+                      {i + 1}
                     </span>
-                    <span className="flex-1 text-sm font-semibold" style={{ color: "var(--text)" }}>
+                    <span className="flex-1 text-sm font-medium" style={{ color: "var(--text)" }}>
                       {e.username}
                     </span>
                     <div className="text-right">
-                      <div className="text-sm font-bold" style={{ color: "var(--accent)" }}>
+                      <div className="font-mono text-sm tabular-nums" style={{ color: "var(--accent)" }}>
                         {e.wins}W
                       </div>
-                      <div className="text-[10px]" style={{ color: "var(--text-dim)" }}>
+                      <div className="font-mono text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>
                         avg {e.avgGuesses}
                       </div>
                     </div>

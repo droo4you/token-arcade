@@ -9,6 +9,7 @@ import Sparkline from "./Sparkline";
 import RevealCard from "./RevealCard";
 import PythFeedCard from "./PythFeedCard";
 import { MAX_GUESSES } from "@/lib/constants";
+import { tileValue } from "@/lib/tileValue";
 
 /** Category column headers */
 const HEADERS = ["Type", "Color", "Year", "Ticker", "Price", "FDV"];
@@ -121,31 +122,21 @@ export default function GameBoard() {
       {gameOver && showGuesses && (
         <button
           onClick={() => setShowGuesses(false)}
-          className="flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold transition-colors"
+          className="flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-medium transition-colors"
           style={{
             background: "var(--bg-surface-2)",
             color: "var(--text)",
             border: "1px solid var(--border)",
           }}
         >
-          ← Back to Result
+          ← Back to result
         </button>
       )}
 
       {/* Sparkline chart — shown in both modes */}
       {!gameOver && (
         <div className="bento-card">
-          <p
-            className="mb-2 text-xs font-medium uppercase tracking-wide"
-            style={{ color: "var(--text-muted)" }}
-          >
-            90-Day Price Hint
-          </p>
-          <Sparkline
-            ticker={secretCoin.ticker}
-            height={80}
-            color="var(--accent)"
-          />
+          <Sparkline ticker={secretCoin.ticker} color="var(--accent)" />
         </div>
       )}
 
@@ -160,7 +151,7 @@ export default function GameBoard() {
             />
           ) : (
             <div
-              className="h-12 animate-pulse rounded-xl"
+              className="h-12 rounded-xl"
               style={{ background: "var(--bg-surface-2)" }}
             />
           )}
@@ -169,15 +160,16 @@ export default function GameBoard() {
               className="text-center text-xs"
               style={{ color: "var(--text-dim)" }}
             >
-              {remaining} guess{remaining !== 1 ? "es" : ""} remaining
+              <span className="font-mono tabular-nums">{remaining}</span> guess{remaining !== 1 ? "es" : ""} remaining
             </p>
             {difficulty === "easy" && hints.length < 3 && (
               <button
                 onClick={useHint}
-                className="rounded-lg px-3 py-1 text-xs font-semibold transition-colors"
+                className="rounded-lg px-3 py-1 text-xs font-medium transition-colors"
                 style={{
-                  background: "var(--result-purple)",
-                  color: "white",
+                  background: "transparent",
+                  color: "var(--text-muted)",
+                  border: "1px solid var(--border)",
                 }}
               >
                 Hint ({hints.length}/3)
@@ -189,32 +181,24 @@ export default function GameBoard() {
 
       {/* Hint reveals */}
       {hints.length > 0 && !gameOver && (
-        <div className="grid grid-cols-6 gap-1.5">
+        <div className="tile-grid">
           {HEADERS.map((h, i) => {
             const hint = hints.find((ht) => ht.categoryIndex === i);
             return (
               <div
                 key={h}
-                className={`flex h-[52px] flex-col items-center justify-center rounded-xl px-1 ${
-                  hint ? "cell-purple" : ""
+                className={`flex h-16 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg px-0.5 ${
+                  hint ? "cell-purple" : "cell-empty"
                 }`}
-                style={
-                  hint
-                    ? undefined
-                    : {
-                        background: "var(--bg-surface-2)",
-                        border: "1px dashed var(--border)",
-                      }
-                }
               >
                 {hint ? (
-                  <span className="text-[10px] font-semibold leading-tight text-center">
-                    {hint.value}
+                  <span className="tile-value">
+                    {tileValue(hint.value)}
                   </span>
                 ) : (
                   <span
-                    className="text-[10px]"
-                    style={{ color: "var(--text-dim)" }}
+                    className="text-xs"
+                    style={{ color: "var(--text-muted)" }}
                   >
                     ?
                   </span>
@@ -226,12 +210,12 @@ export default function GameBoard() {
       )}
 
       {/* Column headers */}
-      <div className="grid grid-cols-6 gap-1.5 px-1">
+      <div className="tile-grid px-1">
         {HEADERS.map((h) => (
           <div
             key={h}
-            className="text-center text-[10px] font-semibold uppercase tracking-wider"
-            style={{ color: "var(--text-dim)" }}
+            className="text-center text-xs"
+            style={{ color: "var(--text-muted)" }}
           >
             {h}
           </div>
@@ -246,16 +230,9 @@ export default function GameBoard() {
       {/* Empty slots */}
       {!gameOver &&
         Array.from({ length: remaining }).map((_, i) => (
-          <div key={`empty-${i}`} className="grid grid-cols-6 gap-1.5">
+          <div key={`empty-${i}`} className="tile-grid">
             {Array.from({ length: 6 }).map((_, j) => (
-              <div
-                key={j}
-                className="h-[72px] rounded-xl"
-                style={{
-                  background: "var(--bg-surface-2)",
-                  border: "1px dashed var(--border)",
-                }}
-              />
+              <div key={j} className="cell-empty h-16 rounded-lg" />
             ))}
           </div>
         ))}
