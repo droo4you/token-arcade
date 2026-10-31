@@ -160,6 +160,12 @@ strong, b {
   overflow-wrap: anywhere;
 }
 
+@media (max-width: 375px) {
+  .tile-value {
+    font-size: 12px;
+  }
+}
+
 .flip-card {
   min-width: 0;
   perspective: 600px;
