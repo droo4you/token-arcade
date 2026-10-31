@@ -3,6 +3,7 @@
 import type { Coin, CachedPrices } from "@/lib/types";
 import type { LivePrices } from "@/hooks/useLivePrices";
 import { PRICE_TIER_LABELS } from "@/lib/constants";
+import { tileValue } from "@/lib/tileValue";
 import LiveDot from "./LiveDot";
 
 interface AnswerRowProps {
@@ -72,7 +73,7 @@ export default function AnswerRow({ secretCoin, prices, livePrices }: AnswerRowP
       </div>
 
       {/* Column headers */}
-      <div className="mb-1 grid grid-cols-6 gap-2 px-1">
+      <div className="tile-grid mb-1 px-1">
         {cells.map((cell) => (
           <div
             key={cell.label}
@@ -84,14 +85,14 @@ export default function AnswerRow({ secretCoin, prices, livePrices }: AnswerRowP
         ))}
       </div>
 
-      <div className="grid grid-cols-6 gap-2">
+      <div className="tile-grid">
         {cells.map((cell) => (
           <div
             key={cell.label}
-            className={`${cell.label === "Price" && priceTier === undefined ? "cell-unavailable" : "cell-green"} flex h-16 flex-col items-center justify-center rounded-lg px-2`}
+            className={`${cell.label === "Price" && priceTier === undefined ? "cell-unavailable" : "cell-green"} flex h-16 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg px-0.5`}
           >
-            <span className={`text-center text-xs font-medium leading-tight ${cell.mono ? "font-mono tabular-nums" : ""}`}>
-              {cell.value}
+            <span className={`tile-value ${cell.mono ? "font-mono tabular-nums" : ""}`}>
+              {tileValue(cell.value)}
             </span>
           </div>
         ))}

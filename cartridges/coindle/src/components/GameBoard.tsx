@@ -9,6 +9,7 @@ import Sparkline from "./Sparkline";
 import RevealCard from "./RevealCard";
 import PythFeedCard from "./PythFeedCard";
 import { MAX_GUESSES } from "@/lib/constants";
+import { tileValue } from "@/lib/tileValue";
 
 /** Category column headers */
 const HEADERS = ["Type", "Color", "Year", "Ticker", "Price", "FDV"];
@@ -180,19 +181,19 @@ export default function GameBoard() {
 
       {/* Hint reveals */}
       {hints.length > 0 && !gameOver && (
-        <div className="grid grid-cols-6 gap-2">
+        <div className="tile-grid">
           {HEADERS.map((h, i) => {
             const hint = hints.find((ht) => ht.categoryIndex === i);
             return (
               <div
                 key={h}
-                className={`flex h-16 flex-col items-center justify-center rounded-lg px-2 ${
+                className={`flex h-16 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg px-0.5 ${
                   hint ? "cell-purple" : "cell-empty"
                 }`}
               >
                 {hint ? (
-                  <span className="text-center text-xs font-medium leading-tight">
-                    {hint.value}
+                  <span className="tile-value">
+                    {tileValue(hint.value)}
                   </span>
                 ) : (
                   <span
@@ -209,7 +210,7 @@ export default function GameBoard() {
       )}
 
       {/* Column headers */}
-      <div className="grid grid-cols-6 gap-2 px-1">
+      <div className="tile-grid px-1">
         {HEADERS.map((h) => (
           <div
             key={h}
@@ -229,7 +230,7 @@ export default function GameBoard() {
       {/* Empty slots */}
       {!gameOver &&
         Array.from({ length: remaining }).map((_, i) => (
-          <div key={`empty-${i}`} className="grid grid-cols-6 gap-2">
+          <div key={`empty-${i}`} className="tile-grid">
             {Array.from({ length: 6 }).map((_, j) => (
               <div key={j} className="cell-empty h-16 rounded-lg" />
             ))}

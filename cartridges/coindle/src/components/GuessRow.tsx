@@ -113,7 +113,7 @@ export default function GuessRow({ guess, prices, livePrices, rowIndex, hintedIn
       </div>
 
       {/* 6 category cells in a grid */}
-      <div className="grid grid-cols-6 gap-2">
+      <div className="tile-grid">
         {cells.map((cell, i) => (
           <CategoryCell
             key={CATEGORIES[i]}

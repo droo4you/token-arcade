@@ -138,7 +138,7 @@ export default function RapidFire({ runId, raid, onBegin, onComplete }: {
       <CoinAutocomplete onSelect={(ticker) => void guess(ticker)} guessedTickers={rows.map((row) => row.coin.ticker)} disabled={busy} />
       {message && <p className="mt-2 text-sm" style={{ color: "var(--result-red)" }}>{message}</p>}
       {rows.length > 0 && <div className="mt-3"><div>
-        <div className="mb-1 grid grid-cols-6 gap-2 text-center text-xs" style={{ color: "var(--text-muted)" }}>{HEADERS.map((h) => <div key={h}>{h}</div>)}</div>
+        <div className="tile-grid mb-1 px-1 text-center text-xs" style={{ color: "var(--text-muted)" }}>{HEADERS.map((h) => <div key={h}>{h}</div>)}</div>
         {rows.map((row, index) => <GuessRow key={row.coin.ticker} guess={row} prices={{}} rowIndex={index} />)}
       </div></div>}
       <div className="mt-4 flex gap-2">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { MatchResult } from "@/lib/types";
+import { tileValue } from "@/lib/tileValue";
 
 type CellResult = MatchResult | "purple";
 
@@ -54,7 +55,7 @@ export default function CategoryCell({
     }
   }, [revealed, index]);
 
-  const valueClass = `text-center text-xs font-medium leading-tight ${mono ? "font-mono tabular-nums" : ""}`;
+  const valueClass = `tile-value ${mono ? "font-mono tabular-nums" : ""}`;
 
   return (
     <div className="flip-card" style={{ height: 64 }}>
@@ -66,7 +67,7 @@ export default function CategoryCell({
         </div>
 
         <div className={`flip-card-back ${RESULT_CLASS[result]}`}>
-          <span className={valueClass}>{value}</span>
+          <span className={valueClass}>{tileValue(value)}</span>
           {direction && direction !== "match" && (
             <span className="mt-0.5 text-base font-medium leading-none">
               {ARROW_ICON[direction]}

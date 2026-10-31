@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import type { Coin, CachedPrices } from "@/lib/types";
 import type { LivePrices } from "@/hooks/useLivePrices";
 import { PRICE_TIER_LABELS, HERMES_BASE_URL } from "@/lib/constants";
@@ -57,15 +58,15 @@ export default function PythFeedCard({
         <span className="text-sm font-medium" style={{ color: "var(--accent)" }}>
           Pyth price feed
         </span>
-        <span
-          className="ml-auto text-xs transition-transform"
+        <ChevronDown
+          size={18}
+          strokeWidth={1.5}
+          className="ml-auto transition-transform"
           style={{
-            color: "var(--text-muted)",
+            color: "var(--text)",
             transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
           }}
-        >
-          ▼
-        </span>
+        />
       </button>
 
       {expanded && (

@@ -35,15 +35,15 @@
      Purple is the hint tile only. */
   --result-green:    #2D8C56;
   --result-green-bg: #D4EDDA;
-  --result-yellow:   #C89B2A;
-  --result-yellow-bg:#FDF3D0;
-  --result-red:      #C45042;
-  --result-red-bg:   #F8D7DA;
+  --result-yellow:   #A8894E;
+  --result-yellow-bg:#F3EBD4;
+  --result-red:      #A86B62;
+  --result-red-bg:   #F4E4DF;
   --result-purple:   #6E4C78;
   --result-purple-bg:#E9DFEF;
 
   --up:   #2D8C56;
-  --down: #C45042;
+  --down: #A86B62;
 
   --rank-1: #A6842E;
   --rank-2: #8A8175;
@@ -74,15 +74,15 @@
 
   --result-green:    #2F7A4E;
   --result-green-bg: #173024;
-  --result-yellow:   #8C7030;
-  --result-yellow-bg:#2C2614;
-  --result-red:      #9A463E;
-  --result-red-bg:   #2C1916;
+  --result-yellow:   #8A7644;
+  --result-yellow-bg:#2A2618;
+  --result-red:      #8A5E58;
+  --result-red-bg:   #2A1C1A;
   --result-purple:   #6E527C;
   --result-purple-bg:#261E2C;
 
   --up:   #5EAE78;
-  --down: #E09A92;
+  --down: #C9A39A;
 
   --rank-1: #C6A15A;
   --rank-2: #A69C8E;
@@ -142,7 +142,26 @@ strong, b {
    120ms stagger. One easing curve, no overshoot.
    ═══════════════════════════════════════════════════════════ */
 
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tile-value {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.15;
+  font-weight: 500;
+  text-align: center;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
 .flip-card {
+  min-width: 0;
   perspective: 600px;
 }
 
@@ -168,7 +187,8 @@ strong, b {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 4px 2px;
+  overflow: hidden;
 }
 
 .flip-card-back {

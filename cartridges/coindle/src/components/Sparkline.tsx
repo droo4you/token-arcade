@@ -31,8 +31,9 @@ function formatPrice(p: number): string {
 }
 
 /**
- * 90-day price shape. The line is the one rich moment: faint grid, a baseline
- * at the start price, start and end prices, and a flat end dot. No fill.
+ * 90-day price shape from the history endpoint (Pyth samples). Straight
+ * segments join the actual points. Faint grid, a baseline at the start
+ * price, start and end prices, and a flat end dot. No fill.
  */
 export default function Sparkline({
   ticker,
@@ -124,7 +125,7 @@ export default function Sparkline({
             <ReferenceLine y={start} stroke="var(--text-dim)" strokeOpacity={0.45} />
             <YAxis domain={["dataMin", "dataMax"]} hide />
             <Line
-              type="monotone"
+              type="linear"
               dataKey="price"
               stroke={color}
               strokeWidth={1.75}
