@@ -160,7 +160,7 @@
   canvas.addEventListener('pointerdown', onDown); addEventListener('pointermove', onMove); addEventListener('pointerup', onUp); addEventListener('pointercancel', e => { lanes.cancel(e.pointerId); onUp(e); });
   // HUD buttons (logical px), safe-area aware.
   // Top strip: one row (score · AIR · sound · pause), then a one-line readout and a thin speed bar. ~11% of a phone screen.
-  function hudGeom() { const t = 8 + (G.safe?.t || 0), rowH = 36, infoY = t + rowH + 10, barY = infoY; return { t, rowH, infoY, barY, bottom: infoY + 6 }; }
+  function hudGeom() { const t = 8 + (G.safe?.t || 0), rowH = 44, infoY = t + rowH, barY = infoY; return { t, rowH, infoY, barY, bottom: t + rowH + 2 }; }
   function hudBtns() { const m = 10 + (G.safe?.r || 0), g = hudGeom(), z = g.rowH; return { pause: { x: W - m - z, y: g.t, w: z, h: z }, mute: { x: W - m - 2 * z - 6, y: g.t, w: z, h: z } }; }
   // hit area padded to >= 44 css px in both orientations
   const hitBtn = (p, k) => { const b = hudBtns()[k], pd = G.portrait ? 8 : 14; return p.x > b.x - pd && p.x < b.x + b.w + pd && p.y > b.y - pd && p.y < b.y + b.h + pd; };
@@ -489,6 +489,7 @@
     if (A.muted) { ctx.strokeStyle = '#ff5a78'; ctx.beginPath(); ctx.moveTo(cx + 4, cy - 6); ctx.lineTo(cx + 12, cy + 6); ctx.moveTo(cx + 12, cy - 6); ctx.lineTo(cx + 4, cy + 6); ctx.stroke(); }
     else { ctx.beginPath(); ctx.arc(cx + 2, cy, 6, -0.9, 0.9); ctx.stroke(); ctx.beginPath(); ctx.arc(cx + 2, cy, 11, -0.9, 0.9); ctx.stroke(); }
   }
+  function tank(x, y, iw, ih, color) { ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(x, y, iw, ih, 3); ctx.fill(); ctx.fillRect(x + iw / 2 - 2, y - 3, 4, 3); }
   function soft(x, y, w, h, r = 10, a = 0.38) { panel(x, y, w, h, r, `rgba(22,10,36,${a})`); }
   /* Thin speed bar: fill, a small tick at `mark` (stall / clear line) and the Mach 0.5 tick that glows as you close in. */
   function thinBar(x, y, w, h, v, max, mark, extra) {
@@ -508,9 +509,10 @@
     const r = G.screen === 'title' ? S.score(s) : RES.final(G, S, s), M = mg(), narrow = W < 760, hb = hudBtns(), HG = hudGeom();
     const rowY = HG.t, rh = HG.rowH;
     // Top strip = SCORE (left) + SPEED (centre), big and high-contrast; sound + pause icons right. Everything else is contextual.
+    const tw = (str, px, w) => { ctx.font = font(px, w); return ctx.measureText(str).width; };
     const sw = narrow ? 116 : 150; soft(M.l, rowY, sw, rh, 10, 0.55);
-    text('SCORE', M.l + 10, rowY + 9, 9, '#ffb3c6', 'left', false, 800);
-    text(r.total.toLocaleString('en-US'), M.l + 10, rowY + rh / 2 + 8, narrow ? 21 : 24, '#fff', 'left', true, 900);
+    text('SCORE', M.l + 12, rowY + 12, 10, '#ffb3c6', 'left', false, 800);
+    text(r.total.toLocaleString('en-US'), M.l + 12, rowY + 30, narrow ? 20 : 23, '#fff', 'left', true, 900);
     iconBtn(hb.pause, 'pause'); iconBtn(hb.mute, 'mute');
     if (G.screen === 'end') return;
     const touchSky = G.touch && s.phase === 'sky', inSky = s.phase === 'sky' || (s.over && s.phase !== 'fall'), ap = G.airPulse || 0;
@@ -520,17 +522,17 @@
       const spw = narrow ? 128 : 160, spx = W / 2 - spw / 2, okRoad = s.phase === 'road' && s.v >= C.CLEAR_V;
       soft(spx, rowY, spw, rh, 10, 0.55);
       const vc = stall ? (blink ? '#ff5a78' : '#fff') : okRoad || s.counts.mach ? '#7dffd6' : '#fff';
-      text(`${KMH(vNow)}`, W / 2 + (narrow ? 18 : 22), rowY + rh / 2 + 8, narrow ? 24 : 27, vc, 'right', true, 900);
-      text('km/h', W / 2 + (narrow ? 22 : 26), rowY + rh / 2 + 7, 11, 'rgba(255,255,255,0.75)', 'left', false, 800);
-      // one tiny line under the speed: distance left (or the stall order while stalling)
+      const num = `${KMH(vNow)}`, np = narrow ? 21 : 24, gw = tw(num, np, 900) + 5 + tw('km/h', 11, 800), gx = W / 2 - gw / 2;
+      text(num, gx, rowY + 17, np, vc, 'left', true, 900);
+      text('km/h', gx + gw, rowY + 19, 11, 'rgba(255,255,255,0.8)', 'right', false, 800);
       const sub = stall ? 'STALL: DIVE!' : s.phase === 'road' ? `CANYON ${Math.max(0, Math.ceil(C.ROAD_LEN - s.z)).toLocaleString('en-US')} m` : toRim > 0 ? `RIM ${toRim.toLocaleString('en-US')} m` : `+${Math.floor(s.z - farRim).toLocaleString('en-US')} m`;
-      text(sub, W / 2, HG.infoY, 10, stall ? '#ff9fb0' : 'rgba(255,255,255,0.8)', 'center', true, 800);
+      text(sub, W / 2, rowY + 35, 10, stall ? '#ff9fb0' : 'rgba(255,255,255,0.78)', 'center', false, 800);
       // Mach 0.5: a brief flash under the strip when it is crossed (G.machT decays 1 -> 0)
       if (G.machT > 0.35) { ctx.globalAlpha = Math.min(1, (G.machT - 0.35) * 4); text('MACH 0.5 ✓', W / 2, HG.bottom + 46, 18, '#ffffff', 'center', true, 900); ctx.globalAlpha = 1; }
       // AIR: on touch it lives on the BOOST button badge; without the button it sits bottom-right, where boost is on the keyboard
       if (!touchSky && !s.over && s.phase !== 'road') { const t2 = `AIR ×${s.air > 999 ? '999+' : s.air}`, aw = 78, ax = W - M.r - aw, ay = H - M.b - 30;
         soft(ax, ay, aw, 26, 13, 0.5); if (ap > 0) { ctx.save(); ctx.globalAlpha = ap * 0.8; ctx.strokeStyle = '#5af0ff'; ctx.lineWidth = 2 + ap * 3; ctx.beginPath(); ctx.roundRect(ax, ay, aw, 26, 13); ctx.stroke(); ctx.restore(); }
-        text(t2, ax + aw / 2, ay + 14, 13, s.air ? '#5af0ff' : 'rgba(90,240,255,0.4)', 'center', true, 900); }
+        tank(ax + 14, ay + 7, 9, 14, s.air ? '#5af0ff' : 'rgba(90,240,255,0.4)'); text(t2.replace('AIR ', ''), ax + aw / 2 + 8, ay + 14, 14, s.air ? '#5af0ff' : 'rgba(90,240,255,0.4)', 'center', true, 900); }
     }
     if (s.phase === 'road') {
     } else if (inSky) {
@@ -561,7 +563,12 @@
       const flipReady = s.trick <= 0 && s.t - s.lastTrickEnd >= C.TRICK_CD && S.agl(s) > C.TRICK_MIN_AGL;
       if (touchSky && !s.over) {
         const b = BTN(), ready = flipReady && s.stabT <= 0;
-        btn(b.boost, s.gam <= C.DIVE_BOOST_GAM && s.air > 0 ? 'DIVE' : 'BOOST', '#5af0ff', s.air > 0 && s.boostCd <= 0, s.air > 99 ? '99+' : `${s.air}`, 'boost');
+        { const bOn = s.air > 0 && s.boostCd <= 0, bl = s.gam <= C.DIVE_BOOST_GAM && s.air > 0 ? 'DIVE' : 'BOOST';
+          btn({ ...b.boost, y: b.boost.y }, ' ', '#5af0ff', bOn, null, 'boost'); ctx.globalAlpha = bOn ? 1 : 0.5;
+          text(bl, b.boost.x, b.boost.y - b.boost.r * 0.24, 14, '#5af0ff', 'center', false, 900);
+          const cnt = `×${s.air > 99 ? '99+' : s.air}`, cw2 = tw(cnt, 16, 900), gw2 = 11 + 5 + cw2, gx2 = b.boost.x - gw2 / 2, cy2 = b.boost.y + b.boost.r * 0.3;
+          if (ap > 0) { ctx.save(); ctx.globalAlpha = ap; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 + ap * 3; ctx.beginPath(); ctx.arc(b.boost.x, b.boost.y, b.boost.r + 3, 0, 7); ctx.stroke(); ctx.restore(); }
+          tank(gx2, cy2 - 8, 11, 17, '#5af0ff'); text(cnt, gx2 + gw2, cy2 + 1, 16, '#fff', 'right', true, 900); ctx.globalAlpha = 1; }
         btn(b.rollLeft, 'ROLL←', '#ff4fd8', ready, null, 'rollLeft'); btn(b.rollRight, 'ROLL→', '#ff4fd8', ready, null, 'rollRight');
         btn(b.flipFront, 'FLIP↓', '#ffd23f', ready, null, 'flipFront'); btn(b.flipBack, 'FLIP↑', '#ffd23f', ready, null, 'flipBack');
         stabBtn(b.stab, s);
