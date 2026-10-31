@@ -654,23 +654,25 @@
     ctx.lineWidth = 3; ctx.strokeStyle = color; ctx.stroke();
     const ink = pressed ? '#1a0d26' : '#ffffff', k = r / 33; ctx.translate(b.x, b.y); ctx.scale(k, k);
     ctx.strokeStyle = ink; ctx.fillStyle = ink; ctx.lineWidth = 3.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    const head = (x, y, ang) => { ctx.beginPath(); ctx.moveTo(x + Math.cos(ang) * 9, y + Math.sin(ang) * 9); ctx.lineTo(x + Math.cos(ang + 2.4) * 8, y + Math.sin(ang + 2.4) * 8); ctx.lineTo(x + Math.cos(ang - 2.4) * 8, y + Math.sin(ang - 2.4) * 8); ctx.closePath(); ctx.fill(); };
+    // bold arc (ellipse polyline) ending in a big solid arrowhead along the final tangent
+    const arrow = (cx, cy, rx, ry, a0, a1) => {
+      const n = 24, P = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; P.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]); }
+      const [ex, ey] = P[n], [px, py] = P[n - 2], d = Math.atan2(ey - py, ex - px);
+      ctx.lineWidth = 4.6; ctx.beginPath(); P.slice(0, n - 1).forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ex + Math.cos(d) * 6, ey + Math.sin(d) * 6); ctx.lineTo(ex + Math.cos(d + 2.35) * 9, ey + Math.sin(d + 2.35) * 9); ctx.lineTo(ex + Math.cos(d - 2.35) * 9, ey + Math.sin(d - 2.35) * 9); ctx.closePath(); ctx.fill();
+    };
+    ctx.save();
     if (kind === 'rollL' || kind === 'rollR') {
-      // car seen from behind (small box + wheels) inside a 3/4 rotation arrow; right = clockwise
-      ctx.fillRect(-7, -3, 14, 7); ctx.fillRect(-4, -8, 8, 5); ctx.fillRect(-8, 4, 4, 3); ctx.fillRect(4, 4, 4, 3);
-      const R = 16, cw = kind === 'rollR', a0 = -Math.PI * 0.95, a1 = a0 + Math.PI * 1.45;
-      ctx.beginPath(); if (cw) ctx.arc(0, 0, R, a0, a1); else ctx.arc(0, 0, R, -Math.PI - a0, -Math.PI - a1, true); ctx.stroke();
-      const ae = cw ? a1 : -Math.PI - a1, tang = ae + (cw ? Math.PI / 2 : -Math.PI / 2);
-      head(Math.cos(ae) * R, Math.sin(ae) * R, tang);
+      // ROLL: wide, flat arc over the top (horizontal emphasis); right = clockwise, ending pointing right/down-right; left = mirror
+      if (kind === 'rollL') ctx.scale(-1, 1);
+      arrow(0, 1, 16, 10, Math.PI * 1.02, Math.PI * 2.12);
     } else {
-      // car in side view (facing right) inside an arc: front flip = nose-down (clockwise), back flip = nose-up (counter-clockwise)
-      ctx.beginPath(); ctx.roundRect(-9, -1, 18, 6, 2); ctx.fill(); ctx.beginPath(); ctx.roundRect(-5, -6, 9, 6, 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(-5, 6, 2.6, 0, 7); ctx.arc(5, 6, 2.6, 0, 7); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(9, 2); ctx.lineTo(12, 2); ctx.stroke(); // nose marker
-      const R = 17, fwd = kind === 'flipF', a0 = Math.PI * 0.85, a1 = Math.PI * 2.25;
-      ctx.beginPath(); if (fwd) ctx.arc(0, 0, R, a0, a1); else ctx.arc(0, 0, R, Math.PI - a0, Math.PI - a1, true); ctx.stroke();
-      const ae = fwd ? a1 : Math.PI - a1; head(Math.cos(ae) * R, Math.sin(ae) * R, ae + (fwd ? Math.PI / 2 : -Math.PI / 2));
+      // FLIP: tall, narrow loop (vertical emphasis); front = curls forward and DOWN, back = mirror vertically (curls back and UP)
+      if (kind === 'flipB') { ctx.translate(0, -4); ctx.scale(1, -1); ctx.translate(0, 4); }
+      arrow(0, -4, 9, 13, Math.PI * 0.95, Math.PI * 2.4);
     }
+    ctx.restore();
+    text(kind[0] === 'r' ? 'ROLL' : 'FLIP', 0, 21, 9, ink, 'center', false, 900);
     ctx.restore();
   }
   function btn(b, label, color, on, badge, flashKey) {
