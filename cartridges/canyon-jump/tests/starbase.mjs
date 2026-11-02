@@ -16,7 +16,7 @@ function fly(seed, pilot = S.bot, maxT = 240) {
 /* A sky state parked just short of the rocket, launch clock set so the stack is tau seconds into its climb. */
 function parked(x, y, tau, extra = {}) {
   const s = S.newRun(3, SB.air); const R = SB.air.rocket;
-  Object.assign(s, { phase: 'sky', z: S.C.ROAD_LEN + R.z - 3, x, y, m: 90, gam: 0, vx: 0, launchT: 0, rkTick: s.tick - Math.round(tau * 120) }, extra);
+  Object.assign(s, { phase: 'sky', z: S.C.ROAD_LEN + R.z - 3, x, y, m: 90, gam: 0, vx: 0, launchT: 0, rkTick: s.tick - Math.round(tau * 120), rkY: R.base + 0.5 * R.acc * tau * tau, rkVy: R.acc * tau, rkChunks: true }, extra);
   return s;
 }
 
@@ -44,17 +44,38 @@ test('starbase runs are deterministic (same seed + inputs = same run)', () => {
   assert.deepEqual(a.sc, b.sc); assert.equal(a.s.tick, b.s.tick); assert.equal(a.s.rkTick, b.s.rkTick);
 });
 
-test('rocket ignites by proximity (deterministic), and rises beside the car', () => {
-  const R = SB.air.rocket, IG = R.ignite;
-  const r = fly(21); const ig = r.ev.find(e => e.e === 'ignition'); assert.ok(ig, 'ignited');
-  assert.ok(r.s.rkTick > 0 && r.s.rkAcc >= IG.accMin && r.s.rkAcc <= IG.accMax);
-  assert.equal(fly(21).s.rkTick, r.s.rkTick, 'same tick every time');
-  const pre = S.newRun(3, SB.air); assert.equal(pre.rkTick, undefined); assert.equal(S.rocketAt(pre).tau, 0);
-  // a car parked 700 m out does not light it; at 300 m and 100 m/s (3 s out) it does, aimed ~`below` m under the car
-  const far = parked(-30, 80, 0, { rkTick: undefined, z: S.C.ROAD_LEN + R.z - 700 }); S.step(far, {}); assert.equal(far.rkTick, undefined);
-  const near = parked(-30, 200, 0, { rkTick: undefined, z: S.C.ROAD_LEN + R.z - 300, m: 100 }); S.step(near, {});
-  assert.ok(near.rkTick != null); const tt = 300 / 100, want = 2 * (200 - IG.below - R.base) / (tt * tt);
-  assert.ok(Math.abs(near.rkAcc - want) / want < 0.05, `acc ${near.rkAcc} vs ${want}`);
+test('guided launch: lights on the final straight, and meets normal AND steep lines', () => {
+  const G = SB.air.rocket.guide, R = SB.air.rocket;
+  const r = fly(21), ig = r.ev.find(e => e.e === 'ignition'); assert.ok(ig);
+  const s = S.newRun(21, SB.air); while (s.rkTick == null) S.step(s, S.bot(s));
+  assert.equal(s.phase, 'road', 'ignites before the ramp'); assert.ok(s.z >= S.C.ROAD_LEN - G.igniteBefore - 2 && s.z < S.C.ROAD_LEN - G.igniteBefore + 3);
+  assert.equal(fly(21).s.rkTick, r.s.rkTick, 'deterministic');
+  // steep line: climb hard after the ramp; the stack is still level with the car when it arrives
+  for (const [name, pitch] of [['normal', 0], ['steep', 1]]) {
+    const q = S.newRun(5, SB.air); let at = null;
+    while (!q.over && q.tick < 120 * 60) { const i = S.bot(q); if (q.phase === 'sky' && q.t - q.launchT < 4) { i.pitch = pitch; } S.step(q, i); q.events.length = 0;
+      const k = S.rocketAt(q); if (!at && q.phase === 'sky' && q.z >= k.z - 1) at = { y: q.y, yB: k.yB, yT: k.yT }; }
+    assert.ok(at, name + ' reached the stack');
+    assert.ok(at.y > at.yB - 60 && at.y < at.yT + 30, `${name}: car ${at.y.toFixed(0)} vs stack ${at.yB.toFixed(0)}..${at.yT.toFixed(0)}`);
+  }
+});
+
+test('Booster Chunks: dropped beside the stack on approach; grabbing one gives seconds of thrust', () => {
+  const R = SB.air.rocket, B = R.chunks;
+  const s = parked(-30, 120, 2, { z: S.C.ROAD_LEN + R.z - B.spawnAt + 1, rkChunks: false }); S.step(s, {});
+  const ch = s.skyPickups.filter(p => p.type === 'booster'); assert.equal(ch.length, B.n);
+  for (const c of ch) assert.ok(Math.abs(c.x - R.x) > R.r + 4 && Math.abs(c.x - R.x) < R.r + 8, 'just outside the body');
+  const g = parked(ch[0].x, ch[0].y, 2, { z: ch[0].z - 1, skyPickups: [Object.assign({}, ch[0])], m: 80, rkChunks: true });
+  const m0 = g.m; let got = false; for (let i = 0; i < 12; i++) { S.step(g, {}); if (g.events.some(e => e.e === 'booster')) got = true; g.events.length = 0; }
+  assert.ok(got && g.boosterT > 0); const h = parked(ch[0].x, ch[0].y, 2, { z: ch[0].z - 1, skyPickups: [], m: 80, rkChunks: true });
+  for (let i = 0; i < 240; i++) { S.step(g, {}); S.step(h, {}); }
+  assert.ok(g.m > h.m + 25, `thrust ${g.m.toFixed(1)} vs ${h.m.toFixed(1)}`);
+});
+
+test('back half of the gap carries extra rings and AIR cans', () => {
+  const from = S.C.ROAD_LEN + S.C.CANYON_W * SB.air.back.from; let rings = 0, cans = 0;
+  for (let seed = 1; seed <= 10; seed++) { const s = fly(seed).s; rings += s.rings.filter(r => r.back && r.z >= from).length; cans += s.skyPickups.filter(p => p.back && p.type === 'air').length; }
+  assert.ok(rings >= 40 && cans >= 8, `rings ${rings} cans ${cans}`);
 });
 
 test('stall nose-over (Starbase only): below stallFree the nose drops and the car falls', () => {
@@ -89,8 +110,9 @@ test('plume pushes the car outward and down; its edge lifts a skimmer', () => {
 });
 
 test('a careful pilot clears it; flying straight at the stack does not; distance stays king', () => {
-  let best = null;
-  for (let seed = 1; seed <= 40; seed++) { const r = fly(seed); if (r.s.reason === 'landed' && (!best || r.sc.distance > best.sc.distance)) best = r; }
+  let best = null, clear = 0;
+  for (let seed = 1; seed <= 60; seed++) { const r = fly(seed); if (r.s.reason === 'landed') { clear++; assert.ok(r.sc.tricks < r.sc.distance, 'seed ' + seed); } if (r.s.reason === 'landed' && (!best || r.sc.distance > best.sc.distance)) best = r; }
+  assert.ok(clear >= 30 && clear <= 42, `bot clear rate ${clear}/60 (target ~55-65%)`);
   assert.ok(best, 'bot lands at least one run'); assert.ok(best.sc.pastRim > 0);
   assert.ok(best.sc.tricks < best.sc.distance, 'tricks never outscore distance');
   const straight = s => { const i = S.bot(s); if (s.phase === 'sky' && s.z < S.C.ROAD_LEN + SB.air.rocket.z + 50) i.steer = -s.x * 0.3; return i; };

@@ -269,6 +269,7 @@
         case 'lane': A.sfx('lane'); break;
         case 'updraft': A.sfx('whoosh', 0.6); popup('UPDRAFT', '#ffd8a8', false, '↑'); break;
         case 'plume': A.sfx('whoosh', 1.2); G.shake = Math.max(G.shake, 14); popup('EXHAUST PLUME!', '#ff9a5a', false, 'steer out'); break;
+        case 'booster': A.sfx('boost'); G.flash = Math.max(G.flash, 0.35); G.flashColor = '#ff8a2a'; G.boostT = Math.max(G.boostT, 3); G.fovKick = Math.max(G.fovKick, 1); G.shake = Math.max(G.shake, 10); popup('BOOSTER!', '#ff8a2a', true, '3 s of thrust'); break;
         case 'skim': A.sfx('whoosh', 0.8); popup('PLUME SKIM', '#ffd8a8', false, `×${fmtMult(ev.mult)}`); G.comboPulse = 1; break;
         case 'lip': A.sfx('land'); G.shake = Math.max(G.shake, 10); popup('LIP SAVE!', '#ffd23f', true, 'scraped the rim'); break;
         case 'near': if (s.phase === 'sky') { A.sfx('whoosh', 1); G.shake = Math.max(G.shake, 5); popup('NEAR MISS', '#fff4e0', false, `×${fmtMult(ev.mult)}`); G.comboPulse = 1; } else { A.sfx('near'); popup('NEAR MISS', '#fff4e0', false, `+${C.NEAR_ROAD_PTS}`); } break;

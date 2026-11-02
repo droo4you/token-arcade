@@ -210,6 +210,7 @@
     s.v = Math.min(C.V_MAX, s.vBase + s.padBoost + s.coinBoost);
     const z0 = s.z; s.z += s.v * dt;
     s.y = rampY(s.z);
+    if (s.cfg.rocket && s.cfg.rocket.guide) rocketFly(s, dt);
     for (const o of s.obstacles) {
       if (o.z > s.z + 3) break;
       if (o.hit || o.z < z0 - 3) continue;
@@ -234,7 +235,7 @@
       if (s.v >= C.CLEAR_V) {
         s.phase = 'sky'; s.gam = LAUNCH_GAM; s.vy = s.v * Math.sin(LAUNCH_GAM); s.y = C.RAMP_H; s.launchT = s.t;
         s.events.push({ e: 'launch', v: s.v });
-        if (s.cfg.rocket && !s.cfg.rocket.ignite) s.rkTick = s.tick + Math.round(s.cfg.rocket.delay / C.DT); // Starbase v1: clock starts at the ramp
+        if (s.cfg.rocket && !s.cfg.rocket.ignite && !s.cfg.rocket.guide) s.rkTick = s.tick + Math.round(s.cfg.rocket.delay / C.DT); // Starbase v1: clock starts at the ramp
       } else {
         s.phase = 'fall'; s.vy = 4; s.y = C.RAMP_H;
         s.events.push({ e: 'short', v: s.v });
@@ -315,6 +316,16 @@
       if (h() < H.can) { const p = { type: 'air', z: z0 + h() * C.SKY_CHUNK, x: (h() * 2 - 1) * 16, y: hy(), taken: false, high: true }; if (clearOf(p.x, p.y, p.z, 2.6)) s.skyPickups.push(p); }
       if (h() < H.orb) { const p = { type: 'orb', z: z0 + h() * C.SKY_CHUNK, x: (h() * 2 - 1) * 16, y: hy(), taken: false, high: true }; if (clearOf(p.x, p.y, p.z, 2.6)) s.skyPickups.push(p); }
     }
+    // Back-half rewards (level air.back, Starbase): extra ring lines and AIR cans over the far part of the gap, where
+    // short flights run out of speed. Own RNG stream.
+    if (A.back && overGap && z0 >= C.ROAD_LEN + C.CANYON_W * A.back.from) {
+      const Bk = A.back, b = rng((s.seed + 0x3c6ef372 + i * 49979687) >>> 0);
+      if (b() < Bk.ringLine) {
+        const gx = (b() * 2 - 1) * 10, gz = z0 + b() * C.SKY_CHUNK * 0.4;
+        for (let k = 0; k < Bk.rings; k++) { const ring = { x: gx, y: clamp(s.y - 3 - k * 2.5, yMin + 4, ceil - 6), z: gz + k * 30, taken: false, risky: false, back: true }; if (clearOf(ring.x, ring.y, ring.z, C.RING_R)) s.rings.push(ring); }
+      }
+      if (b() < Bk.can) { const p = { type: 'air', z: z0 + b() * C.SKY_CHUNK, x: (b() * 2 - 1) * 10, y: clamp(s.y - 4 + b() * 6, yMin + 3, ceil - 5), taken: false, back: true }; if (clearOf(p.x, p.y, p.z, 2.6)) s.skyPickups.push(p); }
+    }
     // Updraft columns (level air.updraft): thermals rising off the canyon floor and the far rim. Own RNG stream.
     // Condors ride them: some columns carry a circling condor, so the free lift has a price.
     if (A.updraft) {
@@ -361,7 +372,7 @@
   function rocketAt(s, tick) {
     const R = s.cfg.rocket; if (!R) return null;
     const tau = s.rkTick == null ? 0 : Math.max(0, ((tick == null ? s.tick : tick) - s.rkTick) * C.DT);
-    const z = C.ROAD_LEN + R.z, yB = R.base + 0.5 * (s.rkAcc != null ? s.rkAcc : R.acc) * tau * tau + R.vy0 * tau;
+    const z = C.ROAD_LEN + R.z, yB = R.guide ? (s.rkY != null ? s.rkY : R.base) : R.base + 0.5 * (s.rkAcc != null ? s.rkAcc : R.acc) * tau * tau + R.vy0 * tau;
     return { x: R.x, z, r: R.r, h: R.h, yB, yT: yB + R.h, tau, lit: tau > 0, plume: tau > 0 ? Math.min(R.plume.len, 20 + tau * 60) : 0 };
   }
   /* Plume radius at d metres below the nozzle (0 outside the plume). */
@@ -459,8 +470,39 @@
   }
   /* Starbase: rocket body / launch tower = solid (crash); exhaust plume shoves you outward and down, bleeds airspeed and
      kills thermal lift for the next tick; skimming the plume's edge gives a small lift bonus (+ a near-miss combo once). */
+  /* Guided launch (air.rocket.guide, Starbase v3): the stack lights while you are still on the final straight
+     (`igniteBefore` m before the ramp) so you watch liftoff ahead, then its climb rate steers toward the speed that puts the
+     nozzle `below` m under the car when the car reaches it (capped accel and speed, gentle for the first `slowT` s, never
+     descends). Normal and steep lines both meet the stack; once you are past it, it just climbs away. Pure sim state. */
+  function rocketFly(s, dt) {
+    const R = s.cfg.rocket, G = R.guide;
+    if (s.rkTick == null) { if (s.z < C.ROAD_LEN - G.igniteBefore) return; s.rkTick = s.tick; s.rkY = R.base; s.rkVy = 0; s.events.push({ e: 'ignition' }); }
+    const tau = (s.tick - s.rkTick) * C.DT, ahead = C.ROAD_LEN + R.z - s.z;
+    let want = G.vMax;
+    if (ahead > -10) {
+      const road = s.phase === 'road', fwd = Math.max(20, road ? s.v : s.m * Math.cos(s.gam)), tt = Math.max(0.4, ahead / fwd);
+      want = clamp(((road ? G.roadY : s.y) - G.below - s.rkY) / tt, 0, G.vMax);
+    }
+    const a = tau < G.slowT ? G.a0 : G.aMax;
+    s.rkVy = Math.max(0, s.rkVy + clamp(want - s.rkVy, -a * dt, a * dt)); s.rkY += s.rkVy * dt;
+  }
   function rocketStep(s, dt) {
     const R = s.cfg.rocket; s.inPlume = false;
+    if (R.guide) rocketFly(s, dt);
+    // Booster Chunks (air.rocket.chunks): debris shed off the stack, dropped once on the open side next to the body as you
+    // close in; grabbing one gives `dur` s of strong forward thrust.
+    const B = R.chunks;
+    if (B) {
+      if (s.boosterT > 0) { s.m = Math.min(C.M_MAX, s.m + B.acc * dt); s.boosterT = Math.max(0, s.boosterT - dt); }
+      const ahead = C.ROAD_LEN + R.z - s.z;
+      if (!s.rkChunks && s.rkTick != null && ahead <= B.spawnAt) {
+        s.rkChunks = true;
+        for (let k = 0; k < B.n; k++) {
+          const z = C.ROAD_LEN + R.z + B.dz[k], y = clamp(s.y + B.dy[k], 6, s.cfg.ceil - 6);
+          s.skyPickups.push({ type: 'booster', x: R.x - R.r - B.gap[k], y, z, taken: false, risky: true });
+        }
+      }
+    }
     // Proximity ignition (air.rocket.ignite): lights when you are within `dist` m along the track AND at most `ttr` s out
     // at your current ground speed, with the climb rate picked so the nozzle is `below` m under you as you arrive (clamped),
     // so the stack rises beside you whatever line you fly. All from sim state at that tick: deterministic.
@@ -606,7 +648,7 @@
     for (const g2 of s.rings) {
       if (g2.taken || g2.z <= z0 || g2.z > s.z) continue;
       if (Math.hypot(g2.x - s.x, g2.y - s.y) < C.RING_PICK) {
-        g2.taken = true; s.counts.rings++; s.m = Math.min(C.M_MAX, s.m + C.RING_V * Math.pow(C.RING_FADE, s.counts.rings - 1)); if (!g2.high) addCombo(s, C.RING_POT, C.RING_MULT); // high-band rings: speed only, no combo, so the float can't farm tricks
+        g2.taken = true; s.counts.rings++; s.m = Math.min(C.M_MAX, s.m + C.RING_V * Math.pow(C.RING_FADE, s.counts.rings - 1)); if (!g2.high && !g2.back) addCombo(s, C.RING_POT, C.RING_MULT); // high-band rings: speed only, no combo, so the float can't farm tricks
         s.events.push({ e: 'ring', risky: g2.risky, pot: s.cmb.pot, mult: s.cmb.mult });
       }
     }
@@ -615,6 +657,7 @@
       if (Math.hypot(p.x - s.x, p.y - s.y) < C.CAN_PICK && Math.abs(p.z - s.z) < 3) {
         p.taken = true;
         if (p.type === 'air') { s.air++; s.counts.air++; s.pts.pickups += C.AIR_PTS; s.events.push({ e: 'air', risky: !!p.risky, n: s.air }); }
+        else if (p.type === 'booster') { const B = s.cfg.rocket.chunks; s.boosterT = B.dur; s.counts.boosters = (s.counts.boosters || 0) + 1; s.pts.pickups += B.pts; s.events.push({ e: 'booster' }); }
         else { s.counts.orbs++; s.m = Math.min(C.M_MAX, s.m + C.COIN_V); s.pts.pickups += C.ORB_PTS; s.events.push({ e: 'orb' }); }
       }
     }
@@ -663,7 +706,8 @@
     if (tgt && !landing && (pastRim || tgt.y > 12 || (s.cfg.gorge && tgt.gorge && s.m > 70))) { tx = tgt.x; ty = tgt.y; }
     if (s.cfg.gorge && !pastRim && s.y < 0) { const th2 = s.drafts.find(d => d.gorge && d.z > s.z && d.z - s.z < fwd * 3 && d.gain < d.max); if (th2) { tx = th2.x; ty = Math.max(ty, s.y); } }
     if (s.cfg.rocket) { const k = rocketAt(s), R = s.cfg.rocket, tt = (k.z - s.z) / fwd; // Starbase: pass on the open (left) side, wide of the plume
-      if (tt > -0.3 && tt < 3.5) { const d = Math.max(0, k.yB - s.y); tx = Math.min(tx, k.x - (k.r + (k.lit && d < k.plume ? plumeR(R, d) + R.plume.edge * 0.5 : 4) + 6)); } }
+      if (tt > -0.3 && tt < 3.5) { const d = Math.max(0, k.yB - s.y); tx = Math.min(tx, k.x - (k.r + (k.lit && d < k.plume ? plumeR(R, d) + R.plume.edge * 0.5 : 4) + 6));
+      const ch = R.chunks && s.skyPickups.find(p => p.type === 'booster' && !p.taken && p.z > s.z && (p.z - s.z) / fwd < 2.5); if (ch && Math.abs(ch.y - s.y) < 6) tx = ch.x; } }
     const th = threats(s).filter(t => t.tt < 1.1)[0];
     if (th) { tx = th.x >= s.x ? th.x - th.o.r - 6 : th.x + th.o.r + 6; ty = th.y > s.y ? th.y - th.o.r - 6 : th.y + th.o.r + 6; }
     i.steer = clamp((tx - s.x) * 0.3, -1, 1);

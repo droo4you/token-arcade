@@ -104,6 +104,8 @@ function init() {
     orb: pool(P.coin(), glowMat(level.pickups.orb, 1.6), 256),
     air: pool(P.airCan(), glowMat(level.pickups.air, 1.8), 64),
   };
+  // Starbase Booster Chunk: a jagged white-hot shard (distinct from the round orb and the AIR can)
+  if (level.air?.rocket) { const g = new THREE.IcosahedronGeometry(1.15, 0); g.scale(1.5, 0.7, 1); PK.booster = pool(g, glowMat('#ff7a1a', 2.6), 8); }
   const padTex = P.padTexture();
   const padMat = new THREE.MeshBasicMaterial({ map: padTex, color: new THREE.Color(level.pickups.pad).multiplyScalar(2.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, fog: true });
   const padGeo = new THREE.PlaneGeometry(2.9, 7.5); padGeo.rotateX(-Math.PI / 2);
@@ -160,6 +162,7 @@ function init() {
   const haloGeo = new THREE.PlaneGeometry(1.9, 1.9);
   const HALO = { orb: pool(haloGeo, haloMat(level.pickups.orb), 256, false), air: pool(haloGeo, haloMat(level.pickups.air), 64, false) };
   HALO.orb.renderOrder = HALO.air.renderOrder = 3;
+  if (PK.booster) { HALO.booster = pool(haloGeo, haloMat('#ff8a2a'), 8, false); HALO.booster.renderOrder = 3; }
   // Level 3 (Starbase): launch site + plume + starfield, and the render-only winding road (every built-in material bends).
   const site = level.air?.rocket ? buildStarbase(level, S, scene) : null;
   const bend = makeBend(level), bx = z => bend ? bend.B(z) : 0;
@@ -170,7 +173,7 @@ function init() {
   function putBill(mesh, x, y, z, s = 1) { o3.position.set(x, y, -z); o3.quaternion.copy(camera.quaternion); o3.scale.setScalar(s); o3.updateMatrix(); mesh.setMatrixAt(mesh.count++, o3.matrix); o3.rotation.set(0, 0, 0); }
 
   function updateDynamic(s, t) {
-    for (const k in OB) OB[k].count = 0; for (const k in PK) PK[k].count = 0; for (const k in SK) SK[k].count = 0; HALO.orb.count = HALO.air.count = 0;
+    for (const k in OB) OB[k].count = 0; for (const k in PK) PK[k].count = 0; for (const k in SK) SK[k].count = 0; HALO.orb.count = HALO.air.count = 0; if (HALO.booster) HALO.booster.count = 0;
     const z0 = s.z - 30, z1 = s.z + 700;
     for (const o of s.obstacles) {
       if (o.z < z0) continue; if (o.z > z1) break;
@@ -192,6 +195,7 @@ function init() {
     for (const p of s.skyPickups) {
       if (p.taken || p.z < z0 || p.z > z1) continue;
       if (p.type === 'air') { put(PK.air, p.x, p.y, p.z, t * 2.2, 0, 0, 1.6); putBill(HALO.air, p.x, p.y, p.z, 2); }
+      else if (p.type === 'booster') { if (PK.booster) { put(PK.booster, p.x, p.y + Math.sin(t * 4 + p.z) * 0.3, p.z, t * 3.1, t * 2.3, 0.4, 1.3); putBill(HALO.booster, p.x, p.y, p.z, 4.2); } }
       else { put(PK.orb, p.x, p.y, p.z, t * 3, 0, 0, 1.6); putBill(HALO.orb, p.x, p.y, p.z, 1.6); }
     }
     for (const o of s.sky) {
@@ -343,7 +347,13 @@ function init() {
       lx = s.x; ly = s.y + Math.sin(s.gam || 0) * 22 + 0.4 - alt * 3.5 - hold * 1.5; lz = s.z + Math.cos(s.gam || 0) * 22;
       fov = 61 + skK * 9 + dive * 10 + (G.trickKick || 0) * -4 - (G.stabFx || 0) * 4;
       // Starbase: way up high the chase cam lifts its gaze so the starfield fills the top of the frame.
-      if (level.time.space) { const k = smooth(level.time.space.y0, level.time.space.y1, s.y || 0); ly += k * 16; fov += k * 6; }
+      // Starbase: within ~800 m of a lit stack the gaze is pulled toward it (render only), so liftoff stays on screen even
+      // in a steep climb; this also cancels the starfield tilt until you are past it.
+      let rkW = 0;
+      if (level.air?.rocket && s.rkTick != null) { const k = S.rocketAt(s), ahead = k.z - s.z; rkW = (1 - smooth(500, 800, ahead)) * smooth(-40, 80, ahead);
+        if (rkW > 0) { const dx = k.x - s.x, dy = clamp(k.yB + 50, k.yB, k.yT) - s.y, dz = Math.max(30, ahead), n = Math.hypot(dx, dy, dz), w = rkW * 0.55;
+          lx += (s.x + dx / n * 22 - lx) * w; ly += (s.y + dy / n * 22 - ly) * w; lz += (s.z + dz / n * 22 - lz) * w; } }
+      if (level.time.space) { const k = smooth(level.time.space.y0, level.time.space.y1, s.y || 0) * (1 - rkW); ly += k * 16; fov += k * 6; }
       // Gorge levels: over the gap, tilt the look point down a little and widen so the canyon below stays in frame
       // (fades in after the launch and out near the far rim; the car stays centered, so control reads the same).
       if (level.air?.gorge && !s.over) { const k = smooth(C.ROAD_LEN + 40, C.ROAD_LEN + 200, s.z) * (1 - smooth(C.ROAD_LEN + C.CANYON_W - 250, C.ROAD_LEN + C.CANYON_W, s.z)) * (1 - hold);

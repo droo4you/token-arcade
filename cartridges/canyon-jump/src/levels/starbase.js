@@ -67,19 +67,23 @@
       density: { base: 1, max: 2, rampChunks: 7, extraP: 0.25 },
       // gulls low, chase helicopters mid, jets high; satellites up where the stars come out
       bands: [{ type: 'bird', top: 60 }, { type: 'heli', top: 260 }, { type: 'plane', top: 540 }],
-      bird: { r: 1.4 }, heli: { r: 5, dx: 12, dy: 1.2, rate: 0.22 }, plane: { r: 3.4 }, balloon: { r: 4.2 },
+      bird: { r: 1.4 }, heli: { r: 4, dx: 12, dy: 1.2, rate: 0.22 }, plane: { r: 3.4 }, balloon: { r: 4.2 },
       satellite: { r: 2.8, chance: 0.35, minY: 560 },
       high: { minY: 520, ringLine: 0.5, can: 0.3, orb: 0.4 },
       updraft: { chance: 0.15, r: 30, w: 18, top: 200, maxGain: 20, pastRim: 160, condorP: 0 },
       thin: { y: 120, span: 400, k: 7, vFloor: 50 },
       recover: { v: 38, engage: -0.24, until: -0.14, blend: true, rate: 1.6, maxDrop: 0.35, stallFree: 28 }, // below 28 m/s the nose-drop cap is off: a stall noses over and falls
       lipGrace: { depth: 4, reach: 6, keep: 0.8 },
+      back: { from: 0.45, ringLine: 0.75, rings: 4, can: 0.6 }, // extra rings + AIR cans over the back half of the gap
       gust: { vx: 5, rate: 0.5, from: 0.2, to: 0.8 },
       // Starship stack 650 m past the ramp lip on the flight line (x 0), tower 21 m to the right. Ignition by proximity (see ignite);
       // body climbs at a constant rate fixed at ignition (yB = base + acc tau^2 / 2). Plume: r = r0 + spread * depth below the nozzle.
       rocket: { x: 0, z: 650, r: 4.5, h: 121, base: -28, delay: 0.2, acc: 10, vy0: 0,
-        // ignition: within 600 m and <= 4 s out; climb rate chosen so the nozzle is ~30 m under you when you get there
-        ignite: { dist: 600, ttr: 4, below: 30, minY: 20, accMin: 4, accMax: 60 },
+        // v3 guided launch: lights 500 m before the ramp (liftoff seen from the runway), slow for 3 s, then steers its climb
+        // so the nozzle is ~15 m under you as you arrive (accel <= 22 m/s^2, speed <= 130 m/s); roadY = assumed launch height
+        guide: { igniteBefore: 500, slowT: 3, a0: 4, aMax: 22, vMax: 130, below: 15, roadY: 60 },
+        // Booster Chunks: 3 glowing pieces dropped beside the stack (open side) when you are 320 m out; 3 s of +16 m/s^2
+        chunks: { spawnAt: 320, n: 3, dz: [-40, 0, 45], dy: [2, 0, -2], gap: [6.5, 6, 6.5], dur: 3, acc: 16, pts: 150 },
         tower: { x: 21, dz: 0, r: 4, h: 146 },
         plume: { len: 300, r0: 6, spread: 0.2, push: 14, sink: 18, drag: 8, edge: 8, lift: 9 } },
     },
