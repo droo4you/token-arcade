@@ -72,12 +72,14 @@
       high: { minY: 520, ringLine: 0.5, can: 0.3, orb: 0.4 },
       updraft: { chance: 0.15, r: 30, w: 18, top: 200, maxGain: 20, pastRim: 160, condorP: 0 },
       thin: { y: 120, span: 400, k: 7, vFloor: 50 },
-      recover: { v: 38, engage: -0.24, until: -0.14, blend: true, rate: 1.6, maxDrop: 0.35 },
+      recover: { v: 38, engage: -0.24, until: -0.14, blend: true, rate: 1.6, maxDrop: 0.35, stallFree: 28 }, // below 28 m/s the nose-drop cap is off: a stall noses over and falls
       lipGrace: { depth: 4, reach: 6, keep: 0.8 },
       gust: { vx: 5, rate: 0.5, from: 0.2, to: 0.8 },
-      // Starship stack 650 m past the ramp lip on the flight line (x 0), tower 21 m to the right. Ignition 0.2 s after you
-      // launch; body climbs at 10 m/s^2 (yB = base + 5 tau^2). Plume: r = r0 + spread * depth below the nozzle.
+      // Starship stack 650 m past the ramp lip on the flight line (x 0), tower 21 m to the right. Ignition by proximity (see ignite);
+      // body climbs at a constant rate fixed at ignition (yB = base + acc tau^2 / 2). Plume: r = r0 + spread * depth below the nozzle.
       rocket: { x: 0, z: 650, r: 4.5, h: 121, base: -28, delay: 0.2, acc: 10, vy0: 0,
+        // ignition: within 600 m and <= 4 s out; climb rate chosen so the nozzle is ~30 m under you when you get there
+        ignite: { dist: 600, ttr: 4, below: 30, minY: 20, accMin: 4, accMax: 60 },
         tower: { x: 21, dz: 0, r: 4, h: 146 },
         plume: { len: 300, r0: 6, spread: 0.2, push: 14, sink: 18, drag: 8, edge: 8, lift: 9 } },
     },

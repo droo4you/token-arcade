@@ -44,12 +44,27 @@ test('starbase runs are deterministic (same seed + inputs = same run)', () => {
   assert.deepEqual(a.sc, b.sc); assert.equal(a.s.tick, b.s.tick); assert.equal(a.s.rkTick, b.s.rkTick);
 });
 
-test('rocket clock starts at launch and climbs on a fixed schedule', () => {
-  const s = parked(0, 10, 0); const R = SB.air.rocket;
-  assert.equal(S.rocketAt(s).yB, R.base);
-  const k = S.rocketAt(s, s.rkTick + 360); // 3 s after ignition
-  assert.ok(Math.abs(k.yB - (R.base + 0.5 * R.acc * 9)) < 1e-9);
+test('rocket ignites by proximity (deterministic), and rises beside the car', () => {
+  const R = SB.air.rocket, IG = R.ignite;
+  const r = fly(21); const ig = r.ev.find(e => e.e === 'ignition'); assert.ok(ig, 'ignited');
+  assert.ok(r.s.rkTick > 0 && r.s.rkAcc >= IG.accMin && r.s.rkAcc <= IG.accMax);
+  assert.equal(fly(21).s.rkTick, r.s.rkTick, 'same tick every time');
   const pre = S.newRun(3, SB.air); assert.equal(pre.rkTick, undefined); assert.equal(S.rocketAt(pre).tau, 0);
+  // a car parked 700 m out does not light it; at 300 m and 100 m/s (3 s out) it does, aimed ~`below` m under the car
+  const far = parked(-30, 80, 0, { rkTick: undefined, z: S.C.ROAD_LEN + R.z - 700 }); S.step(far, {}); assert.equal(far.rkTick, undefined);
+  const near = parked(-30, 200, 0, { rkTick: undefined, z: S.C.ROAD_LEN + R.z - 300, m: 100 }); S.step(near, {});
+  assert.ok(near.rkTick != null); const tt = 300 / 100, want = 2 * (200 - IG.below - R.base) / (tt * tt);
+  assert.ok(Math.abs(near.rkAcc - want) / want < 0.05, `acc ${near.rkAcc} vs ${want}`);
+});
+
+test('stall nose-over (Starbase only): below stallFree the nose drops and the car falls', () => {
+  const st = parked(-30, 400, 0, { z: S.C.ROAD_LEN + 100, m: 5, gam: 1.0, rkTick: 1e9 });
+  const y0 = st.y; for (let i = 0; i < 240; i++) S.step(st, { pitch: 1 });
+  assert.ok(st.gam < 0, `nose over (gam ${st.gam})`); assert.ok(st.y < y0 - 5, 'falls');
+  const off = parked(-30, 400, 0, { z: S.C.ROAD_LEN + 100, m: 5, gam: 1.0, rkTick: 1e9 }); off.cfg = Object.assign({}, SB.air, { recover: Object.assign({}, SB.air.recover, { stallFree: 0 }) });
+  for (let i = 0; i < 240; i++) S.step(off, { pitch: 1 });
+  assert.ok(off.gam > st.gam, 'without it the nose-drop cap holds the nose up (the old hover)');
+  assert.equal(L.get('grand-canyon').air.recover.stallFree, undefined);
 });
 
 test('flying into the rocket body or the tower ends the run', () => {

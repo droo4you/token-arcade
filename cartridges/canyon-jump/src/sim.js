@@ -234,7 +234,7 @@
       if (s.v >= C.CLEAR_V) {
         s.phase = 'sky'; s.gam = LAUNCH_GAM; s.vy = s.v * Math.sin(LAUNCH_GAM); s.y = C.RAMP_H; s.launchT = s.t;
         s.events.push({ e: 'launch', v: s.v });
-        if (s.cfg.rocket) s.rkTick = s.tick + Math.round(s.cfg.rocket.delay / C.DT); // Starbase: the launch clock starts when you leave the ramp
+        if (s.cfg.rocket && !s.cfg.rocket.ignite) s.rkTick = s.tick + Math.round(s.cfg.rocket.delay / C.DT); // Starbase v1: clock starts at the ramp
       } else {
         s.phase = 'fall'; s.vy = 4; s.y = C.RAMP_H;
         s.events.push({ e: 'short', v: s.v });
@@ -361,7 +361,7 @@
   function rocketAt(s, tick) {
     const R = s.cfg.rocket; if (!R) return null;
     const tau = s.rkTick == null ? 0 : Math.max(0, ((tick == null ? s.tick : tick) - s.rkTick) * C.DT);
-    const z = C.ROAD_LEN + R.z, yB = R.base + 0.5 * R.acc * tau * tau + R.vy0 * tau;
+    const z = C.ROAD_LEN + R.z, yB = R.base + 0.5 * (s.rkAcc != null ? s.rkAcc : R.acc) * tau * tau + R.vy0 * tau;
     return { x: R.x, z, r: R.r, h: R.h, yB, yT: yB + R.h, tau, lit: tau > 0, plume: tau > 0 ? Math.min(R.plume.len, 20 + tau * 60) : 0 };
   }
   /* Plume radius at d metres below the nozzle (0 outside the plume). */
@@ -460,8 +460,19 @@
   /* Starbase: rocket body / launch tower = solid (crash); exhaust plume shoves you outward and down, bleeds airspeed and
      kills thermal lift for the next tick; skimming the plume's edge gives a small lift bonus (+ a near-miss combo once). */
   function rocketStep(s, dt) {
-    const R = s.cfg.rocket, k = rocketAt(s); s.inPlume = false;
-    const dz = s.z - k.z, q = Math.hypot(s.x - k.x, dz);
+    const R = s.cfg.rocket; s.inPlume = false;
+    // Proximity ignition (air.rocket.ignite): lights when you are within `dist` m along the track AND at most `ttr` s out
+    // at your current ground speed, with the climb rate picked so the nozzle is `below` m under you as you arrive (clamped),
+    // so the stack rises beside you whatever line you fly. All from sim state at that tick: deterministic.
+    const IG = R.ignite;
+    if (IG && s.rkTick == null) {
+      const ahead = C.ROAD_LEN + R.z - s.z, fwd = Math.max(4, s.m * Math.cos(s.gam));
+      if (ahead <= IG.dist && ahead / fwd <= IG.ttr) {
+        const tt = Math.max(0.5, ahead / fwd), target = Math.max(IG.minY, s.y - IG.below);
+        s.rkTick = s.tick; s.rkAcc = clamp(2 * (target - R.base) / (tt * tt), IG.accMin, IG.accMax); s.events.push({ e: 'ignition', acc: s.rkAcc });
+      }
+    }
+    const k = rocketAt(s), dz = s.z - k.z, q = Math.hypot(s.x - k.x, dz);
     if (Math.abs(dz) > R.plume.len * R.plume.spread + R.plume.r0 + R.plume.edge + 40) return false;
     const T = R.tower, qt = Math.hypot(s.x - T.x, s.z - (C.ROAD_LEN + R.z + T.dz));
     if (qt < T.r + 1.1 && s.y < R.base + T.h && s.y > R.base - 2) { s.events.push({ e: 'crash', what: 'tower' }); end(s, 'air'); return true; }
@@ -526,7 +537,7 @@
     g += (Lv - C.G_SKY * Math.cos(g)) / Math.max(V, 12) * dt;
     // Extra flight-path authority while recovering: high-speed nosedives otherwise turn too slowly (÷V).
     if (recovering) g += sy * (RC ? RC.rate : C.DIVE_RECOVER_RATE) * (ak === 1 ? 1 : ak) * dt;
-    if (RC && sy >= 0 && g < s.gam) g = Math.max(g, s.gam - RC.maxDrop * dt);
+    if (RC && sy >= 0 && g < s.gam && !(RC.stallFree && V < RC.stallFree)) g = Math.max(g, s.gam - RC.maxDrop * dt); // stallFree (Starbase): a stalled car noses over
     // Committed dive (stick forward, nose below the horizon): the car tucks and parasitic drag drops, so a dive banks real speed.
     const tuck = s.pIn < 0 && g < 0 ? -s.pIn * C.DIVE_TUCK : 0;
     V += (-C.G_SKY * Math.sin(g) - (C.DRAG0 + C.DRAG2 * V * V) * (1 - tuck) - C.DRAG_I * s.gLoad * s.gLoad) * dt;
