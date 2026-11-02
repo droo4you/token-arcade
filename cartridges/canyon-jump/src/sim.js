@@ -234,6 +234,7 @@
       if (s.v >= C.CLEAR_V) {
         s.phase = 'sky'; s.gam = LAUNCH_GAM; s.vy = s.v * Math.sin(LAUNCH_GAM); s.y = C.RAMP_H; s.launchT = s.t;
         s.events.push({ e: 'launch', v: s.v });
+        if (s.cfg.rocket) s.rkTick = s.tick + Math.round(s.cfg.rocket.delay / C.DT); // Starbase: the launch clock starts when you leave the ramp
       } else {
         s.phase = 'fall'; s.vy = 4; s.y = C.RAMP_H;
         s.events.push({ e: 'short', v: s.v });
@@ -354,6 +355,17 @@
     }
     return w;
   }
+  /* Starbase rocket (level air.rocket): a scripted launch on a fixed tick clock that starts when the car leaves the ramp.
+     Before ignition it sits on the mount; after, the body (a solid cylinder) climbs at a constant acceleration and the
+     exhaust plume hangs below the nozzle as a widening cone. Pure function of the run's ticks: no randomness. */
+  function rocketAt(s, tick) {
+    const R = s.cfg.rocket; if (!R) return null;
+    const tau = s.rkTick == null ? 0 : Math.max(0, ((tick == null ? s.tick : tick) - s.rkTick) * C.DT);
+    const z = C.ROAD_LEN + R.z, yB = R.base + 0.5 * R.acc * tau * tau + R.vy0 * tau;
+    return { x: R.x, z, r: R.r, h: R.h, yB, yT: yB + R.h, tau, lit: tau > 0, plume: tau > 0 ? Math.min(R.plume.len, 20 + tau * 60) : 0 };
+  }
+  /* Plume radius at d metres below the nozzle (0 outside the plume). */
+  function plumeR(R, d) { return R.plume.r0 + d * R.plume.spread; }
   // Motion is small and bounded so what you see 5 s out is where it will be.
   // Tour helicopters sweep slowly across the gap (dx up to ~16 m); condors circle (inside a thermal when they ride one).
   function skyObjPos(o, t) {
@@ -445,6 +457,31 @@
       p.x = nx; p.y = ny;
     }
   }
+  /* Starbase: rocket body / launch tower = solid (crash); exhaust plume shoves you outward and down, bleeds airspeed and
+     kills thermal lift for the next tick; skimming the plume's edge gives a small lift bonus (+ a near-miss combo once). */
+  function rocketStep(s, dt) {
+    const R = s.cfg.rocket, k = rocketAt(s); s.inPlume = false;
+    const dz = s.z - k.z, q = Math.hypot(s.x - k.x, dz);
+    if (Math.abs(dz) > R.plume.len * R.plume.spread + R.plume.r0 + R.plume.edge + 40) return false;
+    const T = R.tower, qt = Math.hypot(s.x - T.x, s.z - (C.ROAD_LEN + R.z + T.dz));
+    if (qt < T.r + 1.1 && s.y < R.base + T.h && s.y > R.base - 2) { s.events.push({ e: 'crash', what: 'tower' }); end(s, 'air'); return true; }
+    if (q < k.r + 1.1 && s.y > k.yB - 1 && s.y < k.yT + 2) { s.events.push({ e: 'crash', what: 'rocket' }); end(s, 'air'); return true; }
+    if (!s.rkNear && q < k.r + C.NEAR_BAND + 2 && s.y > k.yB && s.y < k.yT) { s.rkNear = true; s.counts.nearMiss++; addCombo(s, C.NEAR_POT, C.NEAR_MULT); s.events.push({ e: 'near', what: 'rocket', pot: s.cmb.pot, mult: s.cmb.mult }); }
+    if (!k.lit) return false;
+    const d = k.yB - s.y; if (d < 0 || d > k.plume) return false;
+    const rp = plumeR(R, d), P = R.plume;
+    if (q < rp) {
+      const u = 1 - q / rp, side = s.x - k.x >= 0 ? 1 : -1; // core = full force
+      s.inPlume = true;
+      s.x = clamp(s.x + side * P.push * (0.4 + 0.6 * u) * dt, -C.SKY_X, C.SKY_X); // exhaust blast: a sideways wind (m/s) you can fight with the stick (20 m/s)
+      s.y -= P.sink * (0.3 + 0.7 * u) * dt; s.m = Math.max(0, s.m - P.drag * u * dt);
+      if (!s.rkPlume) { s.rkPlume = true; s.counts.plume = (s.counts.plume || 0) + 1; s.events.push({ e: 'plume' }); }
+    } else if (q < rp + P.edge) {
+      s.y += P.lift * (1 - (q - rp) / P.edge) * dt; // riding the edge of the exhaust: warm rising air
+      if (!s.rkSkim) { s.rkSkim = true; s.counts.skims = (s.counts.skims || 0) + 1; addCombo(s, C.NEAR_POT, C.NEAR_MULT); s.events.push({ e: 'skim', pot: s.cmb.pot, mult: s.cmb.mult }); }
+    }
+    return false;
+  }
   function skyStep(s, input, dt) {
     const sx = input.steer != null ? clamp(input.steer, -1, 1) : (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const sy = input.pitch != null ? clamp(input.pitch, -1, 1) : (input.up ? 1 : 0) - (input.down ? 1 : 0);
@@ -527,13 +564,14 @@
     const z0 = s.z; s.z += Math.max(4, s.m * Math.cos(s.gam)) * dt;
     s.y = s.y + s.vy * dt;
     // Updrafts lift the car with the rising air (altitude only, no airspeed), capped per column by air.updraft.maxGain.
-    if (s.drafts.length) {
+    if (s.drafts.length && !s.inPlume) {
       const w = updraftAt(s, s.x, s.y, s.z);
       if (w > 0) {
         const d = s.drafts.find(d => Math.abs(s.z - d.z) <= d.r && Math.hypot(s.x - d.x, s.z - d.z) < d.r), dy = Math.min(w * dt, (d.max || s.cfg.updraft.maxGain) - d.gain);
         d.gain += dy; s.y += dy; if (!d.rode) { d.rode = true; s.counts.drafts = (s.counts.drafts || 0) + 1; s.events.push({ e: 'updraft' }); }
       }
     }
+    if (s.cfg.rocket && rocketStep(s, dt)) return;
     if (s.y >= s.cfg.ceil) { s.y = s.cfg.ceil; s.gam = Math.min(0, s.gam); s.vy = Math.min(0, s.vy); }
     s.maxAlt = Math.max(s.maxAlt, s.y);
     // Lip grace (level air.lipGrace): clipping the far wall within a few metres of the lip scrapes you up onto the rim
@@ -613,6 +651,8 @@
       .sort((a, b) => a.z - b.z)[0];
     if (tgt && !landing && (pastRim || tgt.y > 12 || (s.cfg.gorge && tgt.gorge && s.m > 70))) { tx = tgt.x; ty = tgt.y; }
     if (s.cfg.gorge && !pastRim && s.y < 0) { const th2 = s.drafts.find(d => d.gorge && d.z > s.z && d.z - s.z < fwd * 3 && d.gain < d.max); if (th2) { tx = th2.x; ty = Math.max(ty, s.y); } }
+    if (s.cfg.rocket) { const k = rocketAt(s), R = s.cfg.rocket, tt = (k.z - s.z) / fwd; // Starbase: pass on the open (left) side, wide of the plume
+      if (tt > -0.3 && tt < 3.5) { const d = Math.max(0, k.yB - s.y); tx = Math.min(tx, k.x - (k.r + (k.lit && d < k.plume ? plumeR(R, d) + R.plume.edge * 0.5 : 4) + 6)); } }
     const th = threats(s).filter(t => t.tt < 1.1)[0];
     if (th) { tx = th.x >= s.x ? th.x - th.o.r - 6 : th.x + th.o.r + 6; ty = th.y > s.y ? th.y - th.o.r - 6 : th.y + th.o.r + 6; }
     i.steer = clamp((tx - s.x) * 0.3, -1, 1);
@@ -643,7 +683,7 @@
       combo: { pot: s.cmb.pot, mult: s.cmb.mult, n: s.cmb.n }, onRoad: s.onRoad };
   }
 
-  const api = { C, make, forLevel, updraftAt, bandType, zoneAt, defaultAir, stabilize, trickProgress, speedOf, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp, groundY, agl, liftAccel, bot, LAUNCH_GAM, wallInset, inWall };
+  const api = { C, make, forLevel, rocketAt, plumeR, updraftAt, bandType, zoneAt, defaultAir, stabilize, trickProgress, speedOf, rampY, rng, newRun, step, score, laneX, obstacleX, skyObjPos, threats, vEstAt, clamp, groundY, agl, liftAccel, bot, LAUNCH_GAM, wallInset, inWall };
   return api;
   }
   /* A sim for a level object: its sim block (+ optional wall profile) over the base constants, and its air block. */

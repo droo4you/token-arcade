@@ -19,6 +19,7 @@ import { buildCar } from './3d/car.js';
 import * as P from './3d/props.js';
 import { createParticles, createClouds, createStreaks } from './3d/fx.js';
 import { clamp, damp, lerp, smooth, rng } from './3d/util.js';
+import { makeBend, bendScene, buildStarbase } from './3d/starbase.js';
 
 const S = window.CJSim, C = S.C, LV = window.CJLevels;
 const params = new URLSearchParams(location.search);
@@ -159,6 +160,10 @@ function init() {
   const haloGeo = new THREE.PlaneGeometry(1.9, 1.9);
   const HALO = { orb: pool(haloGeo, haloMat(level.pickups.orb), 256, false), air: pool(haloGeo, haloMat(level.pickups.air), 64, false) };
   HALO.orb.renderOrder = HALO.air.renderOrder = 3;
+  // Level 3 (Starbase): launch site + plume + starfield, and the render-only winding road (every built-in material bends).
+  const site = level.air?.rocket ? buildStarbase(level, S, scene) : null;
+  const bend = makeBend(level), bx = z => bend ? bend.B(z) : 0;
+  if (bend) bendScene(scene, bend, [fx.material], car.group);
 
   const o3 = new THREE.Object3D();
   function put(mesh, x, y, z, ry = 0, rx = 0, rz = 0, s = 1) { o3.position.set(x, y, -z); o3.rotation.set(rx, ry, rz); o3.scale.setScalar(s); o3.updateMatrix(); mesh.setMatrixAt(mesh.count++, o3.matrix); }
@@ -337,6 +342,8 @@ function init() {
       tx = s.x * 0.85; ty = s.y - Math.sin(g) * dist + h * Math.cos(g); tz = s.z - Math.cos(g) * dist;
       lx = s.x; ly = s.y + Math.sin(s.gam || 0) * 22 + 0.4 - alt * 3.5 - hold * 1.5; lz = s.z + Math.cos(s.gam || 0) * 22;
       fov = 61 + skK * 9 + dive * 10 + (G.trickKick || 0) * -4 - (G.stabFx || 0) * 4;
+      // Starbase: way up high the chase cam lifts its gaze so the starfield fills the top of the frame.
+      if (level.time.space) { const k = smooth(level.time.space.y0, level.time.space.y1, s.y || 0); ly += k * 16; fov += k * 6; }
       // Gorge levels: over the gap, tilt the look point down a little and widen so the canyon below stays in frame
       // (fades in after the launch and out near the far rim; the car stays centered, so control reads the same).
       if (level.air?.gorge && !s.over) { const k = smooth(C.ROAD_LEN + 40, C.ROAD_LEN + 200, s.z) * (1 - smooth(C.ROAD_LEN + C.CANYON_W - 250, C.ROAD_LEN + C.CANYON_W, s.z)) * (1 - hold);
@@ -361,8 +368,8 @@ function init() {
     cam.z = cam.frozenZ ?? (s.z + cam.offZ);
     const buffet = sky && !s.over ? clamp((s.m - 70) / 100, 0, 1) * 0.05 * (1 + clamp(-(s.gam || 0), 0, 1) * 2) * (1 - (G.stabFx || 0)) : 0; // wind buffet at speed (thrusters settle it)
     const sh = (G.shake || 0) * 0.008 + buffet;
-    camera.position.set(cam.x + (Math.random() - 0.5) * sh, cam.y + (Math.random() - 0.5) * sh, -cam.z);
-    tmpV.set(cam.lx, cam.ly, -(s.z + cam.lz)); camera.lookAt(tmpV);
+    camera.position.set(cam.x + bx(cam.z) + (Math.random() - 0.5) * sh, cam.y + (Math.random() - 0.5) * sh, -cam.z);
+    tmpV.set(cam.lx + bx(s.z + cam.lz), cam.ly, -(s.z + cam.lz)); camera.lookAt(tmpV);
     if (sky) camera.rotateZ(-(s.bank || 0) * 0.07);
     // portrait: keep ~62° of horizontal view so all three lanes stay on screen
     const aspect = W / H, minH = 62 * Math.PI / 180, vFromH = 2 * Math.atan(Math.tan(minH / 2) / aspect) * 180 / Math.PI;
@@ -417,7 +424,8 @@ function init() {
     const L = LEVELS[tier], q = L.post ? 1 : 0; G.q = tier >= 2 ? 1 : 0; api.post = !!composer;
     // car
     const onGround = s.phase === 'road' || (s.over && s.reason === 'road') || (s.over && s.reason === 'landed');
-    car.group.position.set(s.x, (s.y || 0) + (onGround ? (view.bob || 0) : 0), -s.z);
+    car.group.position.set(s.x + bx(s.z), (s.y || 0) + (onGround ? (view.bob || 0) : 0), -s.z);
+    if (bend) car.group.rotation.y = -Math.atan(bend.slope(s.z)); // heading follows the drawn road
     // Flight-path pitch, plus trick spin on the right axis: rolls spin around the line (z), flips tumble end-over-end (x).
     let pitch = s.phase === 'sky' ? clamp((s.gam || 0) + (s.pIn || 0) * 0.07, -1.1, 0.9) : s.phase === 'fall' ? -0.5 : (s.phase === 'road' && s.z > C.ROAD_LEN - C.RAMP_LEN ? 0.13 : 0);
     let rollVis = (s.bank || 0) * 0.14;
@@ -439,7 +447,7 @@ function init() {
     const gy = s.z > C.ROAD_LEN && s.z < C.ROAD_LEN + C.CANYON_W ? -C.CANYON_DEPTH : 0;
     blob.position.y = gy - (s.y || 0) + 0.03; blob.material.opacity = 0.75 * clamp(1 - ((s.y || 0) - gy) / 14, 0, 1);
     // sun + shadow camera follow the car
-    sun.target.position.set(s.x, s.y || 0, -s.z - 10); sun.position.copy(sun.target.position).addScaledVector(world.sunDir, 140);
+    sun.target.position.set(s.x + bx(s.z), s.y || 0, -s.z - 10); sun.position.copy(sun.target.position).addScaledVector(world.sunDir, 140);
     sky.position.copy(camera.position);
     updateCamera(s, view, G, dt, W, H);
     if (api.debugCam) { const d = api.debugCam; camera.position.set(s.x + d.p[0], (s.y || 0) + d.p[1], -(s.z + d.p[2])); camera.lookAt(s.x + d.l[0], (s.y || 0) + d.l[1], -(s.z + d.l[2])); if (d.fov) { camera.fov = d.fov; camera.updateProjectionMatrix(); } }
@@ -478,6 +486,7 @@ function init() {
     streaks.mesh.visible = streaks.material.uniforms.amt.value > 0.01;
     const alt = s.phase === 'sky' ? clamp(s.y / 200, 0, 1) : 0;
     scene.fog.near = level.time.fog.near * (1 + alt * 1.5); scene.fog.far = level.time.fog.far * (1 + alt * 1.2);
+    if (site) site.update(s, t, fx, camera.position.y, sky, scene.fog, L);
     fx.update(dt);
     fx.material.uniforms.scale.value = (ch * prNow) / (2 * Math.tan(camera.fov * Math.PI / 360));
     prevPhase = s.phase;
@@ -491,7 +500,7 @@ function init() {
     // projection for the 2D HUD / particles / warnings
     const k0 = (H / 2) / Math.tan(camera.fov * Math.PI / 360);
     const p = (x, y, z) => {
-      proj.set(x, y, -z).applyMatrix4(camera.matrixWorldInverse); const depth = -proj.z; if (depth < 0.5) return null;
+      proj.set(x + bx(z), y, -z).applyMatrix4(camera.matrixWorldInverse); const depth = -proj.z; if (depth < 0.5) return null;
       proj.applyMatrix4(camera.projectionMatrix); return { x: (proj.x + 1) / 2 * W, y: (1 - proj.y) / 2 * H, k: k0 / depth, dz: depth };
     };
     const cs = p(s.x, (s.y || 0) + 0.7, s.z); if (cs) view.carScreen = { x: cs.x, y: cs.y, k: cs.k * 1.6 };

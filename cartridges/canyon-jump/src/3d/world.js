@@ -177,7 +177,7 @@ export function buildWorld(level, S, renderer, { lowQ = false } = {}) {
   const roadTex = roadTexture(level), roadLen = C.ROAD_LEN - C.RAMP_LEN + 900;
   roadTex.repeat.set(1, roadLen / 28);
   const roadMat = new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.82, metalness: 0, bumpMap: roadTex, bumpScale: 0.6 });
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(14, roadLen), roadMat); road.rotation.x = -Math.PI / 2; road.position.set(0, 0.015, -(C.ROAD_LEN - C.RAMP_LEN - roadLen / 2)); road.receiveShadow = true; scene.add(road);
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(14, roadLen, 1, level.bend ? Math.ceil(roadLen / 6) : 1), roadMat); road.rotation.x = -Math.PI / 2; road.position.set(0, 0.015, -(C.ROAD_LEN - C.RAMP_LEN - roadLen / 2)); road.receiveShadow = true; scene.add(road);
   const farLen = 4000, farTex = roadTex.clone(); farTex.repeat.set(1, farLen / 28); farTex.needsUpdate = true;
   const roadFar = new THREE.Mesh(new THREE.PlaneGeometry(14, farLen), new THREE.MeshStandardMaterial({ map: farTex, roughness: 0.82, bumpMap: farTex, bumpScale: 0.6 }));
   roadFar.rotation.x = -Math.PI / 2; roadFar.position.set(0, 0.015, -(C.ROAD_LEN + C.CANYON_W + farLen / 2)); roadFar.receiveShadow = true; scene.add(roadFar);

@@ -4,16 +4,16 @@
    palette, terrain and canyon geometry params, and which model skins the sim's obstacle types use.
    The 3D renderer (src/3d/) builds the whole world from one of these objects.
 
-   Level 1: snake-river (Twin Falls), level 2: grand-canyon. Each level's sim runs via CJSim.forLevel(level). The sim still runs on its frozen constants (CJSim.C), so a level's
+   Level 1: snake-river (Twin Falls), level 2: grand-canyon, level 3: starbase. Each level's sim runs via CJSim.forLevel(level). The sim still runs on its frozen constants (CJSim.C), so a level's
    `sim` block must match them; tests/levels.mjs enforces that. Phase 2 threads `sim` into
    CJSim.newRun(seed, level) so each canyon can have its own gap width and clear speed. */
 (function (root) {
   'use strict';
 
   // Each level lives in its own settings file under src/levels/ (loaded by a <script> before this one in the browser).
-  const DEFS = typeof module === 'object' && module.exports ? { 'snake-river': require('./levels/snake-river.js'), 'grand-canyon': require('./levels/grand-canyon.js') } : (root.CJLevelDefs || {});
+  const DEFS = typeof module === 'object' && module.exports ? { 'snake-river': require('./levels/snake-river.js'), 'grand-canyon': require('./levels/grand-canyon.js'), starbase: require('./levels/starbase.js') } : (root.CJLevelDefs || {});
   const SNAKE = DEFS['snake-river'];
-  const LEVELS = [SNAKE, DEFS['grand-canyon']].filter(Boolean);
+  const LEVELS = [SNAKE, DEFS['grand-canyon'], DEFS.starbase].filter(Boolean);
   const HEX = /^#[0-9a-f]{6}$/i;
 
   /* Returns a list of problems (empty when the level is usable). */

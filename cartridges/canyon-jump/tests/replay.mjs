@@ -14,7 +14,7 @@ function recordRun(S, seed, levelId) {
   }
   return { s, code: RP.encode(rec.data({ reason: s.reason, total: S.score(s).total })) };
 }
-for (const id of ['snake-river', 'grand-canyon']) test(`replay round trip is exact (${id})`, () => {
+for (const id of ['snake-river', 'grand-canyon', 'starbase']) test(`replay round trip is exact (${id})`, () => {
   const S = id === L.DEFAULT ? S0 : S0.forLevel(L.get(id));
   for (const seed of [3, 17, 2026]) {
     const { s, code } = recordRun(S, seed, id), d = RP.decode(code), inp = RP.inputs(d);

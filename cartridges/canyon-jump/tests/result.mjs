@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const S0 = require('../src/sim.js'), L = require('../src/levels.js'), RES = require('../src/result.js');
 
-for (const id of ['snake-river', 'grand-canyon']) test(`displayed + submitted score = sim score; roll-out is visual only (${id})`, () => {
+for (const id of ['snake-river', 'grand-canyon', 'starbase']) test(`displayed + submitted score = sim score; roll-out is visual only (${id})`, () => {
   const S = id === L.DEFAULT ? S0 : S0.forLevel(L.get(id)); let landed = 0;
   for (let seed = 1; seed <= 12; seed++) {
     const s = S.newRun(seed), G = { simScore: null, landingRoll: 0 }; let atEnd = null;

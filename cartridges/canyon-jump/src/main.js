@@ -268,6 +268,8 @@
         case 'pad': A.sfx('pad'); G.fovKick = 0.8; burst(cs.x, cs.y, 16, ['#ff4fd8', '#ffd0f4', '#fff'], 260, 0.5, 200, true); G.shake = Math.max(G.shake, 6); G.flash = 0.25; G.flashColor = '#ff4fd8'; G.boostT = 0.6; popup('SPEED PAD', '#ff4fd8', true); break;
         case 'lane': A.sfx('lane'); break;
         case 'updraft': A.sfx('whoosh', 0.6); popup('UPDRAFT', '#ffd8a8', false, '↑'); break;
+        case 'plume': A.sfx('whoosh', 1.2); G.shake = Math.max(G.shake, 14); popup('EXHAUST PLUME!', '#ff9a5a', false, 'steer out'); break;
+        case 'skim': A.sfx('whoosh', 0.8); popup('PLUME SKIM', '#ffd8a8', false, `×${fmtMult(ev.mult)}`); G.comboPulse = 1; break;
         case 'lip': A.sfx('land'); G.shake = Math.max(G.shake, 10); popup('LIP SAVE!', '#ffd23f', true, 'scraped the rim'); break;
         case 'near': if (s.phase === 'sky') { A.sfx('whoosh', 1); G.shake = Math.max(G.shake, 5); popup('NEAR MISS', '#fff4e0', false, `×${fmtMult(ev.mult)}`); G.comboPulse = 1; } else { A.sfx('near'); popup('NEAR MISS', '#fff4e0', false, `+${C.NEAR_ROAD_PTS}`); } break;
         case 'ring': A.sfx('ring', s.counts.rings); G.fovKick = Math.max(G.fovKick, 0.7); G.flash = Math.max(G.flash, 0.18); G.flashColor = '#ffd23f'; G.boostT = Math.max(G.boostT, 0.45); G.shake = Math.max(G.shake, 6); G.comboPulse = 1;
@@ -297,7 +299,7 @@
           burst(cs.x, cs.y - 10, 36, ['#f4f1ee', '#a9b3cc', '#3a2a3f'], 420, 1.1);
           sparks(cs.x, cs.y - 10, 28);
           { const lost = ev.lost ? `  ·  combo lost (${fmtPts(ev.lost)})` : '';
-            const B = { botched: ['BOTCHED LANDING', 'finish the trick before you touch down' + lost], nosedive: ['NOSE-DIVED', 'level out before you land' + lost], wall: ['HIT THE WALL', 'climb above the far rim'] }[ev.what] || ['WIPEOUT', `hit a ${{ balloon: 'hot air balloon', heli: 'tour helicopter', condor: 'condor' }[ev.what] || ev.what}`];
+            const B = { botched: ['BOTCHED LANDING', 'finish the trick before you touch down' + lost], nosedive: ['NOSE-DIVED', 'level out before you land' + lost], wall: ['HIT THE WALL', 'climb above the far rim'], rocket: ['HIT THE STARSHIP', 'pass wide of the stack, or go over it'], tower: ['HIT THE LAUNCH TOWER', 'the gap left of the stack is wide open'] }[ev.what] || ['WIPEOUT', `hit a ${{ balloon: 'hot air balloon', heli: 'tour helicopter', condor: 'condor'}[ev.what] || ev.what}`];
             G.banner = { text: B[0], sub: B[1], t: G.t, dur: 3, color: '#ff3b5c' }; } break;
         case 'land': A.sfx('land'); G.shake = 14; G.camDip = 1; G.hitStop = 0.06; dustRing(cs.x, cs.y, cs.k || 30); burst(cs.x, cs.y, 24, ['#e3925a', '#ffd9a8', '#fff'], 300, 1); G.landZ = s.z; G.landingRoll = Math.max(10, s.m * 0.6);
           G.banner = { text: ev.combo ? `COMBO +${fmtPts(ev.combo)}` : 'STUCK THE LANDING', sub: `${ev.combo ? `×${fmtMult(ev.mult)} cashed  ·  ` : ''}+${C.LANDING_BONUS} landing${ev.onRoad ? `  ·  +${C.ROAD_BONUS} on the road` : ''}${s.counts.autoFinish ? '  ·  trick auto-finished' : ''}`, t: G.t, dur: 3, color: ev.combo ? '#ffd23f' : '#5af0ff' };
@@ -704,7 +706,7 @@
     ctx.fillStyle = sg; ctx.fillText('CANYON JUMP', W / 2, y); ctx.restore();
   }
   /* Free Play start screen: level cards (name, tagline, colour swatch, gap/depth, local best), selected highlight, big START. */
-  const LOCKED_LEVELS = [{ id: 'level-3', name: 'Coming soon', tagline: 'a bigger gap is being surveyed', locked: true }];
+  const LOCKED_LEVELS = []; // level 3 (Starbase) is unlocked
   function levelBest(id) { try { return +localStorage.getItem('canyon-jump.best' + (id === window.CJLevels.DEFAULT ? '' : '.' + id)) || 0; } catch (e) { return 0; } }
   function swatch(L, x, y, w, h) {
     ctx.save(); ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.clip();
