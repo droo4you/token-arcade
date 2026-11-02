@@ -72,10 +72,10 @@ test('Booster Chunks: dropped beside the stack on approach; grabbing one gives s
   assert.ok(g.m > h.m + 25, `thrust ${g.m.toFixed(1)} vs ${h.m.toFixed(1)}`);
 });
 
-test('back half of the gap carries extra rings and AIR cans', () => {
+test('back half of the gap carries a few sparse ring clusters and AIR cans', () => {
   const from = S.C.ROAD_LEN + S.C.CANYON_W * SB.air.back.from; let rings = 0, cans = 0;
   for (let seed = 1; seed <= 10; seed++) { const s = fly(seed).s; rings += s.rings.filter(r => r.back && r.z >= from).length; cans += s.skyPickups.filter(p => p.back && p.type === 'air').length; }
-  assert.ok(rings >= 40 && cans >= 8, `rings ${rings} cans ${cans}`);
+  assert.ok(rings >= 60 && rings <= 200 && cans >= 10 && cans <= 45, `rings ${rings} cans ${cans}`); // sparse: ~1/3 of v3 (v3: ~400 rings / ~70 cans per 10 runs)
 });
 
 test('stall nose-over (Starbase only): below stallFree the nose drops and the car falls', () => {
@@ -112,7 +112,7 @@ test('plume pushes the car outward and down; its edge lifts a skimmer', () => {
 test('a careful pilot clears it; flying straight at the stack does not; distance stays king', () => {
   let best = null, clear = 0;
   for (let seed = 1; seed <= 60; seed++) { const r = fly(seed); if (r.s.reason === 'landed') { clear++; assert.ok(r.sc.tricks < r.sc.distance, 'seed ' + seed); } if (r.s.reason === 'landed' && (!best || r.sc.distance > best.sc.distance)) best = r; }
-  assert.ok(clear >= 30 && clear <= 42, `bot clear rate ${clear}/60 (target ~55-65%)`);
+  assert.ok(clear >= 22 && clear <= 36, `bot clear rate ${clear}/60 (target ~40-55%)`);
   assert.ok(best, 'bot lands at least one run'); assert.ok(best.sc.pastRim > 0);
   assert.ok(best.sc.tricks < best.sc.distance, 'tricks never outscore distance');
   const straight = s => { const i = S.bot(s); if (s.phase === 'sky' && s.z < S.C.ROAD_LEN + SB.air.rocket.z + 50) i.steer = -s.x * 0.3; return i; };

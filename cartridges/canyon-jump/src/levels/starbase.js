@@ -74,7 +74,7 @@
       thin: { y: 120, span: 400, k: 7, vFloor: 50 },
       recover: { v: 38, engage: -0.24, until: -0.14, blend: true, rate: 1.6, maxDrop: 0.35, stallFree: 28 }, // below 28 m/s the nose-drop cap is off: a stall noses over and falls
       lipGrace: { depth: 4, reach: 6, keep: 0.8 },
-      back: { from: 0.45, ringLine: 0.75, rings: 4, can: 0.6 }, // extra rings + AIR cans over the back half of the gap
+      back: { from: 0.45, ringLine: 0.35, rings: 3, can: 0.2 }, // v4: sparse ring clusters + the odd AIR can over the back half (v3 was 0.75/4/0.6: far too many)
       gust: { vx: 5, rate: 0.5, from: 0.2, to: 0.8 },
       // Starship stack 650 m past the ramp lip on the flight line (x 0), tower 21 m to the right. Ignition by proximity (see ignite);
       // body climbs at a constant rate fixed at ignition (yB = base + acc tau^2 / 2). Plume: r = r0 + spread * depth below the nozzle.
