@@ -1,5 +1,11 @@
 # Token Arcade v0 — Metropolis
 
+## Read-only testnet raid check
+
+Set `TESTNET_RPC_URL` to a Monad testnet RPC endpoint and run `npm run raid:readiness` from the repository root. No private key is required. The command reads the committed Skrumpey economy deployment at one block, checks its vault/pool wiring, and prints balances, pending fee allocation, funding shortfall, cooldown, prize size and configured time windows as JSON. It sends no transactions and does not modify deployment records. Run its focused tests with `npm run test:raid-readiness`.
+
+`canOpenOnchainNow` describes the vault funding/timing conditions only. Website-to-chain raid mapping, verified winner settlement and the player's claim flow still need integration. Opening an onchain raid starts its timer immediately. The free website pilot is separate and has no prize.
+
 The Internet Is Fun. Four imported games run as reviewed Cartridges, discovered through the published Game Registry. Guest Free Play requires no wallet or account. Token Arcade owns identity, sessions, cabinet leaderboards, raids, publication and optional economies.
 
 ## Run locally
