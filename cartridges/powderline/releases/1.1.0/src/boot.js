@@ -34,6 +34,9 @@ const endCopy = document.querySelector('#end-copy');
 const previewEl = document.querySelector('#preview');
 const veil = document.querySelector('#veil');
 const hudEl = document.querySelector('#hud');
+const airEl = document.querySelector('#air');
+const airFill = document.querySelector('#air-fill');
+const chipsEl = document.querySelector('#chips');
 
 const params = new URLSearchParams(location.search);
 const embedded = !!(TA && TA.embedded);
@@ -211,6 +214,32 @@ function hud(now) {
       callUntil = now + 200;
     }
   callEl.hidden = now > callUntil;
+  paintAir();
+}
+
+function paintAir() {
+  if (!airEl || !state) return;
+  const flying = state.y > 0.35 && !state.over;
+  airEl.hidden = !flying;
+  if (!flying) return;
+  const left = SIM.airtime(state);
+  airFill.style.width = `${Math.max(4, Math.min(100, (left / 2.4) * 100))}%`;
+  const tricks = [];
+  if (state.trick) tricks.push(state.trick);
+  if (state.queue) for (const item of state.queue) tricks.push(item);
+  let cursor = 0;
+  chipsEl.replaceChildren(...tricks.map((trick) => {
+    const remain = Math.max(0, trick.dur - (trick.t || 0));
+    cursor += remain;
+    const chip = document.createElement('span');
+    chip.className = `chip${left < cursor ? ' late' : ' ok'}`;
+    const name = document.createElement('b');
+    name.textContent = trick.name;
+    const bar = document.createElement('i');
+    bar.style.width = `${Math.max(0, Math.min(100, ((trick.t || 0) / trick.dur) * 100))}%`;
+    chip.append(name, bar);
+    return chip;
+  }));
 }
 
 function frame(now) {
@@ -322,6 +351,7 @@ function seekShot() {
     if (shot === 'carve' && !state.trick && state.y < 0.08 && state.z > 160 && Math.abs(state.vx) > 2.5 && state.gap > 8) break;
     if (shot === 'trick' && state.trick && state.trick.id === 'method' && state.y > 1.8 && state.trick.t > 0.08 && state.trick.t < 0.28) break;
     if (shot === 'slide' && state.gap < 7.2 && state.z > 200 && state.y < 0.35) break;
+    if (shot === 'slow' && state.slow && state.trick && state.y > 1.4 && state.trick.t > 0.12) break;
   }
   phase = 'shot';
   hudEl.hidden = false;

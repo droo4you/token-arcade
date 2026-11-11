@@ -40,6 +40,10 @@ A swipe in the air queues one trick, up to three deep. It scores only if the tim
 
 Short grabs are there to build the combo. The long tricks need a large kicker.
 
+## Slow motion
+
+When the hang predicted at the lip is longer than 1.2 s, the apex runs at time scale 0.45 for up to 0.6 s of the fixed clock. `slowLeft` is part of the sim state. It counts down by one 60 Hz step each tick, and the physics step uses `DT * 0.45` while it is above zero. A trick input during the window adds 0.08 s, still capped at 0.6 s. The same seed and input replay the same window. In the air, ink chips show the queue. A chip is green when the trick finishes before touchdown and red when it does not. The bar under the chips is the air time still left.
+
 ## Kickers
 
 Kickers come in three seeded sizes. Small is 4.4 m by 1.8 m, medium is 6.2 m by about 2.15 m, and large is 8.6 m by 2.6 m. The lip is `ramp.z`. The mesh uses `kickerBox` and `kickerSurface`, so the draw and the hitbox are the same rectangle. Crossing that rectangle rides you up the face and launches at the lip, including during the crash iframe.

@@ -1030,14 +1030,16 @@ export function createView(canvas, options) {
         landKick = 4;
       }
     }
-    spray.update(dt);
-    fall.update(state, dt, near);
+    const motion = state.slow ? dt * globalThis.PLSim.C.SLOW : dt;
+    spray.update(motion);
+    fall.update(state, motion, near);
 
     const air = state.y > 0.35 ? 1 : 0;
     const hero = state.tick < 2;
     const lean = clamp(-state.vx / 13.2, -1, 1);
     const portrait = camera.aspect < 1;
-    const trickSide = state.trick ? (portrait ? 1.8 : 2.4) : 0;
+    const slow = state.slow ? 1 : 0;
+    const trickSide = (state.trick || slow) ? (portrait ? 1.8 : 2.4) + slow * (portrait ? 1.7 : 2.8) : 0;
     const want = hero ? (portrait ? {
       x: state.x + 0.35, y: 1.85, z: state.z - 4.4,
       lx: state.x, ly: 0.55, lz: state.z + 8,
@@ -1047,7 +1049,7 @@ export function createView(canvas, options) {
     }) : {
       x: state.x * 0.22 + trickSide - lean * 0.45,
       y: 2.15 + state.y * 0.2 + air * 0.7,
-      z: state.z - (state.trick ? 4.4 : 5.5) - air * 1.2,
+      z: state.z - ((state.trick || slow) ? 3.6 : 5.5) - air * 1.2,
       lx: state.x * 0.12,
       ly: 0.9 + state.y * 0.35,
       lz: state.z + 14,
@@ -1090,7 +1092,7 @@ export function createView(canvas, options) {
 
     const speed = clamp(state.vz / 33.2, 0, 1.15);
     landKick = Math.max(0, landKick - dtSafe * 10);
-    const targetFov = (hero ? (portrait ? 52 : 46) : 58 + (portrait ? 6 : 0) + 12 * smoothstep(0.3, 1, speed)) + landKick;
+    const targetFov = (hero ? (portrait ? 52 : 46) : 58 + (portrait ? 6 : 0) + 12 * smoothstep(0.3, 1, speed)) + landKick - slow * 10;
     fov += (targetFov - fov) * (1 - Math.exp(-dtSafe * 5));
     if (camera.fov !== fov) {
       camera.fov = fov;

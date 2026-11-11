@@ -169,3 +169,56 @@ html, body {
   .keys { display: none; }
 }
 .compact .keys { display: none; }
+#air {
+  position: fixed;
+  left: 50%;
+  top: max(58px, calc(env(safe-area-inset-top) + 46px));
+  transform: translateX(-50%);
+  width: min(320px, 78vw);
+  pointer-events: none;
+  font-family: "Atkinson Hyperlegible", "Iowan Old Style", Palatino, Georgia, serif;
+}
+#air-time {
+  height: 8px;
+  border: 1px solid #1c2428;
+  background: #f4f1ea;
+}
+#air-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #1c2428;
+}
+#chips {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 6px;
+}
+.chip {
+  display: flex;
+  flex-direction: column;
+  min-width: 72px;
+  padding: 3px 6px 4px;
+  background: #f4f1ea;
+  border: 1px solid #1c2428;
+  color: #14202b;
+}
+.chip b {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.chip i {
+  display: block;
+  height: 4px;
+  margin-top: 3px;
+  width: 0;
+  background: #1f4d3a;
+}
+.chip.late {
+  background: #f4e4dc;
+  border-color: #8a3d28;
+  color: #8a3d28;
+}
+.chip.late i { background: #8a3d28; }

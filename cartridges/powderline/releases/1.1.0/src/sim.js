@@ -53,6 +53,9 @@
     BAIL_GAP: 1.8,
     IFRAME: 0.42,
     MAX_TICKS: 60 * 150,
+    SLOW: 0.45,
+    SLOW_MAX: 0.6,
+    SLOW_HANG: 1.2,
   });
   const RULES_VERSION = '1.1.0';
   const RULESET = 'powderline-v2';
@@ -165,6 +168,7 @@
       yaw: 0, steerHold: 0, steerSign: 0, steerMag: 0, nearMissed: false, lastGate: -1, gateId: 0, gatePoints: 0,
       railTime: 0, railId: 0, railAward: 0,
       queue: [], lastGesture: 0, variety: '', airAward: 0,
+      slowLeft: 0, slowUsed: 0, slow: 0, predict: 0,
     };
   }
   function unpack(code) {
@@ -263,6 +267,8 @@
   function land(s) {
     s.y = 0;
     s.vy = 0;
+    s.slowLeft = 0;
+    s.slow = 0;
     const quality = landingQuality(s);
     if (s.trick && !s.trick.scored) {
       const trick = s.trick;
@@ -437,6 +443,10 @@
             s.lastGesture = 0;
             s.arm = 0;
             s.airAward = 0;
+            s.slowUsed = 0;
+            s.slowLeft = 0;
+            s.slow = 0;
+            s.predict = airtime(s);
             return;
           }
         }
@@ -453,7 +463,12 @@
   function step(s, code) {
     if (s.over) return s;
     const inp = unpack(code);
-    const dt = C.DT;
+    let dt = s.slowLeft > 0 ? C.DT * C.SLOW : C.DT;
+    if (s.slowLeft > 0) {
+      s.slowLeft = Math.max(0, s.slowLeft - C.DT);
+      if (inp.trick) s.slowLeft = Math.min(C.SLOW_MAX, s.slowLeft + 0.08);
+    }
+    s.slow = s.slowLeft > 0 ? 1 : 0;
     if (s.stun > 0) s.stun = Math.max(0, s.stun - dt);
     if (s.iframe > 0) s.iframe = Math.max(0, s.iframe - dt);
     if (inp.trick === 0) s.arm = 0;
@@ -556,6 +571,10 @@
         applyYaw(s);
       }
       rideRamps(s, prevX, prevZ);
+      if (s.y > 0.8 && !s.slowUsed && s.predict > C.SLOW_HANG && s.vy < 2.5 && s.vy > -3) {
+        s.slowLeft = C.SLOW_MAX;
+        s.slowUsed = 1;
+      }
       if (s.y <= 0) land(s);
       else if (s.trick && !s.trick.scored && s.trick.t >= s.trick.dur) finishTrick(s, 1, true);
     }

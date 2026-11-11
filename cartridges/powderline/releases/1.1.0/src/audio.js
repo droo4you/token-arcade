@@ -3,7 +3,7 @@
 (function (root) {
   'use strict';
   function create() {
-    let ctx, master, windGain, rumbleGain;
+    let ctx, master, windGain, rumbleGain, muff;
     function context() {
       if (ctx) return ctx;
       const AC = root.AudioContext || root.webkitAudioContext;
@@ -11,7 +11,11 @@
       ctx = new AC();
       master = ctx.createGain();
       master.gain.value = 0.32;
-      master.connect(ctx.destination);
+      muff = ctx.createBiquadFilter();
+      muff.type = 'lowpass';
+      muff.frequency.value = 16000;
+      master.connect(muff);
+      muff.connect(ctx.destination);
       const frames = ctx.sampleRate * 2;
       const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
       const data = buffer.getChannelData(0);
@@ -78,6 +82,7 @@
         windGain.gain.value = 0.03 + Math.min(0.07, state.vz / 420) + carve * 0.03;
         const near = Math.max(0, Math.min(1, (25 - state.gap) / 18));
         rumbleGain.gain.value = near * near * 0.42;
+        if (muff) muff.frequency.value = state.slow ? 680 : 16000;
       },
       land(kind) {
         if (kind === 'clean') burst(180, 0.16, 0.18, 'triangle');
