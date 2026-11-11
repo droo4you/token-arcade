@@ -113,25 +113,27 @@ function attachSnow(mat, sunView, octaves) {
           return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
         }
         float plSnowH(vec2 w){
-          float h = sin(w.y * 0.28 + plNoise(w * 0.02) * 1.4) * 0.16;
-          h += plNoise(w * vec2(0.05, 0.09)) * 0.22;
+          float h = sin(w.y * 0.09 + plNoise(w * 0.012) * 1.1) * 0.55;
+          h += sin(w.x * 0.07 + 1.7) * 0.28;
+          h += plNoise(w * vec2(0.018, 0.025)) * 0.45;
           return h;
         }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         {
           vec2 w = vPlWorld.xz;
           float pix = max(fwidth(w.x), fwidth(w.y));
-          float e = max(1.1, pix * 4.0);
+          float e = max(2.4, pix * 3.0);
           float h0 = plSnowH(w);
           float hx = (plSnowH(w + vec2(e, 0.0)) - h0) / e;
           float hz = (plSnowH(w + vec2(0.0, e)) - h0) / e;
           vec3 nGeo = normalize(normal);
+          float dist = length(vViewPosition);
           float ndv = clamp(abs(dot(nGeo, normalize(vViewPosition))), 0.0, 1.0);
-          float near = 1.0 - smoothstep(8.0, 16.0, length(vViewPosition));
-          float aa = near * smoothstep(0.04, 0.28, ndv);
+          float mid = smoothstep(6.0, 12.0, dist) * (1.0 - smoothstep(22.0, 36.0, dist));
+          float aa = mid * smoothstep(0.12, 0.45, ndv);
           vec3 tx = normalize(cross(vec3(0.0, 0.0, 1.0), nGeo));
           vec3 tz = normalize(cross(nGeo, tx));
-          normal = normalize(nGeo - tx * hx * 0.15 * aa - tz * hz * 0.15 * aa);
+          normal = normalize(nGeo - tx * hx * 0.28 * aa - tz * hz * 0.28 * aa);
         }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
@@ -154,6 +156,11 @@ function attachSnow(mat, sunView, octaves) {
           vec3 crest = gl_FragColor.rgb * vec3(1.02, 1.01, 0.98);
           vec3 trough = gl_FragColor.rgb * vec3(0.94, 0.95, 0.97);
           gl_FragColor.rgb = mix(trough, crest, smoothstep(0.18, 0.62, sunN));
+          float dist = length(vViewPosition);
+          float mid = smoothstep(6.0, 14.0, dist) * (1.0 - smoothstep(26.0, 46.0, dist));
+          float drift = plNoise(vPlWorld.xz * vec2(0.012, 0.018));
+          gl_FragColor.rgb *= mix(1.0, 0.93 + drift * 0.14, mid);
+          gl_FragColor.rgb += vec3(0.05, 0.042, 0.028) * pow(sunN, 1.5) * mid;
           vec2 w = vPlWorld.xz;
           vec2 cell = floor(w * 8.0);
           float fh = plHash(cell);
@@ -1009,7 +1016,7 @@ export function createView(canvas, options) {
 
   const fall = buildFall(low ? 140 : 320);
   slopeRoot.add(fall.points);
-  const streaks = buildStreaks(low ? 36 : 64);
+  const streaks = buildStreaks(low ? 10 : 16);
   slopeRoot.add(streaks.lines);
 
   const samples = [];
@@ -1489,9 +1496,11 @@ function buildFall(count) {
 
 function buildStreaks(count) {
   const pos = new Float32Array(count * 6);
+  const col = new Float32Array(count * 6);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const mat = new THREE.LineBasicMaterial({ color: 0xf7f8fb, transparent: true, opacity: 0.4 });
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.28, depthWrite: false });
   const lines = new THREE.LineSegments(geo, mat);
   lines.frustumCulled = false;
   return {
@@ -1499,19 +1508,25 @@ function buildStreaks(count) {
     update(state, time) {
       const ground = snowHeight(state.x, state.z);
       for (let i = 0; i < count; i++) {
-        const along = ((hash2(i, 5) + time * 0.22) % 1) * 18 - 6;
-        const x = state.x + (hash2(i, 3) - 0.5) * 14;
-        const z = state.z + along;
-        const y = ground + 0.12 + hash2(i, 7) * 0.9;
+        const span = ((hash2(i, 5) + time * 0.15) % 1) * 10 - 2;
+        const fade = Math.max(0, 1 - Math.abs(span) / 8);
+        const x = state.x + (hash2(i, 3) - 0.5) * 8;
+        const z = state.z + span;
+        const y = ground + 0.03 + hash2(i, 7) * 0.1;
+        const len = 0.12 + hash2(i, 9) * 0.1;
         const o = i * 6;
         pos[o] = x;
         pos[o + 1] = y;
         pos[o + 2] = z;
-        pos[o + 3] = x + 0.08;
-        pos[o + 4] = y + 0.03;
-        pos[o + 5] = z + 0.7 + hash2(i, 9) * 0.45;
+        pos[o + 3] = x + 0.02;
+        pos[o + 4] = y + 0.008;
+        pos[o + 5] = z + len;
+        const tone = 0.72 * fade;
+        col[o] = col[o + 1] = col[o + 2] = tone;
+        col[o + 3] = col[o + 4] = col[o + 5] = tone * 0.35;
       }
       geo.attributes.position.needsUpdate = true;
+      geo.attributes.color.needsUpdate = true;
     },
   };
 }
@@ -1525,15 +1540,32 @@ function buildSpray(grainCount, bitCount) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const mat = new THREE.PointsMaterial({
-    size: 0.2, vertexColors: true, transparent: true, opacity: 0.92,
-    depthWrite: false, sizeAttenuation: true,
+  const mat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    vertexShader: `
+      attribute vec3 color;
+      varying vec3 vColor;
+      void main() {
+        vColor = color;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = clamp(42.0 / max(0.8, -mv.z), 2.0, 22.0);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      varying vec3 vColor;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        if (d > 0.5) discard;
+        float a = smoothstep(0.5, 0.05, d);
+        gl_FragColor = vec4(vColor, a * 0.62);
+      }`,
   });
   const points = new THREE.Points(geo, mat);
   points.frustumCulled = false;
   group.add(points);
   const lit = new THREE.Color('#f6f1ea');
-  const shade = new THREE.Color('#7f9fd0');
+  const shade = new THREE.Color('#e7edf2');
   let cursor = 0;
 
   let bits = null;
