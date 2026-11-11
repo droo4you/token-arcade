@@ -67,7 +67,7 @@ function snowBump() {
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const u = x / size;
     const v = y / size;
-    const ridge = Math.sin((v * 26 + Math.sin(u * 6.2) * 0.65) * Math.PI * 2);
+    const ridge = Math.sin((v * 4.5 + Math.sin(u * 1.4) * 0.4) * Math.PI * 2);
     const cross = Math.sin((u * 4.5 + v * 1.2) * Math.PI * 2);
     const fine = noise2(x * 0.4, y * 0.16);
     const clump = noise2(x * 0.07, y * 0.05);
@@ -113,64 +113,56 @@ function attachSnow(mat, sunView, octaves) {
           return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
         }
         float plSnowH(vec2 w){
-          float h = 0.0;
-          float a = 0.52;
-          vec2 p = w * vec2(0.42, 1.25);
-          for (int i = 0; i < ${octaves}; i++) {
-            h += a * plNoise(p);
-            p = p * 2.07 + vec2(1.7, 9.2);
-            a *= 0.5;
-          }
-          h += sin(w.y * 1.85 + plNoise(w * 0.07) * 5.0) * 0.28;
-          h += sin(w.y * 4.6 + w.x * 0.35) * 0.08;
+          float h = sin(w.y * 0.28 + plNoise(w * 0.02) * 1.4) * 0.16;
+          h += plNoise(w * vec2(0.05, 0.09)) * 0.22;
           return h;
         }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         {
           vec2 w = vPlWorld.xz;
-          float e = 0.28;
+          float pix = max(fwidth(w.x), fwidth(w.y));
+          float e = max(1.1, pix * 4.0);
           float h0 = plSnowH(w);
           float hx = (plSnowH(w + vec2(e, 0.0)) - h0) / e;
           float hz = (plSnowH(w + vec2(0.0, e)) - h0) / e;
           vec3 nGeo = normalize(normal);
+          float ndv = clamp(abs(dot(nGeo, normalize(vViewPosition))), 0.0, 1.0);
+          float near = 1.0 - smoothstep(8.0, 16.0, length(vViewPosition));
+          float aa = near * smoothstep(0.04, 0.28, ndv);
           vec3 tx = normalize(cross(vec3(0.0, 0.0, 1.0), nGeo));
           vec3 tz = normalize(cross(nGeo, tx));
-          normal = normalize(nGeo - tx * hx * 0.38 - tz * hz * 0.38);
+          normal = normalize(nGeo - tx * hx * 0.15 * aa - tz * hz * 0.15 * aa);
         }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec2 w = vPlWorld.xz;
-          float macro = plNoise(w * 0.05);
-          float micro = plNoise(w * 2.4);
-          float wind = plNoise(w * vec2(0.018, 0.09));
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.75, 0.84, 0.93), smoothstep(0.66, 0.84, macro) * 0.55);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.97), smoothstep(0.72, 0.9, wind) * 0.22);
-          diffuseColor.rgb *= 0.88 + micro * 0.2;
+          float micro = plNoise(w * 0.35);
+          diffuseColor.rgb *= 0.96 + micro * 0.08;
           float lane0 = abs(w.x - sin(w.y * 0.012) * 0.28);
           float lane1 = abs(w.x - (3.05 + sin(w.y * 0.012 + 1.0) * 0.28));
           float lane2 = abs(w.x + 3.05 - sin(w.y * 0.012 + 2.0) * 0.28);
-          float tracks = max(smoothstep(0.26, 0.03, lane0), max(smoothstep(0.26, 0.03, lane1), smoothstep(0.26, 0.03, lane2)));
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.52, 0.62, 0.75), tracks * 0.55);
+          float tracks = max(smoothstep(0.3, 0.05, lane0), max(smoothstep(0.3, 0.05, lane1), smoothstep(0.3, 0.05, lane2)));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.80, 0.82), tracks * 0.22);
         }`)
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
         {
           float wrap = clamp((dot(normalize(normal), normalize(uSunView)) + 0.35) / 1.35, 0.0, 1.0);
-          reflectedLight.indirectDiffuse += vec3(0.42, 0.58, 0.84) * (1.0 - wrap) * 0.26 * diffuseColor.rgb;
+          reflectedLight.indirectDiffuse += vec3(0.78, 0.82, 0.86) * (1.0 - wrap) * 0.1 * diffuseColor.rgb;
         }`)
       .replace('#include <fog_fragment>', `{
           float sunN = clamp(dot(normalize(normal), normalize(uSunView)), 0.0, 1.0);
-          vec3 crest = gl_FragColor.rgb * vec3(1.03, 1.01, 0.98);
-          vec3 trough = gl_FragColor.rgb * vec3(0.84, 0.89, 0.98);
-          gl_FragColor.rgb = mix(trough, crest, smoothstep(0.12, 0.72, sunN));
+          vec3 crest = gl_FragColor.rgb * vec3(1.02, 1.01, 0.98);
+          vec3 trough = gl_FragColor.rgb * vec3(0.94, 0.95, 0.97);
+          gl_FragColor.rgb = mix(trough, crest, smoothstep(0.18, 0.62, sunN));
           vec2 w = vPlWorld.xz;
-          vec2 cell = floor(w * 36.0);
+          vec2 cell = floor(w * 8.0);
           float fh = plHash(cell);
           float ang = plHash(cell + vec2(19.0, 7.0)) * 6.2831853;
-          vec3 facetN = normalize(mat3(viewMatrix) * vec3(cos(ang) * 0.42, 1.0, sin(ang) * 0.42));
-          float face = pow(clamp(dot(facetN, normalize(uSunView)), 0.0, 1.0), 40.0);
-          float spark = step(0.986, fh) * step(0.7, face);
-          float distFade = 1.0 - smoothstep(14.0, 46.0, length(vViewPosition));
-          gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0), spark * distFade);
+          vec3 facetN = normalize(mat3(viewMatrix) * vec3(cos(ang) * 0.35, 1.0, sin(ang) * 0.35));
+          float face = pow(clamp(dot(facetN, normalize(uSunView)), 0.0, 1.0), 64.0);
+          float spark = step(0.998, fh) * step(0.9, face);
+          float distFade = 1.0 - smoothstep(6.0, 18.0, length(vViewPosition));
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0), spark * distFade * 0.35);
         }
         #include <fog_fragment>`);
   };
@@ -295,11 +287,15 @@ function pineGeometry() {
     colorize(cone, hex, 0.05);
     parts.push(cone);
   }
-  for (const [x, y, z, r] of [[0, 3.45, 0, 0.32], [0.22, 3.15, 0.06, 0.2], [-0.16, 3.05, -0.05, 0.18], [0.04, 2.55, 0.14, 0.15]]) {
-    const cap = new THREE.SphereGeometry(r, 6, 4);
-    cap.scale(1.05, 0.58, 0.95);
+  for (const [x, y, z, r] of [
+    [0.05, 1.72, 0.08, 0.34], [-0.22, 1.58, -0.06, 0.22],
+    [0.12, 2.48, 0.05, 0.26], [-0.08, 2.32, -0.1, 0.16],
+    [0, 3.12, 0.02, 0.22], [0.1, 2.98, 0.08, 0.12],
+  ]) {
+    const cap = new THREE.SphereGeometry(r, 6, 3);
+    cap.scale(1.35, 0.28, 1.1);
     cap.translate(x, y, z);
-    colorize(cap, '#f4f7f8', 0.03);
+    colorize(cap, '#f6f4ef', 0.02);
     parts.push(cap);
   }
   return mergeGeos(parts);
@@ -441,7 +437,7 @@ function snowHeight(x, z) {
   const wall = wallT * wallT * (8 + 22 * smoothstep(36, 110, ax));
   const und = (noise2(x * 0.035, z * 0.035) - 0.5) * 1.4 * wallT;
   const sas = Math.sin(z * 1.35 + x * 0.35) * 0.018 * line;
-  const mogul = Math.sin(x * 0.62 + Math.sin(z * 0.13) * 1.6) * Math.sin(z * 0.37 + 0.6) * 0.2 * line;
+  const mogul = Math.sin(x * 0.28 + Math.sin(z * 0.05) * 0.8) * Math.sin(z * 0.16 + 0.6) * 0.08 * line;
   const drift = (noise2(x * 0.07 + 3.2, z * 0.045) - 0.42) * 0.28 * line;
   let tracks = 0;
   for (let lane = -1; lane <= 1; lane++) {
@@ -592,7 +588,7 @@ export function createView(canvas, options) {
 
   const bump = snowBump();
   const snowMat = new THREE.MeshStandardMaterial({
-    color: 0xf4f7fb, bumpMap: bump, bumpScale: low ? 0.16 : 0.34,
+    color: 0xf7f4ee, bumpMap: bump, bumpScale: low ? 0.04 : 0.07,
     vertexColors: true, roughness: 0.86, metalness: 0,
   });
   const sunView = new THREE.Vector3();
@@ -633,11 +629,11 @@ export function createView(canvas, options) {
   const tmp2 = new THREE.Vector3();
   const dummy = new THREE.Object3D();
 
-  const warm = new THREE.Color('#f7f5f1');
-  const away = new THREE.Color('#b9cce3');
-  const ice = new THREE.Color('#d7e3f1');
-  const groove = new THREE.Color('#46586f');
-  const lipCol = new THREE.Color('#fffdf8');
+  const warm = new THREE.Color('#f6f3ec');
+  const away = new THREE.Color('#e6e4df');
+  const ice = new THREE.Color('#f3f1eb');
+  const groove = new THREE.Color('#c8c6c0');
+  const lipCol = new THREE.Color('#f4f1ea');
 
   function paintSnow(geo, z0, displace) {
     const p = geo.attributes.position;
@@ -665,7 +661,7 @@ export function createView(canvas, options) {
             lip = Math.max(lip, clamp(edge, 0, 1));
           }
         }
-        y += -depth * 0.16 + lip * 0.045;
+        y += -depth * 0.07 + lip * 0.012;
       }
       p.setY(i, y);
       const ax = Math.abs(x);
@@ -673,8 +669,8 @@ export function createView(canvas, options) {
       c.copy(warm);
       if (ax < 1.6) c.lerp(ice, 0.55);
       if (x * SUN_DIR.x < 0) c.lerp(away, 0.22);
-      if (depth > 0.12) c.lerp(groove, clamp(depth, 0, 1) * 0.92);
-      else if (lip > 0.3) c.lerp(lipCol, lip);
+      if (depth > 0.12) c.lerp(groove, clamp(depth, 0, 1) * 0.45);
+      else if (lip > 0.3) c.lerp(lipCol, lip * 0.35);
       c.multiplyScalar(1 + fbm);
       cols.setXYZ(i, c.r, c.g, c.b);
     }
@@ -981,14 +977,17 @@ export function createView(canvas, options) {
   trenchGeo.setAttribute('position', new THREE.BufferAttribute(trenchPos, 3));
   trenchGeo.setAttribute('color', new THREE.BufferAttribute(trenchCol, 3));
   trenchGeo.setIndex(trenchIdx);
-  const trenchMat = new THREE.MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  const trenchMat = new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.4, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+  });
   const trench = new THREE.Mesh(trenchGeo, trenchMat);
   trench.frustumCulled = false;
   trench.renderOrder = 2;
   slopeRoot.add(trench);
-  const bermColor = new THREE.Color('#f7f6f2');
-  const grooveColor = new THREE.Color('#3c516c');
-  const rimColor = new THREE.Color('#fffdf8');
+  const bermColor = new THREE.Color('#e4dfd6');
+  const grooveColor = new THREE.Color('#c9c4ba');
+  const rimColor = new THREE.Color('#ddd6cc');
   const billboardQ = new THREE.Quaternion();
   const parentQ = new THREE.Quaternion();
   const debrisBase = [];
@@ -1203,10 +1202,11 @@ export function createView(canvas, options) {
     trench.visible = state.tick >= 2;
     for (let i = 0; i < trenchN; i++) {
       const s = samples[Math.max(0, samples.length - trenchN + i)] || { x: state.x, z: state.z };
-      const behind = s.z < state.z - 22 || s.z > state.z - 0.15;
-      const groundY = behind ? -8 : snowHeight(s.x, s.z);
+      const along = (s.z - (state.z - 3.2)) / 3.05;
+      const taper = along > 0 && along < 1 ? along : 0;
+      const groundY = snowHeight(s.x, s.z) + 0.015;
       const cols = [rimColor, bermColor, grooveColor, bermColor, rimColor];
-      const offs = [[-0.36, 0.028], [-0.16, 0.01], [0, -0.055], [0.16, 0.01], [0.36, 0.028]];
+      const offs = [[-0.11 * taper, 0], [-0.05 * taper, 0], [0, 0], [0.05 * taper, 0], [0.11 * taper, 0]];
       for (let k = 0; k < 5; k++) {
         const o = (i * 5 + k) * 3;
         trenchPos[o] = s.x + offs[k][0];
@@ -1218,7 +1218,7 @@ export function createView(canvas, options) {
     trenchGeo.attributes.position.needsUpdate = true;
     trenchGeo.attributes.color.needsUpdate = true;
     const lead = (state.steerSign || 0) * (state.steerMag || 0) * 4.2;
-    arc.visible = state.tick >= 2 && (Math.abs(state.vx) > 0.35 || aim !== 0);
+    arc.visible = false;
     for (let i = 0; i < arcN; i++) {
       const t = i / (arcN - 1);
       const z = state.z + 0.8 + t * 4.2;
