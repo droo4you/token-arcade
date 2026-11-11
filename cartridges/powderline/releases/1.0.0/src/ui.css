@@ -1,0 +1,151 @@
+@font-face {
+  font-family: "Fraunces";
+  src: url("../assets/fonts/Fraunces-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("../assets/fonts/AtkinsonHyperlegible-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("../assets/fonts/AtkinsonHyperlegible-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+[hidden] { display: none !important; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #1a2744;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#app { position: fixed; inset: 0; }
+#gl { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+#veil {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(214, 224, 236, 0.92), rgba(255, 236, 214, 0.28) 38%, transparent 68%);
+  opacity: 0;
+}
+#hud, #preview, #gate, #end, #boost, .fail {
+  font-family: "Atkinson Hyperlegible", "Iowan Old Style", Palatino, Georgia, serif;
+  font-synthesis: none;
+}
+#hud {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  pointer-events: none;
+  color: #241c16;
+}
+.ticket, #slide, #call, #combo, #preview {
+  display: inline-flex;
+  gap: 10px;
+  margin: 0 8px 8px 0;
+  padding: 4px 8px;
+  background: #fff3df;
+  border: 1px solid #241c16;
+}
+.ticket { font-variant-numeric: tabular-nums; }
+#slide { color: #2f5f9e; }
+#call { letter-spacing: 0.02em; }
+#combo { font-weight: 700; }
+#preview {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(12px, env(safe-area-inset-bottom));
+}
+#boost {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  width: 92px;
+  height: 92px;
+  border: 2px solid #241c16;
+  background: #fff3df;
+  color: #241c16;
+  font: 700 13px/1 "Atkinson Hyperlegible", Palatino, Georgia, serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  overflow: hidden;
+  touch-action: none;
+}
+#boost { display: grid; place-items: center; }
+#fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40%;
+  background: #d4532c;
+  pointer-events: none;
+}
+#boost .word { position: relative; }
+#boost.on { background: #241c16; color: #fff6ea; }
+#boost.low #fill { background: #8d8478; }
+#gate, #end {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 28px 24px max(22px, env(safe-area-inset-bottom));
+  color: #fff6ea;
+  background: linear-gradient(to top, rgba(16, 18, 32, 0.9), rgba(28, 22, 32, 0.55) 52%, rgba(28, 22, 32, 0));
+}
+#gate h1, #end h2 {
+  margin: 0 0 10px;
+  font-family: Fraunces, "Iowan Old Style", Palatino, Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(40px, 8vw, 68px);
+  letter-spacing: -0.03em;
+  line-height: 0.9;
+}
+.eyebrow {
+  margin: 0 0 6px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+#gate ul { margin: 0 0 8px; padding: 0; list-style: none; max-width: 38rem; }
+#gate li { margin: 0 0 4px; }
+.keys { margin: 0 0 14px; font-size: 13px; max-width: 36rem; }
+#drop, #again {
+  border: 2px solid #fff6ea;
+  background: #fff6ea;
+  color: #241c16;
+  font: 700 16px/1 "Atkinson Hyperlegible", Palatino, Georgia, serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 14px 18px;
+  touch-action: none;
+}
+#end p { display: flex; justify-content: space-between; max-width: 18rem; margin: 0 0 4px; }
+#end-copy { min-height: 1.2em; }
+.fail {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  background: #1a2744;
+  color: #fff6ea;
+}
+@media (pointer: coarse) {
+  .keys { display: none; }
+}
