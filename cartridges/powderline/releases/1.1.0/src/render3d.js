@@ -62,21 +62,118 @@ function canvasTex(w, h, draw, color) {
 }
 
 function snowBump() {
-  const size = 128;
+  const size = 256;
   const data = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const sas = Math.sin(y * 0.55 + Math.sin(x * 0.08) * 2);
-    const fine = noise2(x * 0.35, y * 0.12);
-    const v = clamp(128 + sas * 28 + (fine - 0.5) * 36, 0, 255);
+    const u = x / size;
+    const v = y / size;
+    const ridge = Math.sin((v * 26 + Math.sin(u * 6.2) * 0.65) * Math.PI * 2);
+    const cross = Math.sin((u * 4.5 + v * 1.2) * Math.PI * 2);
+    const fine = noise2(x * 0.4, y * 0.16);
+    const clump = noise2(x * 0.07, y * 0.05);
+    const value = clamp(132 + ridge * 46 + cross * 12 + (fine - 0.5) * 30 + (clump - 0.5) * 24, 0, 255);
     const i = (y * size + x) * 4;
-    data[i] = data[i + 1] = data[i + 2] = v;
+    data[i] = data[i + 1] = data[i + 2] = value;
     data[i + 3] = 255;
   }
   const tex = new THREE.DataTexture(data, size, size);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
   tex.needsUpdate = true;
   tex.colorSpace = THREE.NoColorSpace;
   return tex;
+}
+
+function attachSnow(mat, sunView, octaves) {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = { value: 0 };
+    shader.uniforms.uSunView = { value: sunView };
+    mat.userData.shader = shader;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vPlWorld;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPlWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform float uTime;
+        uniform vec3 uSunView;
+        varying vec3 vPlWorld;
+        float plHash(vec2 p){
+          p = fract(p * vec2(123.34, 345.45));
+          p += dot(p, p + 34.345);
+          return fract(p.x * p.y);
+        }
+        float plNoise(vec2 p){
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          float a = plHash(i);
+          float b = plHash(i + vec2(1.0, 0.0));
+          float c = plHash(i + vec2(0.0, 1.0));
+          float d = plHash(i + vec2(1.0, 1.0));
+          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+        float plSnowH(vec2 w){
+          float h = 0.0;
+          float a = 0.52;
+          vec2 p = w * vec2(0.42, 1.25);
+          for (int i = 0; i < ${octaves}; i++) {
+            h += a * plNoise(p);
+            p = p * 2.07 + vec2(1.7, 9.2);
+            a *= 0.5;
+          }
+          h += sin(w.y * 1.85 + plNoise(w * 0.07) * 5.0) * 0.28;
+          h += sin(w.y * 4.6 + w.x * 0.35) * 0.08;
+          return h;
+        }`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        {
+          vec2 w = vPlWorld.xz;
+          float e = 0.28;
+          float h0 = plSnowH(w);
+          float hx = (plSnowH(w + vec2(e, 0.0)) - h0) / e;
+          float hz = (plSnowH(w + vec2(0.0, e)) - h0) / e;
+          vec3 nGeo = normalize(normal);
+          vec3 tx = normalize(cross(vec3(0.0, 0.0, 1.0), nGeo));
+          vec3 tz = normalize(cross(nGeo, tx));
+          normal = normalize(nGeo - tx * hx * 1.75 - tz * hz * 1.75);
+        }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        {
+          vec2 w = vPlWorld.xz;
+          float macro = plNoise(w * 0.05);
+          float micro = plNoise(w * 2.4);
+          float wind = plNoise(w * vec2(0.018, 0.09));
+          float sunN = clamp(dot(normalize(normal), normalize(uSunView)), 0.0, 1.0);
+          vec3 crest = diffuseColor.rgb * vec3(1.06, 1.02, 0.96);
+          vec3 trough = diffuseColor.rgb * vec3(0.58, 0.70, 0.92);
+          diffuseColor.rgb = mix(trough, crest, smoothstep(0.02, 0.62, sunN));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.75, 0.84, 0.93), smoothstep(0.66, 0.84, macro) * 0.55);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.97), smoothstep(0.72, 0.9, wind) * 0.22);
+          diffuseColor.rgb *= 0.88 + micro * 0.2;
+          float lane0 = abs(w.x - sin(w.y * 0.012) * 0.28);
+          float lane1 = abs(w.x - (3.05 + sin(w.y * 0.012 + 1.0) * 0.28));
+          float lane2 = abs(w.x + 3.05 - sin(w.y * 0.012 + 2.0) * 0.28);
+          float tracks = max(smoothstep(0.26, 0.03, lane0), max(smoothstep(0.26, 0.03, lane1), smoothstep(0.26, 0.03, lane2)));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.52, 0.62, 0.75), tracks * 0.55);
+        }`)
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+        {
+          float wrap = clamp((dot(normalize(normal), normalize(uSunView)) + 0.35) / 1.35, 0.0, 1.0);
+          reflectedLight.indirectDiffuse += vec3(0.42, 0.58, 0.84) * (1.0 - wrap) * 0.26 * diffuseColor.rgb;
+        }`)
+      .replace('#include <fog_fragment>', `{
+          vec2 w = vPlWorld.xz;
+          vec2 cell = floor(w * 36.0);
+          float fh = plHash(cell);
+          float ang = plHash(cell + vec2(19.0, 7.0)) * 6.2831853;
+          vec3 facetN = normalize(mat3(viewMatrix) * vec3(cos(ang) * 0.42, 1.0, sin(ang) * 0.42));
+          float face = pow(clamp(dot(facetN, normalize(uSunView)), 0.0, 1.0), 40.0);
+          float spark = step(0.986, fh) * step(0.7, face);
+          float distFade = 1.0 - smoothstep(14.0, 46.0, length(vViewPosition));
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0), spark * distFade);
+        }
+        #include <fog_fragment>`);
+  };
 }
 
 function skyMaterial() {
@@ -305,7 +402,15 @@ function snowHeight(x, z) {
   const wall = wallT * wallT * (8 + 22 * smoothstep(36, 110, ax));
   const und = (noise2(x * 0.035, z * 0.035) - 0.5) * 1.4 * wallT;
   const sas = Math.sin(z * 1.35 + x * 0.35) * 0.018 * line;
-  return roller + bowl + wall + und + sas;
+  const mogul = Math.sin(x * 0.62 + Math.sin(z * 0.13) * 1.6) * Math.sin(z * 0.37 + 0.6) * 0.2 * line;
+  const drift = (noise2(x * 0.07 + 3.2, z * 0.045) - 0.42) * 0.28 * line;
+  let tracks = 0;
+  for (let lane = -1; lane <= 1; lane++) {
+    const center = lane * 3.05 + Math.sin(z * 0.012 + lane) * 0.28;
+    const dist = Math.abs(x - center);
+    if (dist < 0.2) tracks += (1 - dist / 0.2) * 0.028;
+  }
+  return roller + bowl + wall + und + sas + mogul + drift - tracks;
 }
 
 function xAt(i, n) {
@@ -448,37 +553,11 @@ export function createView(canvas, options) {
 
   const bump = snowBump();
   const snowMat = new THREE.MeshStandardMaterial({
-    color: 0xf6f1ea, bumpMap: bump, bumpScale: low ? 0.04 : 0.16,
-    vertexColors: true, roughness: 0.82, metalness: 0,
+    color: 0xf4f7fb, bumpMap: bump, bumpScale: low ? 0.16 : 0.34,
+    vertexColors: true, roughness: 0.86, metalness: 0,
   });
   const sunView = new THREE.Vector3();
-  if (Q.sparkle) {
-    snowMat.onBeforeCompile = (shader) => {
-      shader.uniforms.uTime = { value: 0 };
-      shader.uniforms.uSunView = { value: sunView };
-      snowMat.userData.shader = shader;
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vPlWorld;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPlWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>
-          uniform float uTime;
-          uniform vec3 uSunView;
-          varying vec3 vPlWorld;
-          float plHash(vec2 p){ p = fract(p * vec2(123.34, 345.45)); p += dot(p, p + 34.345); return fract(p.x * p.y); }`)
-        .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
-          float wrap = clamp((dot(normalize(normal), normalize(uSunView)) + 0.45) / 1.45, 0.0, 1.0);
-          reflectedLight.indirectDiffuse += vec3(0.50, 0.66, 0.92) * (1.0 - wrap) * 0.22 * diffuseColor.rgb;`)
-        .replace('#include <fog_fragment>', `
-          float g = plHash(floor(vPlWorld.xz * 90.0));
-          float glint = step(0.997, g) * (0.5 + 0.5 * sin(uTime * 6.0 + g * 40.0));
-          float ndl = clamp(dot(normalize(normal), normalize(uSunView)), 0.0, 1.0);
-          float grazing = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 3.0);
-          float distFade = 1.0 - smoothstep(40.0, 70.0, length(vViewPosition));
-          gl_FragColor.rgb += vec3(glint * clamp(ndl * 2.0 + 0.2, 0.0, 1.0) * (0.35 + 0.65 * grazing) * distFade * 0.45);
-          #include <fog_fragment>`);
-    };
-  }
+  attachSnow(snowMat, sunView, low ? 2 : 4);
 
   const pineGeo = pineGeometry();
   const pineMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 });
@@ -506,11 +585,11 @@ export function createView(canvas, options) {
   const tmp2 = new THREE.Vector3();
   const dummy = new THREE.Object3D();
 
-  const warm = new THREE.Color('#f6f1ea');
-  const away = new THREE.Color('#dfe7f0');
-  const ice = new THREE.Color('#cfdbe8');
-  const groove = new THREE.Color('#5d7fb8');
-  const lipCol = new THREE.Color('#fff8ee');
+  const warm = new THREE.Color('#f7f5f1');
+  const away = new THREE.Color('#b9cce3');
+  const ice = new THREE.Color('#d7e3f1');
+  const groove = new THREE.Color('#46586f');
+  const lipCol = new THREE.Color('#fffdf8');
 
   function paintSnow(geo, z0, displace) {
     const p = geo.attributes.position;
@@ -524,18 +603,21 @@ export function createView(canvas, options) {
       let y = base[i * 3 + 1];
       let depth = 0;
       let lip = 0;
-      if (displace && Math.abs(x) < 8) {
-        for (let s = samples.length - 1; s >= 0 && s >= samples.length - 42; s--) {
-          const dx = x - samples[s].x;
+      if (displace && Math.abs(x) < 9) {
+        for (let s = samples.length - 1; s >= 0; s--) {
           const dz = z - samples[s].z;
-          const d = Math.hypot(dx, dz);
-          if (d < 0.16) depth = Math.max(depth, 1 - d / 0.16);
-          else if (d < 0.62) {
-            const ring = (d - 0.16) / 0.46;
-            lip = Math.max(lip, Math.sin(clamp(ring, 0, 1) * Math.PI) * (ring < 0.55 ? 1 : 0.65));
+          if (dz > 7 || dz < -1.2) continue;
+          const dx = x - samples[s].x;
+          const d = Math.hypot(dx, dz * 0.8);
+          const hard = samples[s].hard || 0.4;
+          if (d < 0.13) depth = Math.max(depth, (1 - d / 0.13) * (0.7 + hard * 0.3));
+          else if (d < 0.34) {
+            const ring = (d - 0.13) / 0.21;
+            const edge = ring < 0.28 ? ring / 0.28 : 1 - (ring - 0.28) / 0.72;
+            lip = Math.max(lip, clamp(edge, 0, 1));
           }
         }
-        y += -depth * 0.22 + lip * 0.085;
+        y += -depth * 0.36 + lip * 0.13;
       }
       p.setY(i, y);
       const ax = Math.abs(x);
@@ -543,8 +625,8 @@ export function createView(canvas, options) {
       c.copy(warm);
       if (ax < 1.6) c.lerp(ice, 0.55);
       if (x * SUN_DIR.x < 0) c.lerp(away, 0.22);
-      if (depth > 0.2) c.lerp(groove, clamp(depth, 0, 1));
-      else if (lip > 0.4) c.lerp(lipCol, lip * 0.7);
+      if (depth > 0.12) c.lerp(groove, clamp(depth, 0, 1) * 0.92);
+      else if (lip > 0.3) c.lerp(lipCol, lip);
       c.multiplyScalar(1 + fbm);
       cols.setXYZ(i, c.r, c.g, c.b);
     }
@@ -831,13 +913,16 @@ export function createView(canvas, options) {
   }
   const mist = buildMist(low ? 80 : 160);
   slopeRoot.add(mist.points);
-  const trenchN = 26;
-  const trenchPos = new Float32Array(trenchN * 9);
-  const trenchCol = new Float32Array(trenchN * 9);
+  const trenchN = 48;
+  const trenchW = 5;
+  const trenchPos = new Float32Array(trenchN * trenchW * 3);
+  const trenchCol = new Float32Array(trenchN * trenchW * 3);
   const trenchIdx = [];
   for (let i = 0; i < trenchN - 1; i++) {
-    const a = i * 3;
-    trenchIdx.push(a, a + 3, a + 1, a + 1, a + 3, a + 4, a + 1, a + 4, a + 2, a + 2, a + 4, a + 5);
+    const a = i * trenchW;
+    for (let k = 0; k < trenchW - 1; k++) {
+      trenchIdx.push(a + k, a + trenchW + k, a + k + 1, a + k + 1, a + trenchW + k, a + trenchW + k + 1);
+    }
   }
   const trenchGeo = new THREE.BufferGeometry();
   trenchGeo.setAttribute('position', new THREE.BufferAttribute(trenchPos, 3));
@@ -848,8 +933,9 @@ export function createView(canvas, options) {
   trench.frustumCulled = false;
   trench.renderOrder = 2;
   slopeRoot.add(trench);
-  const bermColor = new THREE.Color('#f4efe6');
-  const grooveColor = new THREE.Color('#4f73b0');
+  const bermColor = new THREE.Color('#f7f6f2');
+  const grooveColor = new THREE.Color('#3c516c');
+  const rimColor = new THREE.Color('#fffdf8');
   const billboardQ = new THREE.Quaternion();
   const parentQ = new THREE.Quaternion();
   const debrisBase = [];
@@ -1054,20 +1140,20 @@ export function createView(canvas, options) {
     }
     if (state.y < 0.25) {
       const last = samples[samples.length - 1];
-      if (!last || Math.abs(last.z - state.z) > 0.45) {
+      if (!last || Math.abs(last.z - state.z) > 0.36) {
         samples.push({ x: state.x, z: state.z, side: Math.sign(state.vx || 1), hard: Math.min(1, Math.abs(state.vx) / 8) });
-        if (samples.length > 64) samples.shift();
+        if (samples.length > 160) samples.shift();
       }
     }
     trench.visible = state.tick >= 2;
     for (let i = 0; i < trenchN; i++) {
       const s = samples[Math.max(0, samples.length - trenchN + i)] || { x: state.x, z: state.z };
-      const behind = s.z < state.z - 4.6 || s.z > state.z - 0.35;
+      const behind = s.z < state.z - 22 || s.z > state.z - 0.15;
       const groundY = behind ? -8 : snowHeight(s.x, s.z);
-      const cols = [bermColor, grooveColor, bermColor];
-      const offs = [[-0.38, 0.045], [0, -0.07], [0.38, 0.045]];
-      for (let k = 0; k < 3; k++) {
-        const o = (i * 3 + k) * 3;
+      const cols = [rimColor, bermColor, grooveColor, bermColor, rimColor];
+      const offs = [[-0.52, 0.11], [-0.24, 0.05], [0, -0.13], [0.24, 0.05], [0.52, 0.11]];
+      for (let k = 0; k < 5; k++) {
+        const o = (i * 5 + k) * 3;
         trenchPos[o] = s.x + offs[k][0];
         trenchPos[o + 1] = groundY + offs[k][1];
         trenchPos[o + 2] = s.z;
