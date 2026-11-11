@@ -10,7 +10,10 @@
     const ptrs = new Map();
     return {
       cfg: c,
-      down(id, x, y) { ptrs.set(id, { x0: x, y0: y, x, y, locked: false, steer: 0 }); },
+      down(id, x, y, width) {
+        const hold = width > 0 ? (x < width * 0.5 ? -1 : 1) : 0;
+        ptrs.set(id, { x0: x, y0: y, x, y, locked: false, steer: 0, hold });
+      },
       move(id, x, y, airborne) {
         const p = ptrs.get(id);
         if (!p || p.locked) return null;
@@ -41,11 +44,23 @@
         for (const p of ptrs.values()) if (!p.locked && p.steer) s = p.steer;
         return s;
       },
+      hold() {
+        let h = 0;
+        for (const p of ptrs.values()) if (!p.locked && p.hold) h = p.hold;
+        return h;
+      },
       clear() { ptrs.clear(); },
       size() { return ptrs.size; },
     };
   }
-  const api = { create, CFG };
+  /* Screen-left is -1. The chase cam looks down +z, so screen-left is +slope x,
+     which the frozen sim produces with steer code 2 (steerDir +1). */
+  function steerCode(screenDir) {
+    if (screenDir < 0) return 2;
+    if (screenDir > 0) return 1;
+    return 0;
+  }
+  const api = { create, CFG, steerCode };
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.PLInput = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

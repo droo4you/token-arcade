@@ -787,6 +787,21 @@ export function createView(canvas, options) {
   slopeRoot.add(fall.points);
 
   const samples = [];
+  const arcN = 9;
+  const arcPos = new Float32Array(arcN * 6);
+  const arcIdx = [];
+  for (let i = 0; i < arcN - 1; i++) {
+    const a = i * 2;
+    arcIdx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+  }
+  const arcGeo = new THREE.BufferGeometry();
+  arcGeo.setAttribute('position', new THREE.BufferAttribute(arcPos, 3));
+  arcGeo.setIndex(arcIdx);
+  const arc = new THREE.Mesh(arcGeo, new THREE.MeshBasicMaterial({ color: 0x14202b, side: THREE.DoubleSide }));
+  arc.frustumCulled = false;
+  arc.renderOrder = 3;
+  slopeRoot.add(arc);
+  let aim = 0;
   const camS = { x: 0, y: 3, z: -6 };
   const lookS = { x: 0, y: 1, z: 10 };
   const camW = new THREE.Vector3();
@@ -968,6 +983,22 @@ export function createView(canvas, options) {
     }
     trenchGeo.attributes.position.needsUpdate = true;
     trenchGeo.attributes.color.needsUpdate = true;
+    const lead = -aim * 5.5;
+    arc.visible = state.tick >= 2 && (Math.abs(state.vx) > 0.35 || aim !== 0);
+    for (let i = 0; i < arcN; i++) {
+      const t = i / (arcN - 1);
+      const z = state.z + 1.3 + t * 7.5;
+      const x = state.x + state.vx * t * 0.38 + lead * t * t;
+      const y = snowHeight(x, z) + 0.07;
+      const w = 0.07 + t * 0.05;
+      arcPos[i * 6] = x - w;
+      arcPos[i * 6 + 1] = y;
+      arcPos[i * 6 + 2] = z;
+      arcPos[i * 6 + 3] = x + w;
+      arcPos[i * 6 + 4] = y;
+      arcPos[i * 6 + 5] = z;
+    }
+    arcGeo.attributes.position.needsUpdate = true;
     spray.curtain(samples, state);
     if (carving) spray.carve(state);
     if (state.landId !== lastLand) {
@@ -1068,7 +1099,7 @@ export function createView(canvas, options) {
   }
 
   resize();
-  return { sync, resize, dispose, canvas };
+  return { sync, resize, dispose, canvas, setAim(v) { aim = v || 0; } };
 }
 
 function makeGrade(low) {

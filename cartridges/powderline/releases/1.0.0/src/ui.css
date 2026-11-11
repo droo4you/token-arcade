@@ -70,6 +70,24 @@ html, body {
   left: max(12px, env(safe-area-inset-left));
   bottom: max(12px, env(safe-area-inset-bottom));
 }
+#carve { pointer-events: none; }
+#carve-l, #carve-r {
+  position: fixed;
+  top: 44%;
+  width: 22px;
+  height: 28px;
+  background: #14202b;
+  opacity: 0.28;
+}
+#carve-l {
+  left: max(12px, env(safe-area-inset-left));
+  clip-path: polygon(78% 0, 100% 0, 42% 50%, 100% 100%, 78% 100%, 20% 50%);
+}
+#carve-r {
+  right: max(12px, env(safe-area-inset-right));
+  clip-path: polygon(0 0, 22% 0, 80% 50%, 22% 100%, 0 100%, 58% 50%);
+}
+#carve-l.on, #carve-r.on { opacity: 1; }
 #boost {
   position: fixed;
   right: max(14px, env(safe-area-inset-right));

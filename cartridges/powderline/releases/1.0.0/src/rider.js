@@ -189,7 +189,7 @@ export function buildRider(low, shadows) {
     body.scale.set(1 + 0.18 * k, 1 - 0.42 * k, 1 + 0.12 * k);
     body.position.y = -0.12 * k;
 
-    bank.rotation.z = lean * 0.85;
+    bank.rotation.z = lean * 1.15;
     bank.rotation.x = air ? -0.08 : 0.12;
     let spinY = lean * -0.06;
     let spinX = air ? -0.08 : 0.06;

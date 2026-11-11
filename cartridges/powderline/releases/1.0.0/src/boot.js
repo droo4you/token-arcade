@@ -27,6 +27,8 @@ const scoreEl = document.querySelector('#score');
 const slideEl = document.querySelector('#slide');
 const callEl = document.querySelector('#call');
 const comboEl = document.querySelector('#combo');
+const carveL = document.querySelector('#carve-l');
+const carveR = document.querySelector('#carve-r');
 const fillEl = document.querySelector('#fill');
 const endCopy = document.querySelector('#end-copy');
 const previewEl = document.querySelector('#preview');
@@ -91,15 +93,17 @@ function arm() {
   return resolved;
 }
 
+function screenDir() {
+  if (keys.has('ArrowLeft') || keys.has('KeyA')) return -1;
+  if (keys.has('ArrowRight') || keys.has('KeyD')) return 1;
+  const drag = gestures.steer();
+  if (drag) return drag;
+  const grounded = !(state && state.y > 0.2);
+  return grounded ? gestures.hold() : 0;
+}
+
 function readCode() {
-  let steer = 0;
-  if (keys.has('ArrowLeft') || keys.has('KeyA')) steer = 1;
-  else if (keys.has('ArrowRight') || keys.has('KeyD')) steer = 2;
-  else {
-    const touch = gestures.steer();
-    if (touch < 0) steer = 1;
-    else if (touch > 0) steer = 2;
-  }
+  const steer = globalThis.PLInput.steerCode(screenDir());
   const boost = (heldBoost || keys.has('Space') || keys.has('ShiftLeft') || keys.has('ShiftRight')) ? 1 : 0;
   const trick = queuedTrick;
   queuedTrick = 0;
@@ -174,6 +178,9 @@ function hud(now) {
   comboEl.hidden = state.combo < 2;
   comboEl.textContent = state.combo > 1 ? `x${state.combo}` : '';
   fillEl.style.height = `${Math.round(state.boost)}%`;
+  const aim = screenDir();
+  carveL?.classList.toggle('on', aim < 0);
+  carveR?.classList.toggle('on', aim > 0);
   boostBtn.classList.toggle('on', state.boosting);
   boostBtn.classList.toggle('low', state.boost < SIM.C.BOOST_MIN && !state.boosting);
   if (state.landId !== seenLand) {
@@ -217,6 +224,7 @@ function frame(now) {
     if (state.over) finish();
   }
   if (view && state) {
+    view.setAim?.(screenDir());
     const near = view.sync(state, phase === 'run' ? dt : 0, now / 1000);
     const pressure = phase === 'run' || phase === 'shot' ? Math.max(0, Math.min(1, (25 - state.gap) / 20)) : 0;
     veil.style.opacity = String(pressure * 0.5);
@@ -252,7 +260,7 @@ function onKeyUp(event) { keys.delete(event.code); }
 function pointerDown(event) {
   if (event.target === boostBtn || event.target === drop || event.target === again) return;
   app.setPointerCapture?.(event.pointerId);
-  gestures.down(event.pointerId, event.clientX, event.clientY);
+  gestures.down(event.pointerId, event.clientX, event.clientY, window.innerWidth || 1);
 }
 function pointerMove(event) {
   const trick = gestures.move(event.pointerId, event.clientX, event.clientY, !!(state && state.y > SIM.C.TRICK_MIN_Y));
