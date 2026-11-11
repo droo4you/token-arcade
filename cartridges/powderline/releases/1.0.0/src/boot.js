@@ -216,10 +216,11 @@ function frame(now) {
   }
   if (view && state) {
     const near = view.sync(state, phase === 'run' ? dt : 0, now / 1000);
-    veil.style.opacity = String(near * near * 0.75);
+    veil.style.opacity = String(near * near * 0.22);
     audio.feel(state);
     hud(now);
     if (shot && phase !== 'run') document.documentElement.dataset.shot = 'ready';
+    else if (preview && !shot && phase === 'gate') document.documentElement.dataset.shot = 'ready';
   }
 }
 
@@ -297,8 +298,9 @@ function seekShot() {
   while (state && !state.over && guard < SIM.C.MAX_TICKS) {
     guard += 1;
     SIM.step(state, SIM.botInput(state));
-    if (shot === 'trick' && state.trick && state.y > 4 && state.trick.t > 0.12 && state.trick.t < 0.34) break;
-    if (shot === 'slide' && state.gap < 6.2 && state.z > 200 && state.y < 0.4) break;
+    if (shot === 'carve' && state.y < 0.08 && state.z > 160 && Math.abs(state.vx) > 2.5 && state.gap > 8) break;
+    if (shot === 'trick' && state.trick && state.trick.id === 'method' && state.y > 2.6 && state.trick.t > 0.24 && state.trick.t < 0.4) break;
+    if (shot === 'slide' && state.gap < 7.2 && state.z > 200 && state.y < 0.35) break;
   }
   phase = 'shot';
   hudEl.hidden = false;
@@ -321,6 +323,7 @@ function startShell() {
     arm();
     if (shot) seekShot();
   }
+  if (low || matchMedia('(max-width: 700px)').matches) document.documentElement.classList.add('compact');
   raf = requestAnimationFrame(frame);
   canvas.addEventListener('webglcontextlost', (event) => {
     event.preventDefault();

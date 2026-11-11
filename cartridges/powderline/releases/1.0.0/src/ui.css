@@ -149,3 +149,4 @@ html, body {
 @media (pointer: coarse) {
   .keys { display: none; }
 }
+.compact .keys { display: none; }
