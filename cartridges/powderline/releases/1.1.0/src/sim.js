@@ -59,7 +59,7 @@
   });
   const RULES_VERSION = '1.1.0';
   const RULESET = 'powderline-v2';
-  const ALPHA = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const ALPHA = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%*+-=?@';
   const LANES = [-4.15, 0, 4.15];
   const TRICKS = [
     null,
@@ -138,6 +138,18 @@
       if (size === 'L') ramps[i].w = 2.6;
     }
   }
+  function padAt(seed, index) {
+    if (index < 2 || index % 4 !== 0) return null;
+    const rng = mulberry32((seed ^ Math.imul(index + 4, 0xC2B2AE35)) >>> 0);
+    const z0 = index * C.CHUNK + 12;
+    return { id: index, x: (rng() - 0.5) * 2.4, z0, z1: z0 + 9, w: 2.05 };
+  }
+  function snowmanAt(seed, index) {
+    if (index < 2 || index % 4 !== 3) return null;
+    const rng = mulberry32((seed ^ Math.imul(index + 8, 0x165667B1)) >>> 0);
+    const lane = (rng() * 3) | 0;
+    return { id: index, x: LANES[lane] + (rng() - 0.5) * 0.5, z: index * C.CHUNK + 22, r: 0.62 };
+  }
   function scan(seed, z0, z1) {
     const obstacles = [];
     const ramps = [];
@@ -169,15 +181,22 @@
       railTime: 0, railId: 0, railAward: 0,
       queue: [], lastGesture: 0, variety: '', airAward: 0,
       slowLeft: 0, slowUsed: 0, slow: 0, predict: 0,
+      padId: 0, smashed: '', cleared: '', puffId: 0, tuck: 0,
     };
   }
   function unpack(code) {
     const n = code | 0;
-    if (n < 0 || n >= ALPHA.length) return { steer: 0, boost: 0, trick: 0 };
-    return { steer: n % 3, boost: ((n / 3) | 0) & 1, trick: (n / 6) | 0 };
+    if (n < 0 || n >= ALPHA.length) return { steer: 0, boost: 0, trick: 0, tuck: 0 };
+    const base = n >= 36 ? n - 36 : n;
+    return {
+      steer: base % 3,
+      boost: ((base / 3) | 0) & 1,
+      trick: (base / 6) | 0,
+      tuck: n >= 36 ? 1 : 0,
+    };
   }
-  function pack(steer, boost, trick) {
-    return (steer | 0) + 3 * (boost ? 1 : 0) + 6 * (trick | 0);
+  function pack(steer, boost, trick, tuck) {
+    return (steer | 0) + 3 * (boost ? 1 : 0) + 6 * (trick | 0) + (tuck ? 36 : 0);
   }
   function end(s, cause) {
     s.over = true;
@@ -474,7 +493,9 @@
     if (inp.trick === 0) s.arm = 0;
     const prevZ = s.z;
     const prevX = s.x;
-    const steerDir = inp.steer === 1 ? -1 : inp.steer === 2 ? 1 : 0;
+    let steerDir = inp.steer === 1 ? -1 : inp.steer === 2 ? 1 : 0;
+    if (inp.tuck) steerDir = 0;
+    s.tuck = inp.tuck ? 1 : 0;
     if (steerDir !== 0 && steerDir === s.steerSign) s.steerHold += dt;
     else if (steerDir !== 0) { s.steerSign = steerDir; s.steerHold = dt; }
     else { s.steerSign = 0; s.steerHold = 0; }
@@ -495,6 +516,7 @@
     if (s.y <= 0.001) {
       s.vz += (C.CRUISE - s.vz) * 0.9 * dt;
       if (s.boosting) s.vz += C.BOOST_A * dt;
+      if (inp.tuck) s.vz += 7.5 * dt;
       const cap = s.boosting ? C.BOOST_V : C.MAX_V;
       if (s.vz > cap) s.vz += (cap - s.vz) * Math.min(1, 3 * dt);
       s.x += s.vx * dt;
@@ -536,6 +558,25 @@
         s.gateId += 1;
         s.gatePoints = 16;
       }
+      const pad = padAt(s.seed, here);
+      if (pad && s.z >= pad.z0 && s.z <= pad.z1 && Math.abs(s.x - pad.x) <= pad.w * 0.5 && s.padId !== pad.id) {
+        s.padId = pad.id;
+        s.vz = Math.min(C.MAX_V, s.vz + 6.5);
+        s.boost = Math.min(100, s.boost + 6);
+      }
+      const man = snowmanAt(s.seed, here) || snowmanAt(s.seed, here - 1);
+      if (man && Math.abs(s.z - man.z) < 0.9 && Math.abs(s.x - man.x) < man.r + 0.35 && s.smashed.indexOf(man.id + ',') < 0) {
+        s.smashed += man.id + ',';
+        if (s.boosting) {
+          s.trickPoints += 18;
+          s.puffId = man.id;
+        } else {
+          s.vz = Math.max(14, s.vz * 0.72);
+          s.combo = 1;
+          s.variety = '';
+          s.stun = 0.16;
+        }
+      }
       rideRamps(s, prevX, prevZ);
       if (s.y <= 0.001 && s.iframe <= 0) {
         const near = scan(s.seed, s.z - 1.4, s.z + 1.4);
@@ -569,6 +610,11 @@
       if (s.trick) {
         s.trick.t += dt;
         applyYaw(s);
+      }
+      const man = snowmanAt(s.seed, Math.floor(s.z / C.CHUNK));
+      if (man && s.y > 0.7 && prevZ < man.z && s.z >= man.z && Math.abs(s.x - man.x) < 1.3 && s.cleared.indexOf(man.id + ',') < 0) {
+        s.cleared += man.id + ',';
+        s.trickPoints += 6;
       }
       rideRamps(s, prevX, prevZ);
       if (s.y > 0.8 && !s.slowUsed && s.predict > C.SLOW_HANG && s.vy < 2.5 && s.vy > -3) {
@@ -662,7 +708,7 @@
   const api = {
     C, RULES_VERSION, RULESET, ALPHA, TRICKS, LANES,
     issuedSeed, resolveRunSeed, chunk, scan, create, step, unpack, pack, result, botInput, botRun,
-    gateAt, railAt, kickerBox, kickerSurface, airtime,
+    gateAt, railAt, padAt, snowmanAt, kickerBox, kickerSurface, airtime,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.PLSim = api;

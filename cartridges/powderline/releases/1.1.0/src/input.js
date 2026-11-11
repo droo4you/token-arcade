@@ -49,6 +49,16 @@
         for (const p of ptrs.values()) if (!p.locked && p.hold) h = p.hold;
         return h;
       },
+      sides() {
+        let left = false;
+        let right = false;
+        for (const p of ptrs.values()) {
+          if (p.locked || !p.hold) continue;
+          if (p.hold < 0) left = true;
+          if (p.hold > 0) right = true;
+        }
+        return { left, right };
+      },
       clear() { ptrs.clear(); },
       size() { return ptrs.size; },
     };

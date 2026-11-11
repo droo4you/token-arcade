@@ -294,6 +294,81 @@ test('slow motion replays to the same trace', () => {
   assert.ok(first.marks.some((mark) => mark & 1));
 });
 
+test('a corduroy pad pays speed once and a tuck outruns a coast', () => {
+  const pad = SIM.padAt(8, 4);
+  assert.ok(pad);
+  const on = SIM.create(8);
+  on.x = pad.x;
+  on.z = pad.z0 - 0.2;
+  on.vz = 22;
+  const off = SIM.create(8);
+  off.x = pad.x + 4;
+  off.z = pad.z0 - 0.2;
+  off.vz = 22;
+  let saw = false;
+  for (let i = 0; i < 40; i++) {
+    SIM.step(on, 0);
+    SIM.step(off, 0);
+    if (on.padId === pad.id) { saw = true; break; }
+  }
+  assert.equal(saw, true);
+  assert.ok(on.vz > off.vz + 5, `pad ${on.vz} miss ${off.vz}`);
+  const gap = on.vz - off.vz;
+  SIM.step(on, 0);
+  SIM.step(off, 0);
+  assert.ok(on.vz - off.vz < gap + 0.5);
+
+  const tucked = SIM.create(3);
+  const coast = SIM.create(3);
+  const code = SIM.pack(2, 0, 0, 1);
+  for (let i = 0; i < 90; i++) {
+    SIM.step(tucked, code);
+    SIM.step(coast, 0);
+  }
+  assert.ok(tucked.vz > coast.vz + 4, `tuck ${tucked.vz} coast ${coast.vz}`);
+  assert.ok(Math.abs(tucked.x) < 0.35, `tuck drifted ${tucked.x}`);
+  assert.equal(SIM.unpack(code).tuck, 1);
+  assert.equal(SIM.unpack(SIM.pack(2, 0, 5)).trick, 5);
+  assert.equal(SIM.unpack(SIM.pack(2, 0, 5)).tuck, 0);
+});
+
+test('snowmen stumble, smash on boost, and pay a clearance', () => {
+  const man = SIM.snowmanAt(9, 3);
+  assert.ok(man);
+  const stumble = SIM.create(9);
+  stumble.x = man.x;
+  stumble.z = man.z - 0.4;
+  stumble.vz = 24;
+  stumble.combo = 3;
+  stumble.iframe = 1;
+  SIM.step(stumble, 0);
+  assert.ok(stumble.smashed.indexOf(`${man.id},`) >= 0);
+  assert.equal(stumble.combo, 1);
+  assert.ok(stumble.vz < 24);
+  assert.equal(stumble.puffId, 0);
+
+  const smash = SIM.create(9);
+  smash.x = man.x;
+  smash.z = man.z - 0.4;
+  smash.vz = 24;
+  smash.boost = 40;
+  smash.iframe = 1;
+  SIM.step(smash, SIM.pack(0, 1, 0));
+  assert.equal(smash.puffId, man.id);
+  assert.equal(smash.trickPoints, 18);
+  assert.equal(smash.combo, 1);
+
+  const over = SIM.create(9);
+  over.x = man.x;
+  over.z = man.z - 0.3;
+  over.vz = 24;
+  over.y = 2;
+  over.vy = 2;
+  SIM.step(over, 0);
+  assert.equal(over.trickPoints, 6);
+  assert.ok(over.cleared.indexOf(`${man.id},`) >= 0);
+});
+
 test('a near miss inside 4 m pays once', () => {
   const s = SIM.create(2);
   s.gap = 3.5;

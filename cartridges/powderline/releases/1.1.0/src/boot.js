@@ -106,11 +106,13 @@ function screenDir() {
 }
 
 function readCode() {
-  const steer = globalThis.PLInput.steerCode(screenDir());
+  const sides = gestures.sides();
+  const tuck = keys.has('KeyS') || (sides.left && sides.right) ? 1 : 0;
+  const steer = tuck ? 0 : globalThis.PLInput.steerCode(screenDir());
   const boost = (heldBoost || keys.has('Space') || keys.has('ShiftLeft') || keys.has('ShiftRight')) ? 1 : 0;
   const trick = queuedTrick;
   queuedTrick = 0;
-  return SIM.pack(steer, boost, trick);
+  return SIM.pack(steer, boost, trick, tuck);
 }
 
 function queueTrick(nameOrCode) {

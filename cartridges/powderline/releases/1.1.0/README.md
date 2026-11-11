@@ -26,7 +26,7 @@ Avalanche speed is `20.4 + distance * 0.0135`, plus extra when the gap is alread
 
 ## Steering
 
-Each 60 Hz character is an index into the 36-character alphabet: `steer + 3 * boost + 6 * trick`. Steer is 0, 1, or 2. Boost is 0 or 1. Trick is 0 through 5. The sim stores `steerHold`. The sideways target starts at 35% and reaches full after 0.35 s of the same direction. Full speed is 9 m/s and `STEER_A` is 4, so a release eases back to zero instead of snapping. A one-frame tap moves the rider less than 0.3 m. Holding across one lane (4.15 m) takes about 0.7 s. The snow arc and the edge chevrons follow `steerMag`.
+Each 60 Hz character is an index into the 72-character alphabet: `steer + 3 * boost + 6 * trick`, plus 36 when tucked. Steer is 0, 1, or 2. Boost is 0 or 1. Trick is 0 through 5. Tuck holds both screen halves, or the S key. It drops steering to zero and adds 7.5 m/s² until the speed cap. The sim stores `steerHold`. The sideways target starts at 35% and reaches full after 0.35 s of the same direction. Full speed is 9 m/s and `STEER_A` is 4, so a release eases back to zero instead of snapping. A one-frame tap moves the rider less than 0.3 m. Holding across one lane (4.15 m) takes about 0.7 s. The snow arc and the edge chevrons follow `steerMag`.
 
 ## Tricks
 
@@ -54,6 +54,8 @@ Launch speed scales with the size, with how fast you are past 22 m/s, and with w
 
 Slalom pairs sit on every chunk whose index is at least 3 and `index % 3 === 1`, 18 m into the chunk. Passing between the poles on the snow pays `8 * combo`. A fallen log on chunks `index % 5 === 2` (from chunk 5) pays 16 points once you have stayed on it for 0.45 s.
 
+A groomed corduroy strip sits on chunks `index % 4 === 0` from chunk 4. Crossing it once adds 6.5 m/s, capped at the normal top speed, and 6 boost. A snowman stands on chunks `index % 4 === 3` from chunk 3. Hitting one costs speed and the combo. Boosting through it pays 18 and pops it. Jumping over it pays 6.
+
 ## Passport tie-break
 
-Same order as 1.0.0, scored by replaying this sim on the issued seed: higher score, then longer distance, then fewer crashes, then earlier acceptance time, then run id. A 1.1.0 proof is `{ v: 1, rules: "1.1.0", ruleset: "powderline-v2", seed, input }` with one character per 60 Hz tick. Decode a character with its alphabet index as `steer + 3 * boost + 6 * trick`. The live API referee is still `powderline-v1` on `releases/1.0.0/` until that adapter is switched.
+Same order as 1.0.0, scored by replaying this sim on the issued seed: higher score, then longer distance, then fewer crashes, then earlier acceptance time, then run id. A 1.1.0 proof is `{ v: 1, rules: "1.1.0", ruleset: "powderline-v2", seed, input }` with one character per 60 Hz tick. Decode a character with its alphabet index as `steer + 3 * boost + 6 * trick`, plus 36 when that tick is tucked. The live API referee is still `powderline-v1` on `releases/1.0.0/` until that adapter is switched.

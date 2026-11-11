@@ -328,6 +328,52 @@ function puffGeometry(low) {
   return geo;
 }
 
+function snowmanGroup(white, coal, carrot, twig) {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), white);
+  body.position.y = 0.4;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), white);
+  head.position.y = 0.92;
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.26, 5), carrot);
+  nose.rotation.x = Math.PI / 2;
+  nose.position.set(0, 0.9, 0.26);
+  group.add(body, head, nose);
+  for (const [x, y, z] of [[-0.08, 0.96, 0.2], [0.08, 0.96, 0.2], [0, 0.62, 0.36], [0, 0.46, 0.4]]) {
+    const bit = new THREE.Mesh(new THREE.SphereGeometry(0.035, 5, 4), coal);
+    bit.position.set(x, y, z);
+    group.add(bit);
+  }
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.045), twig);
+    arm.position.set(side * 0.48, 0.7, 0);
+    arm.rotation.z = side * 0.5;
+    group.add(arm);
+  }
+  return group;
+}
+
+function corduroyMesh(pad, z0, mat) {
+  const len = pad.z1 - pad.z0;
+  const geo = new THREE.PlaneGeometry(pad.w, len, 1, 16);
+  const pos = geo.attributes.position;
+  const col = new Float32Array(pos.count * 3);
+  const groomed = new THREE.Color('#d5deea');
+  const groove = new THREE.Color('#8ea4c4');
+  for (let i = 0; i < pos.count; i++) {
+    const stripe = (Math.floor((pos.getY(i) / len + 0.5) * 16) % 2) === 0;
+    const c = stripe ? groomed : groove;
+    col[i * 3] = c.r;
+    col[i * 3 + 1] = c.g;
+    col[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  const mid = (pad.z0 + pad.z1) / 2;
+  mesh.position.set(pad.x, 0.05 + snowHeight(pad.x, mid), mid - z0 - CHUNK / 2);
+  return mesh;
+}
+
 export function createView(canvas, options) {
   const tier = options.tier || (options.low ? 'low' : 'high');
   const Q = TIER[tier] || TIER.high;
@@ -444,6 +490,11 @@ export function createView(canvas, options) {
   const flagMat = new THREE.MeshStandardMaterial({ color: 0xc4492a, roughness: 0.6, metalness: 0, side: THREE.DoubleSide });
   const cabinGeo = cabinGeometry();
   const cabinMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0 });
+  const snowWhite = new THREE.MeshLambertMaterial({ color: 0xf7f4ee });
+  const snowCoal = new THREE.MeshLambertMaterial({ color: 0x1c2428 });
+  const snowCarrot = new THREE.MeshLambertMaterial({ color: 0xd24f2c });
+  const snowTwig = new THREE.MeshLambertMaterial({ color: 0x6a4a32 });
+  const cordMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   readableFog(pineMat, 0.55);
   readableFog(rockMat, 0.55);
   readableFog(kickMat, 0.55);
@@ -630,6 +681,19 @@ export function createView(canvas, options) {
         log.position.set(rail.x, 0.2 + snowHeight(rail.x, (rail.z0 + rail.z1) / 2), (rail.z0 + rail.z1) / 2 - z0 - CHUNK / 2);
         log.castShadow = Q.shadow > 0;
         group.add(log);
+      }
+    }
+    if (globalThis.PLSim.padAt) {
+      const pad = globalThis.PLSim.padAt(seed, index);
+      if (pad) group.add(corduroyMesh(pad, z0, cordMat));
+    }
+    if (globalThis.PLSim.snowmanAt) {
+      const man = globalThis.PLSim.snowmanAt(seed, index);
+      if (man) {
+        const figure = snowmanGroup(snowWhite, snowCoal, snowCarrot, snowTwig);
+        figure.position.set(man.x, snowHeight(man.x, man.z), man.z - z0 - CHUNK / 2);
+        figure.userData.snowman = man.id;
+        group.add(figure);
       }
     }
     if (index % 8 === 4) {
@@ -831,6 +895,7 @@ export function createView(canvas, options) {
   let primed = null;
   let fov = 58;
   let lastLand = -1;
+  let lastPuff = 0;
   let landKick = 0;
 
   const grade = makeGrade(low);
@@ -957,6 +1022,12 @@ export function createView(canvas, options) {
 
   function sync(state, dt, time) {
     syncWorld(state);
+    if (state.smashed) {
+      slopeRoot.traverse((obj) => {
+        if (!obj.userData.snowman) return;
+        obj.visible = state.smashed.indexOf(`${obj.userData.snowman},`) < 0;
+      });
+    }
     const ground = snowHeight(state.x, state.z);
     rider.group.position.set(state.x, state.y + ground, state.z);
     rider.pose(state, time);
@@ -1023,6 +1094,10 @@ export function createView(canvas, options) {
     arcGeo.attributes.position.needsUpdate = true;
     spray.curtain(samples, state);
     if (carving) spray.carve(state);
+    if (state.puffId && state.puffId !== lastPuff) {
+      lastPuff = state.puffId;
+      spray.burst(state, 24);
+    }
     if (state.landId !== lastLand) {
       lastLand = state.landId;
       if (state.landKind) {
@@ -1039,17 +1114,24 @@ export function createView(canvas, options) {
     const lean = clamp(-state.vx / 13.2, -1, 1);
     const portrait = camera.aspect < 1;
     const slow = state.slow ? 1 : 0;
-    const trickSide = (state.trick || slow) ? (portrait ? 1.8 : 2.4) + slow * (portrait ? 1.7 : 2.8) : 0;
+    const trickSide = state.trick ? (portrait ? 1.8 : 2.4) : 0;
     const want = hero ? (portrait ? {
       x: state.x + 0.35, y: 1.85, z: state.z - 4.4,
       lx: state.x, ly: 0.55, lz: state.z + 8,
     } : {
       x: state.x + 1.4, y: 1.9, z: state.z - 5.6,
       lx: state.x - 0.4, ly: 0.85, lz: state.z + 12,
-    }) : {
+    }) : slow ? {
+      x: state.x + (portrait ? 2.8 : 3.6),
+      y: state.y + 1.25,
+      z: state.z - 3.4,
+      lx: state.x,
+      ly: state.y + 0.55,
+      lz: state.z + 0.5,
+    } : {
       x: state.x * 0.22 + trickSide - lean * 0.45,
       y: 2.15 + state.y * 0.2 + air * 0.7,
-      z: state.z - ((state.trick || slow) ? 3.6 : 5.5) - air * 1.2,
+      z: state.z - (state.trick ? 4.4 : 5.5) - air * 1.2,
       lx: state.x * 0.12,
       ly: 0.9 + state.y * 0.35,
       lz: state.z + 14,
@@ -1092,7 +1174,7 @@ export function createView(canvas, options) {
 
     const speed = clamp(state.vz / 33.2, 0, 1.15);
     landKick = Math.max(0, landKick - dtSafe * 10);
-    const targetFov = (hero ? (portrait ? 52 : 46) : 58 + (portrait ? 6 : 0) + 12 * smoothstep(0.3, 1, speed)) + landKick - slow * 10;
+    const targetFov = (hero ? (portrait ? 52 : 46) : 58 + (portrait ? 6 : 0) + 12 * smoothstep(0.3, 1, speed)) + landKick - slow * 6;
     fov += (targetFov - fov) * (1 - Math.exp(-dtSafe * 5));
     if (camera.fov !== fov) {
       camera.fov = fov;
@@ -1113,6 +1195,7 @@ export function createView(canvas, options) {
     renderer.dispose();
     snowMat.dispose(); pineMat.dispose(); rockMat.dispose(); kickMat.dispose();
     lipMat.dispose(); poleMat.dispose(); flagMat.dispose(); cabinMat.dispose();
+    snowWhite.dispose(); snowCoal.dispose(); snowCarrot.dispose(); snowTwig.dispose(); cordMat.dispose();
     puffMat.dispose(); debrisMat.dispose(); snowBitMat.dispose(); skyMat.dispose();
     puffMap.dispose(); bump.dispose();
     grade.rt.dispose();

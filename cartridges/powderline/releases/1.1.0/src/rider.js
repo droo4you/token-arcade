@@ -269,15 +269,24 @@ export function buildRider(low, shadows) {
       legL.knee.rotation.x = -1.7;
       legR.knee.rotation.x = -1.6;
     } else if (id === 'frontside' || id === 'backside') {
-      const tuck = arc;
+      const spin = arc;
       armL.shoulder.rotation.set(0.8, 0, 1.3);
       armR.shoulder.rotation.set(0.8, 0, -1.3);
       armL.elbow.rotation.x = 1.35;
       armR.elbow.rotation.x = 1.35;
       legL.knee.rotation.x = -1.55;
       legR.knee.rotation.x = -1.55;
-      torso.rotation.x = -0.35 * tuck;
-      board.rotation.z = (id === 'backside' ? -0.4 : 0.4) * tuck;
+      torso.rotation.x = -0.35 * spin;
+      board.rotation.z = (id === 'backside' ? -0.4 : 0.4) * spin;
+    }
+    if (state.tuck && !air) {
+      torso.rotation.x = 0.82;
+      torso.position.z = 0.1;
+      legL.knee.rotation.x = -1.7;
+      legR.knee.rotation.x = -1.75;
+      armL.shoulder.rotation.set(0.9, 0, 0.7);
+      armR.shoulder.rotation.set(0.9, 0, -0.7);
+      head.rotation.x = 0.45;
     }
   }
 
