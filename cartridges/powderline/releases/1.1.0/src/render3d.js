@@ -135,7 +135,7 @@ function attachSnow(mat, sunView, octaves) {
           vec3 nGeo = normalize(normal);
           vec3 tx = normalize(cross(vec3(0.0, 0.0, 1.0), nGeo));
           vec3 tz = normalize(cross(nGeo, tx));
-          normal = normalize(nGeo - tx * hx * 1.75 - tz * hz * 1.75);
+          normal = normalize(nGeo - tx * hx * 0.38 - tz * hz * 0.38);
         }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
@@ -143,10 +143,6 @@ function attachSnow(mat, sunView, octaves) {
           float macro = plNoise(w * 0.05);
           float micro = plNoise(w * 2.4);
           float wind = plNoise(w * vec2(0.018, 0.09));
-          float sunN = clamp(dot(normalize(normal), normalize(uSunView)), 0.0, 1.0);
-          vec3 crest = diffuseColor.rgb * vec3(1.06, 1.02, 0.96);
-          vec3 trough = diffuseColor.rgb * vec3(0.58, 0.70, 0.92);
-          diffuseColor.rgb = mix(trough, crest, smoothstep(0.02, 0.62, sunN));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.75, 0.84, 0.93), smoothstep(0.66, 0.84, macro) * 0.55);
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.97), smoothstep(0.72, 0.9, wind) * 0.22);
           diffuseColor.rgb *= 0.88 + micro * 0.2;
@@ -162,6 +158,10 @@ function attachSnow(mat, sunView, octaves) {
           reflectedLight.indirectDiffuse += vec3(0.42, 0.58, 0.84) * (1.0 - wrap) * 0.26 * diffuseColor.rgb;
         }`)
       .replace('#include <fog_fragment>', `{
+          float sunN = clamp(dot(normalize(normal), normalize(uSunView)), 0.0, 1.0);
+          vec3 crest = gl_FragColor.rgb * vec3(1.03, 1.01, 0.98);
+          vec3 trough = gl_FragColor.rgb * vec3(0.84, 0.89, 0.98);
+          gl_FragColor.rgb = mix(trough, crest, smoothstep(0.12, 0.72, sunN));
           vec2 w = vPlWorld.xz;
           vec2 cell = floor(w * 36.0);
           float fh = plHash(cell);
@@ -282,19 +282,25 @@ function colorize(geo, hex, jitter = 0.08) {
 function pineGeometry() {
   const trunk = new THREE.CylinderGeometry(0.11, 0.18, 1.1, 5);
   trunk.translate(0, 0.55, 0);
-  colorize(trunk, '#2a2622', 0.08);
+  colorize(trunk, '#3a3228', 0.08);
   const parts = [trunk];
   const layers = [
-    [1.15, 1.7, 1.55, '#1e3a33'],
-    [0.86, 1.45, 2.45, '#243f38'],
-    [0.58, 1.15, 3.25, '#1e3a33'],
-    [0.28, 0.7, 3.85, '#e9eef3'],
+    [1.15, 1.5, 1.35, '#1a4634'],
+    [0.88, 1.25, 2.15, '#226348'],
+    [0.58, 1.05, 2.9, '#1c543c'],
   ];
   for (const [r, h, y, hex] of layers) {
     const cone = new THREE.ConeGeometry(r, h, 7);
     cone.translate(0, y, 0);
-    colorize(cone, hex, 0.06);
+    colorize(cone, hex, 0.05);
     parts.push(cone);
+  }
+  for (const [x, y, z, r] of [[0, 3.45, 0, 0.32], [0.22, 3.15, 0.06, 0.2], [-0.16, 3.05, -0.05, 0.18], [0.04, 2.55, 0.14, 0.15]]) {
+    const cap = new THREE.SphereGeometry(r, 6, 4);
+    cap.scale(1.05, 0.58, 0.95);
+    cap.translate(x, y, z);
+    colorize(cap, '#f4f7f8', 0.03);
+    parts.push(cap);
   }
   return mergeGeos(parts);
 }
@@ -307,7 +313,12 @@ function rockGeometry() {
     p.setXYZ(i, p.getX(i) * n, p.getY(i) * (0.7 + n * 0.3), p.getZ(i) * n);
   }
   geo.computeVertexNormals();
-  return colorize(geo, '#4a4f58', 0.16);
+  colorize(geo, '#5a5e55', 0.12);
+  const cap = new THREE.SphereGeometry(0.42, 7, 4);
+  cap.scale(1.15, 0.36, 0.95);
+  cap.translate(0, 0.38, 0);
+  colorize(cap, '#f3f6f8', 0.03);
+  return mergeGeos([geo, cap]);
 }
 
 function kickerGeometry(width, length, height) {
@@ -316,6 +327,7 @@ function kickerGeometry(width, length, height) {
   const count = (nx + 1) * (nz + 1);
   const pos = new Float32Array(count * 3);
   const col = new Float32Array(count * 3);
+  const uv = new Float32Array(count * 2);
   const idx = [];
   const snow = new THREE.Color('#fff8ee');
   const shade = new THREE.Color('#9eb4d0');
@@ -334,6 +346,8 @@ function kickerGeometry(width, length, height) {
       pos[v * 3] = x;
       pos[v * 3 + 1] = rise + berm;
       pos[v * 3 + 2] = z;
+      uv[v * 2] = i / nx;
+      uv[v * 2 + 1] = j / nz;
       c.copy(edge > 0.78 ? shade : u > 0.8 ? lip : snow);
       col[v * 3] = c.r; col[v * 3 + 1] = c.g; col[v * 3 + 2] = c.b;
       v += 1;
@@ -346,9 +360,34 @@ function kickerGeometry(width, length, height) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   geo.setIndex(idx);
   geo.computeVertexNormals();
   return geo;
+}
+
+function packedSnowMap() {
+  return canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#f4f1ea';
+    g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#d7e0ea';
+    g.lineWidth = 4;
+    for (let i = 0; i < 16; i++) {
+      g.beginPath();
+      g.moveTo(0, 10 + i * 15);
+      g.lineTo(w, 16 + i * 15);
+      g.stroke();
+    }
+    g.strokeStyle = '#8ea0b8';
+    g.lineWidth = 2;
+    for (let i = 0; i < 7; i++) {
+      const y = 22 + i * 32;
+      g.beginPath();
+      g.moveTo(14, y);
+      g.quadraticCurveTo(w * 0.5, y + 16, w - 14, y - 6);
+      g.stroke();
+    }
+  }, true);
 }
 
 function puffTexture() {
@@ -563,10 +602,11 @@ export function createView(canvas, options) {
   const pineMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 });
   const rockGeo = rockGeometry();
   const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0, flatShading: true });
-  const kickMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.74, metalness: 0 });
+  const kickMat = new THREE.MeshStandardMaterial({ map: packedSnowMap(), vertexColors: true, roughness: 0.78, metalness: 0 });
   const lipMat = new THREE.MeshStandardMaterial({ color: 0x1f4d3a, roughness: 0.55, metalness: 0 });
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x6a5a48, roughness: 0.7, metalness: 0 });
   const flagMat = new THREE.MeshStandardMaterial({ color: 0xc4492a, roughness: 0.6, metalness: 0, side: THREE.DoubleSide });
+  const flagBlue = new THREE.MeshStandardMaterial({ color: 0x2a4f86, roughness: 0.6, metalness: 0, side: THREE.DoubleSide });
   const cabinGeo = cabinGeometry();
   const cabinMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0 });
   const snowWhite = new THREE.MeshLambertMaterial({ color: 0xf7f4ee });
@@ -574,7 +614,15 @@ export function createView(canvas, options) {
   const snowCarrot = new THREE.MeshLambertMaterial({ color: 0xd24f2c });
   const snowTwig = new THREE.MeshLambertMaterial({ color: 0x6a4a32 });
   const cordMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-  readableFog(pineMat, 0.55);
+  pineMat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+        reflectedLight.indirectDiffuse += vec3(0.52, 0.66, 0.82) * 0.24 * diffuseColor.rgb;`)
+      .replace('#include <fog_fragment>', `#ifdef USE_FOG
+        float fogFactor = smoothstep(fogNear, fogFar, vFogDepth) * 0.55;
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
+      #endif`);
+  };
   readableFog(rockMat, 0.55);
   readableFog(kickMat, 0.55);
   const shared = [pineGeo, rockGeo, cabinGeo];
@@ -617,7 +665,7 @@ export function createView(canvas, options) {
             lip = Math.max(lip, clamp(edge, 0, 1));
           }
         }
-        y += -depth * 0.36 + lip * 0.13;
+        y += -depth * 0.16 + lip * 0.045;
       }
       p.setY(i, y);
       const ax = Math.abs(x);
@@ -710,7 +758,12 @@ export function createView(canvas, options) {
       const s = 1.5 + hash2(n, index + 9) * 2.1;
       pines.push({ x, y: snowHeight(x, z), z: z - z0 - CHUNK / 2, s, ry: hash2(n, 8) * 6, tilt: (hash2(n, 2) - 0.5) * 0.1 });
     }
-    if (pines.length) group.add(addInstances(pineGeo, pineMat, pines, Q.shadow > 0));
+    if (pines.length) {
+      const forest = addInstances(pineGeo, pineMat, pines, Q.shadow > 0);
+      forest.userData.trees = pines;
+      forest.userData.originZ = z0 + CHUNK / 2;
+      group.add(forest);
+    }
     if (rocks.length) group.add(addInstances(rockGeo, rockMat, rocks, Q.shadow > 0));
     for (const ramp of part.ramps) {
       const g = new THREE.Group();
@@ -746,14 +799,14 @@ export function createView(canvas, options) {
     if (globalThis.PLSim.gateAt) {
       const gate = globalThis.PLSim.gateAt(seed, index);
       if (gate) {
-        for (const x of [gate.x0, gate.x1]) {
-          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 2.1, 5), poleMat);
-          pole.position.set(x, 1.05 + snowHeight(x, gate.z), gate.z - z0 - CHUNK / 2);
+        [gate.x0, gate.x1].forEach((x, poleIndex) => {
+          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 2.4, 5), poleMat);
+          pole.position.set(x, 1.2 + snowHeight(x, gate.z), gate.z - z0 - CHUNK / 2);
           pole.quaternion.copy(upright);
-          const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 0.36), flagMat);
-          cloth.position.set(x, 1.7 + snowHeight(x, gate.z), gate.z - z0 - CHUNK / 2);
+          const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.05, 0.62), poleIndex ? flagBlue : flagMat);
+          cloth.position.set(x, 1.85 + snowHeight(x, gate.z), gate.z - z0 - CHUNK / 2);
           group.add(pole, cloth);
-        }
+        });
       }
       const rail = globalThis.PLSim.railAt(seed, index);
       if (rail) {
@@ -957,6 +1010,8 @@ export function createView(canvas, options) {
 
   const fall = buildFall(low ? 140 : 320);
   slopeRoot.add(fall.points);
+  const streaks = buildStreaks(low ? 36 : 64);
+  slopeRoot.add(streaks.lines);
 
   const samples = [];
   const arcN = 9;
@@ -1151,7 +1206,7 @@ export function createView(canvas, options) {
       const behind = s.z < state.z - 22 || s.z > state.z - 0.15;
       const groundY = behind ? -8 : snowHeight(s.x, s.z);
       const cols = [rimColor, bermColor, grooveColor, bermColor, rimColor];
-      const offs = [[-0.52, 0.11], [-0.24, 0.05], [0, -0.13], [0.24, 0.05], [0.52, 0.11]];
+      const offs = [[-0.36, 0.028], [-0.16, 0.01], [0, -0.055], [0.16, 0.01], [0.36, 0.028]];
       for (let k = 0; k < 5; k++) {
         const o = (i * 5 + k) * 3;
         trenchPos[o] = s.x + offs[k][0];
@@ -1182,18 +1237,20 @@ export function createView(canvas, options) {
     if (carving) spray.carve(state);
     if (state.puffId && state.puffId !== lastPuff) {
       lastPuff = state.puffId;
-      spray.burst(state, 24);
+      spray.burst(state, 52, 1.7);
     }
     if (state.landId !== lastLand) {
       lastLand = state.landId;
       if (state.landKind) {
-        spray.burst(state, state.landKind === 'clean' ? 36 : 18);
+        const poof = state.landKind === 'sketchy' || state.landKind === 'bail' || state.landKind === 'crash';
+        spray.burst(state, poof ? 74 : 40, poof ? 1.65 : 1);
         landKick = 4;
       }
     }
     const motion = state.slow ? dt * globalThis.PLSim.C.SLOW : dt;
     spray.update(motion);
     fall.update(state, motion, near);
+    streaks.update(state, time);
 
     const air = state.y > 0.35 ? 1 : 0;
     const hero = state.tick < 2;
@@ -1208,12 +1265,12 @@ export function createView(canvas, options) {
       x: state.x + 1.4, y: 1.9, z: state.z - 5.6,
       lx: state.x - 0.4, ly: 0.85, lz: state.z + 12,
     }) : slow ? {
-      x: state.x + (portrait ? 2.8 : 3.6),
-      y: state.y + 1.25,
-      z: state.z - 3.4,
+      x: state.x + (portrait ? 2.2 : 3.4),
+      y: state.y + (portrait ? 2.05 : 1.5),
+      z: state.z - (portrait ? 6.4 : 4.4),
       lx: state.x,
-      ly: state.y + 0.55,
-      lz: state.z + 0.5,
+      ly: state.y + 0.7,
+      lz: state.z + 0.7,
     } : {
       x: state.x * 0.22 + trickSide - lean * 0.45,
       y: 2.15 + state.y * 0.2 + air * 0.7,
@@ -1240,6 +1297,35 @@ export function createView(canvas, options) {
     camera.position.copy(camW);
     camera.up.set(0, 1, 0);
     camera.lookAt(lookW);
+    slopeRoot.traverse((obj) => {
+      const trees = obj.userData.trees;
+      if (!trees) return;
+      const originZ = obj.userData.originZ || 0;
+      obj.parent?.updateWorldMatrix(true, false);
+      trees.forEach((item, i) => {
+        const wz = item.z + originZ;
+        const wp = new THREE.Vector3(item.x, item.y, item.z).applyMatrix4(obj.parent.matrixWorld);
+        const dist2 = wp.distanceToSquared(camera.position);
+        const close = dist2 < 49;
+        const shake = !close && dist2 < 80;
+        dummy.position.set(item.x, item.y + (shake ? Math.sin(time * 14 + item.x) * 0.04 : 0), item.z);
+        dummy.quaternion.copy(upright);
+        dummy.rotateY(item.ry || 0);
+        if (item.tilt) dummy.rotateZ(item.tilt);
+        if (shake) dummy.rotateZ(Math.sin(time * 18 + wz) * 0.05);
+        dummy.scale.setScalar(close ? 0.001 : (item.s || 1));
+        dummy.updateMatrix();
+        obj.setMatrixAt(i, dummy.matrix);
+        const rdx = item.x - state.x;
+        const rdz = wz - state.z;
+        if (!close && rdx * rdx + rdz * rdz < 30 && (state.tick % 14) === (i % 14)) spray.shed(item.x, item.y + 2.4, wz);
+      });
+      obj.instanceMatrix.needsUpdate = true;
+    });
+    for (const tree of snapTrees) {
+      tree.updateWorldMatrix(true, false);
+      if (new THREE.Vector3().setFromMatrixPosition(tree.matrixWorld).distanceToSquared(camera.position) < 49) tree.visible = false;
+    }
     const roll = hero ? 0 : clamp(lean * 0.7 * 0.3, -8 * Math.PI / 180, 8 * Math.PI / 180);
     camera.rotateZ(roll);
     sky.position.copy(camW);
@@ -1260,7 +1346,7 @@ export function createView(canvas, options) {
 
     const speed = clamp(state.vz / 33.2, 0, 1.15);
     landKick = Math.max(0, landKick - dtSafe * 10);
-    const targetFov = (hero ? (portrait ? 52 : 46) : 58 + (portrait ? 6 : 0) + 12 * smoothstep(0.3, 1, speed)) + landKick - slow * 6;
+    const targetFov = (hero ? (portrait ? 52 : 46) : 58 + (portrait ? 6 : 0) + 12 * smoothstep(0.3, 1, speed)) + landKick - (slow && !portrait ? 4 : 0);
     fov += (targetFov - fov) * (1 - Math.exp(-dtSafe * 5));
     if (camera.fov !== fov) {
       camera.fov = fov;
@@ -1280,7 +1366,7 @@ export function createView(canvas, options) {
   function dispose() {
     renderer.dispose();
     snowMat.dispose(); pineMat.dispose(); rockMat.dispose(); kickMat.dispose();
-    lipMat.dispose(); poleMat.dispose(); flagMat.dispose(); cabinMat.dispose();
+    lipMat.dispose(); poleMat.dispose(); flagMat.dispose(); flagBlue.dispose(); cabinMat.dispose();
     snowWhite.dispose(); snowCoal.dispose(); snowCarrot.dispose(); snowTwig.dispose(); cordMat.dispose();
     puffMat.dispose(); debrisMat.dispose(); snowBitMat.dispose(); skyMat.dispose();
     puffMap.dispose(); bump.dispose();
@@ -1401,6 +1487,35 @@ function buildFall(count) {
   };
 }
 
+function buildStreaks(count) {
+  const pos = new Float32Array(count * 6);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.LineBasicMaterial({ color: 0xf7f8fb, transparent: true, opacity: 0.4 });
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.frustumCulled = false;
+  return {
+    lines,
+    update(state, time) {
+      const ground = snowHeight(state.x, state.z);
+      for (let i = 0; i < count; i++) {
+        const along = ((hash2(i, 5) + time * 0.22) % 1) * 18 - 6;
+        const x = state.x + (hash2(i, 3) - 0.5) * 14;
+        const z = state.z + along;
+        const y = ground + 0.12 + hash2(i, 7) * 0.9;
+        const o = i * 6;
+        pos[o] = x;
+        pos[o + 1] = y;
+        pos[o + 2] = z;
+        pos[o + 3] = x + 0.08;
+        pos[o + 4] = y + 0.03;
+        pos[o + 5] = z + 0.7 + hash2(i, 9) * 0.45;
+      }
+      geo.attributes.position.needsUpdate = true;
+    },
+  };
+}
+
 function buildSpray(grainCount, bitCount) {
   const group = new THREE.Group();
   const pos = new Float32Array(grainCount * 3);
@@ -1496,27 +1611,31 @@ function buildSpray(grainCount, bitCount) {
     group,
     carve(state) {
       const side = Math.sign(state.vx || 1);
-      const hard = Math.min(1, Math.abs(state.vx) / 9);
-      const n = 2 + Math.round(hard * 4);
-      const edge = state.x + side * 0.2;
-      const y = state.y + snowHeight(state.x, state.z) + 0.08;
+      const hard = Math.min(1, Math.abs(state.vx) / 7);
+      const n = 3 + Math.round(hard * 7);
+      const edge = state.x + side * (0.28 + hard * 0.22);
+      const y = state.y + snowHeight(state.x, state.z) + 0.06;
       for (let k = 0; k < n; k++) {
         emitGrain(
-          edge, y, state.z - k * 0.08,
-          side * (1.4 + hard * 3.2),
-          0.8 + hard * 2.4,
-          -0.4 - hard,
+          edge, y + (k % 3) * 0.05, state.z - k * 0.05,
+          side * (1.8 + hard * 4.4),
+          1.1 + hard * 3.6,
+          -0.2 - hard * 1.4,
           side > 0,
         );
       }
-      if (hard > 0.35) emitBit(edge, y, state.z, side * 1.2, 1.4, -0.3);
+      if (hard > 0.25) emitBit(edge, y + 0.2, state.z, side * (1.4 + hard), 1.8 + hard * 2, -0.2);
     },
-    burst(state, n) {
-      const y = state.y + snowHeight(state.x, state.z) + 0.1;
+    burst(state, n, lift = 1) {
+      const y = state.y + snowHeight(state.x, state.z) + 0.12;
       for (let k = 0; k < n; k++) {
         const side = k % 2 === 0 ? -1 : 1;
-        emitGrain(state.x + side * 0.2, y, state.z, side * (1 + (k % 4)), 2.2 + (k % 3), (k % 5) * 0.2, k % 2 === 0);
+        emitGrain(state.x + side * 0.25, y, state.z, side * (1.2 + (k % 4)) * lift, (2.4 + (k % 3)) * lift, (k % 5) * 0.25, k % 2 === 0);
+        if (lift > 1.3 && k % 3 === 0) emitBit(state.x + side * 0.3, y, state.z, side * 1.6, 2.8 * lift, 0.2);
       }
+    },
+    shed(x, y, z) {
+      for (let k = 0; k < 5; k++) emitGrain(x + (k - 2) * 0.12, y, z, (k - 2) * 0.35, 0.4, 0.8, k % 2 === 0);
     },
     dust(state, near) {
       const y = snowHeight(state.x, state.z) + 0.2;
@@ -1525,8 +1644,8 @@ function buildSpray(grainCount, bitCount) {
       }
     },
     curtain(samples, state) {
-      const hard = Math.min(1, Math.abs(state.vx) / 8);
-      const height = 0.2 + hard * 1.15;
+      const hard = Math.min(1, Math.abs(state.vx) / 7);
+      const height = 0.4 + hard * 2.3;
       const side = Math.sign(state.vx || 1) || 1;
       sheetMat.uniforms.uCam.value.set(state.x, 2.1, state.z - 5.1);
       for (let i = 0; i < sheetN; i++) {

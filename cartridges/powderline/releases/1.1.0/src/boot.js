@@ -354,6 +354,7 @@ function seekShot() {
     if (shot === 'trick' && state.trick && state.trick.id === 'method' && state.y > 1.8 && state.trick.t > 0.08 && state.trick.t < 0.28) break;
     if (shot === 'slide' && state.gap < 7.2 && state.z > 200 && state.y < 0.35) break;
     if (shot === 'slow' && state.slow && state.trick && state.y > 1.4 && state.trick.t > 0.12) break;
+    if (shot === 'land' && state.landKind && (state.landKind === 'sketchy' || state.landKind === 'bail' || state.landKind === 'clean') && state.y < 0.15 && state.z > 90) break;
   }
   phase = 'shot';
   hudEl.hidden = false;

@@ -24,7 +24,7 @@ function deckGeometry() {
   for (let i = 0; i < p.count; i++) {
     const ny = n.getY(i);
     let c = base;
-    if (ny > 0.4) c = Math.abs(p.getX(i)) < 0.028 ? spruce : top;
+    if (ny > 0.4) c = (i % 11 === 0) ? new THREE.Color('#f7fbfd') : Math.abs(p.getX(i)) < 0.028 ? spruce : top;
     else if (Math.abs(ny) < 0.5) c = edge;
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
@@ -64,9 +64,27 @@ function shell(mesh, mat, scale) {
   return outline;
 }
 
+function fabricNormal() {
+  const size = 64;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const weave = Math.sin(x * 0.85) * Math.sin(y * 0.85);
+    const i = (y * size + x) * 4;
+    data[i] = 128 + weave * 26;
+    data[i + 1] = 128 + Math.sin(y * 1.2) * 16;
+    data[i + 2] = 255;
+    data[i + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, size, size);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 export function buildRider(low, shadows) {
   const seg = low ? 7 : 10;
-  const jacket = new THREE.MeshStandardMaterial({ color: 0xd24f2c, roughness: 0.62, metalness: 0 });
+  const jacket = new THREE.MeshStandardMaterial({ color: 0xd24f2c, roughness: 0.72, metalness: 0, normalMap: fabricNormal(), normalScale: new THREE.Vector2(0.4, 0.4) });
   const outlineMat = new THREE.MeshBasicMaterial({ color: 0x14202b, side: THREE.BackSide });
   const pants = new THREE.MeshStandardMaterial({ color: 0x243038, roughness: 0.74, metalness: 0 });
   const deckMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.04 });
@@ -117,6 +135,9 @@ export function buildRider(low, shadows) {
     boot.position.set(side * 0.07, 0.06, forward + 0.02);
     boot.castShadow = shadows;
     board.add(boot);
+    const dust = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.025, 0.16), new THREE.MeshStandardMaterial({ color: 0xf4f7fb, roughness: 0.92 }));
+    dust.position.set(side * 0.07, 0.11, forward + 0.03);
+    board.add(dust);
     return { hip, knee };
   }
   const legL = leg(-1, 0.2);
@@ -239,8 +260,8 @@ export function buildRider(low, shadows) {
       torso.rotation.x = -0.15;
     } else if (id === 'indy' || id === 'double') {
       board.rotation.set(0.25 * arc, 0, -0.55 * arc);
-      armR.shoulder.rotation.set(2.35 * arc, 0.15, 0.35);
-      armR.elbow.rotation.x = 0.2;
+      armR.shoulder.rotation.set(1.05 * arc, 0.2, 0.4);
+      armR.elbow.rotation.x = 1.25 * arc;
       if (id === 'double') {
         armL.shoulder.rotation.set(2.15 * arc, -0.2, -0.25);
         armL.elbow.rotation.x = 0.15;
@@ -253,10 +274,10 @@ export function buildRider(low, shadows) {
       legR.hip.rotation.x = 1.35;
       legL.knee.rotation.x = -1.85;
       legR.knee.rotation.x = -1.95;
-      armL.shoulder.rotation.set(-2.5 * arc, 0, -0.25);
-      armL.elbow.rotation.x = 0.08;
-      armR.shoulder.rotation.set(2.2 * arc, 0.55 * arc, 1.25 * arc);
-      armR.elbow.rotation.x = 0.35 * arc;
+      armL.shoulder.rotation.set(-1.25 * arc, 0.2 * arc, -0.45);
+      armL.elbow.rotation.x = 1.35 * arc;
+      armR.shoulder.rotation.set(0.7 * arc, 0.15, 1.05);
+      armR.elbow.rotation.x = 0.85;
       torso.rotation.set(-0.85 * arc, 0, -0.25 * arc);
       head.rotation.set(0.4 * arc, -0.7 * arc, 0);
     } else if (id === 'mute') {
