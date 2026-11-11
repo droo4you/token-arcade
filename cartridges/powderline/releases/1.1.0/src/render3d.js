@@ -227,14 +227,13 @@ function kickerGeometry(width, length, height) {
   let v = 0;
   for (let j = 0; j <= nz; j++) {
     const u = j / nz;
-    const z = -length + u * (length + 0.45);
-    let rise = height * smoothstep(0.02, 0.78, u);
-    if (u > 0.74) rise += Math.sin((u - 0.74) / 0.26 * Math.PI) * 0.22;
+    const z = -length * (1 - u);
+    const rise = globalThis.PLSim.kickerSurface ? globalThis.PLSim.kickerSurface(u) : height * u * u;
     for (let i = 0; i <= nx; i++) {
       const t = i / nx * 2 - 1;
       const edge = Math.abs(t);
-      const berm = smoothstep(0.62, 1, edge) * 0.16;
-      const x = t * (width * 0.5 + 0.22);
+      const berm = smoothstep(0.72, 1, edge) * 0.08;
+      const x = t * (width * 0.5);
       pos[v * 3] = x;
       pos[v * 3 + 1] = rise + berm;
       pos[v * 3 + 2] = z;
@@ -583,11 +582,12 @@ export function createView(canvas, options) {
     for (const ramp of part.ramps) {
       const g = new THREE.Group();
       g.position.set(ramp.x, snowHeight(ramp.x, ramp.z), ramp.z - z0 - CHUNK / 2);
-      const body = new THREE.Mesh(kickerGeometry(Math.max(2.6, ramp.w), 6.2, LAUNCH_Y), kickMat);
+      const box = globalThis.PLSim.kickerBox(ramp);
+      const body = new THREE.Mesh(kickerGeometry(box.width, box.length, box.height), kickMat);
       body.castShadow = Q.shadow > 0;
       body.receiveShadow = Q.shadow > 0;
-      const lip = new THREE.Mesh(new THREE.BoxGeometry(Math.max(2.6, ramp.w) + 0.2, 0.07, 0.22), lipMat);
-      lip.position.set(0, LAUNCH_Y + 0.16, 0.05);
+      const lip = new THREE.Mesh(new THREE.BoxGeometry(box.width, 0.06, 0.12), lipMat);
+      lip.position.set(0, box.height, 0);
       const blob = new THREE.Mesh(
         new THREE.CircleGeometry(Math.max(2.2, ramp.w) * 0.85, 14),
         new THREE.MeshBasicMaterial({ color: 0x6d8bb5, transparent: true, opacity: 0.32, depthWrite: false }),
@@ -1005,11 +1005,11 @@ export function createView(canvas, options) {
     }
     trenchGeo.attributes.position.needsUpdate = true;
     trenchGeo.attributes.color.needsUpdate = true;
-    const lead = -aim * 5.5;
+    const lead = (state.steerSign || 0) * (state.steerMag || 0) * 4.2;
     arc.visible = state.tick >= 2 && (Math.abs(state.vx) > 0.35 || aim !== 0);
     for (let i = 0; i < arcN; i++) {
       const t = i / (arcN - 1);
-      const z = state.z + 1.3 + t * 7.5;
+      const z = state.z + 0.8 + t * 4.2;
       const x = state.x + state.vx * t * 0.38 + lead * t * t;
       const y = snowHeight(x, z) + 0.07;
       const w = 0.07 + t * 0.05;

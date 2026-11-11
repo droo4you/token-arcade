@@ -178,9 +178,12 @@ function hud(now) {
   comboEl.hidden = state.combo < 2;
   comboEl.textContent = state.combo > 1 ? `x${state.combo}` : '';
   fillEl.style.height = `${Math.round(state.boost)}%`;
-  const aim = screenDir();
-  carveL?.classList.toggle('on', aim < 0);
-  carveR?.classList.toggle('on', aim > 0);
+  const mag = state.steerMag || 0;
+  const sign = state.steerSign || 0;
+  if (carveL) carveL.style.setProperty('--p', sign > 0 ? String(mag) : '0');
+  if (carveR) carveR.style.setProperty('--p', sign < 0 ? String(mag) : '0');
+  carveL?.classList.toggle('on', sign > 0 && mag > 0.45);
+  carveR?.classList.toggle('on', sign < 0 && mag > 0.45);
   boostBtn.classList.toggle('on', state.boosting);
   boostBtn.classList.toggle('low', state.boost < SIM.C.BOOST_MIN && !state.boosting);
   if (state.landId !== seenLand) {

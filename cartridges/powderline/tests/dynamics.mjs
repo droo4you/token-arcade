@@ -75,6 +75,58 @@ test('threading a gate pays points and a crooked landing drops the combo', () =>
   assert.equal(s.combo, 1);
 });
 
+test('a one-frame tap nudges and a held steer crosses a lane in about 0.7 s', () => {
+  const tap = SIM.create(3);
+  SIM.step(tap, 2);
+  for (let i = 0; i < 120; i++) SIM.step(tap, 0);
+  assert.ok(Math.abs(tap.x) < 0.3, `tap moved ${tap.x}`);
+  const hold = SIM.create(3);
+  let ticks = 0;
+  while (hold.x < 4.15 && ticks < 180) {
+    SIM.step(hold, 2);
+    ticks += 1;
+  }
+  const seconds = ticks / 60;
+  assert.ok(seconds >= 0.6 && seconds <= 0.8, `lane took ${seconds}`);
+  assert.ok(hold.steerMag > 0.95);
+});
+
+test('every ramp crossing inside the drawn footprint launches', () => {
+  for (const seed of [1, 4, 11, 42]) {
+    const ramps = [];
+    for (let i = 1; i < 24; i++) for (const ramp of SIM.chunk(seed, i).ramps) ramps.push(ramp);
+    assert.ok(ramps.length > 0);
+    for (const ramp of ramps) {
+      const box = SIM.kickerBox(ramp);
+      for (const x of [ramp.x, box.x0 + 0.04, box.x1 - 0.04]) {
+        const s = SIM.create(seed);
+        s.x = x;
+        s.z = box.tail - 0.4;
+        s.vz = 26;
+        s.iframe = 1;
+        s.sinceRamp = 0;
+        let launched = false;
+        for (let n = 0; n < 90 && !s.over; n++) {
+          SIM.step(s, 0);
+          if (s.vy > 4 && s.y > 0.8) { launched = true; break; }
+        }
+        assert.ok(launched, `seed ${seed} lip ${box.lip} x ${x} y ${s.y}`);
+      }
+      const miss = SIM.create(seed);
+      miss.x = box.x1 + 0.35;
+      miss.z = box.tail - 0.4;
+      miss.vz = 26;
+      miss.iframe = 1;
+      let launched = false;
+      for (let n = 0; n < 90 && miss.z < box.lip + 1; n++) {
+        SIM.step(miss, 0);
+        if (miss.vy > 4 && miss.y > 0.8) launched = true;
+      }
+      assert.equal(launched, false, `seed ${seed} outside ${box.lip}`);
+    }
+  }
+});
+
 test('a near miss inside 4 m pays once', () => {
   const s = SIM.create(2);
   s.gap = 3.5;

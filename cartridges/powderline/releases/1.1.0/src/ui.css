@@ -77,7 +77,8 @@ html, body {
   width: 22px;
   height: 28px;
   background: #14202b;
-  opacity: 0.28;
+  opacity: calc(0.22 + var(--p, 0) * 0.78);
+  transform: scale(calc(0.72 + var(--p, 0) * 0.4));
 }
 #carve-l {
   left: max(12px, env(safe-area-inset-left));

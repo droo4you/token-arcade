@@ -24,6 +24,14 @@ The meter does not refill on its own. It comes back from a clean trick, a smalle
 
 Avalanche speed is `20.4 + distance * 0.0135`, plus extra when the gap is already large. Gap at or under 0.45 m ends the run.
 
+## Steering
+
+Input codes are unchanged: steer 0, 1, or 2 inside the 60 Hz character. The sim stores `steerHold`. The sideways target starts at 35% and reaches full after 0.35 s of the same direction. Full speed is 9 m/s and `STEER_A` is 4, so a release eases back to zero instead of snapping. A one-frame tap moves the rider less than 0.3 m. Holding across one lane (4.15 m) takes 0.8 s. The snow arc and the edge chevrons follow `steerMag`. A 7.5 m/s cap with this same ramp takes 0.9 s, which is outside the lane window, so the cap is 9.
+
+## Kickers
+
+A kicker is `ramp.w` wide and 6.2 m long, with the lip at `ramp.z`. The mesh uses `kickerBox` and `kickerSurface`, so the draw and the hitbox are the same rectangle. Crossing that rectangle rides you up the face and launches at the lip, including during the crash iframe.
+
 ## Line
 
 Slalom pairs sit on every chunk whose index is at least 3 and `index % 3 === 1`, 18 m into the chunk. Passing between the poles on the snow pays `8 * combo`. A fallen log on chunks `index % 5 === 2` (from chunk 5) pays 16 points once you have stayed on it for 0.45 s.

@@ -22,8 +22,11 @@
     CRUISE: 24.2,
     MAX_V: 33.2,
     BOOST_V: 37.6,
-    STEER_V: 13.2,
-    STEER_A: 9.5,
+    STEER_V: 9,
+    STEER_A: 4,
+    STEER_HOLD: 0.35,
+    STEER_MIN: 0.35,
+    KICK_LEN: 6.2,
     GAP0: 17.5,
     AVA_BASE: 20.4,
     AVA_RAMP: 0.0135,
@@ -143,7 +146,7 @@
       trick: null, banked: 0, bankName: '', bankChain: 1, arm: 0,
       stun: 0, iframe: 0, sinceRamp: 1,
       landId: 0, landKind: '', landName: '', landPoints: 0,
-      yaw: 0, nearMissed: false, lastGate: -1, gateId: 0, gatePoints: 0,
+      yaw: 0, steerHold: 0, steerSign: 0, steerMag: 0, nearMissed: false, lastGate: -1, gateId: 0, gatePoints: 0,
       railTime: 0, railId: 0, railAward: 0,
     };
   }
@@ -194,6 +197,23 @@
     if (trick.id === 'frontside') return C.DT / trick.dur;
     if (trick.id === 'backside') return -C.DT / trick.dur;
     return 0;
+  }
+  function kickerBox(ramp) {
+    const width = ramp.w;
+    const length = C.KICK_LEN;
+    return {
+      width, length, height: C.LAUNCH_Y,
+      x0: ramp.x - width * 0.5, x1: ramp.x + width * 0.5,
+      tail: ramp.z - length, lip: ramp.z,
+    };
+  }
+  function kickerSurface(u) {
+    const t = u < 0 ? 0 : u > 1 ? 1 : u;
+    const s = t * t * (3 - 2 * t);
+    const start = t < 0.02 ? t / 0.02 : 1;
+    const lip = t > 0.74 ? (t - 0.74) / 0.26 : 0;
+    const curl = lip * (1 - lip) * 0.88;
+    return C.LAUNCH_Y * s * start + curl;
   }
   function gateAt(seed, index) {
     if (index < 3 || index % 3 !== 1) return null;
@@ -259,6 +279,37 @@
       s.landPoints = 0;
     }
   }
+  function rideRamps(s, prevX, prevZ) {
+    const zLo = Math.min(prevZ, s.z) - C.KICK_LEN;
+    const zHi = Math.max(prevZ, s.z);
+    const a = Math.max(0, Math.floor(zLo / C.CHUNK));
+    const b = Math.floor(zHi / C.CHUNK);
+    const span = s.z - prevZ;
+    for (let i = a; i <= b; i++) {
+      const part = chunk(s.seed, i);
+      for (let k = 0; k < part.ramps.length; k++) {
+        const ramp = part.ramps[k];
+        const box = kickerBox(ramp);
+        if (prevZ < box.lip && s.z >= box.lip) {
+          const xLip = span === 0 ? s.x : prevX + (s.x - prevX) * ((box.lip - prevZ) / span);
+          if (xLip >= box.x0 && xLip <= box.x1 && s.y < box.height + 1.2) {
+            s.y = box.height;
+            s.vy = C.LAUNCH_VY + Math.max(0, s.vz - 22) * 0.05;
+            s.vz += 1.35;
+            s.sinceRamp = 0;
+            return;
+          }
+        }
+        if (s.z >= box.tail && s.z < box.lip && s.x >= box.x0 && s.x <= box.x1) {
+          const surface = kickerSurface((s.z - box.tail) / box.length);
+          if (s.y <= surface + 0.25) {
+            s.y = surface;
+            if (s.vy < 0) s.vy = 0;
+          }
+        }
+      }
+    }
+  }
   function step(s, code) {
     if (s.over) return s;
     const inp = unpack(code);
@@ -267,9 +318,16 @@
     if (s.iframe > 0) s.iframe = Math.max(0, s.iframe - dt);
     if (inp.trick === 0) s.arm = 0;
     const prevZ = s.z;
+    const prevX = s.x;
     const steerDir = inp.steer === 1 ? -1 : inp.steer === 2 ? 1 : 0;
+    if (steerDir !== 0 && steerDir === s.steerSign) s.steerHold += dt;
+    else if (steerDir !== 0) { s.steerSign = steerDir; s.steerHold = dt; }
+    else { s.steerSign = 0; s.steerHold = 0; }
+    const rampT = Math.min(1, s.steerHold / C.STEER_HOLD);
+    const mag = steerDir === 0 ? 0 : C.STEER_MIN + (1 - C.STEER_MIN) * rampT;
+    s.steerMag = mag;
     const steerScale = s.stun > 0 ? 0.35 : s.y > 0.2 ? 0.55 : 1;
-    const targetVx = steerDir * C.STEER_V * steerScale;
+    const targetVx = steerDir * C.STEER_V * mag * steerScale;
     s.vx += (targetVx - s.vx) * Math.min(1, C.STEER_A * dt);
     const wantBoost = inp.boost === 1 && s.stun <= 0 && (s.boosting || s.boost >= C.BOOST_MIN);
     if (wantBoost && s.boost > 0) {
@@ -322,19 +380,7 @@
         s.gateId += 1;
         s.gatePoints = 16;
       }
-      if (!s.over && s.iframe <= 0 && s.sinceRamp > 0.35) {
-        const ahead = scan(s.seed, prevZ - 0.2, s.z + 0.2);
-        for (let i = 0; i < ahead.ramps.length; i++) {
-          const ramp = ahead.ramps[i];
-          if (prevZ < ramp.z && s.z >= ramp.z && Math.abs(s.x - ramp.x) <= ramp.w * 0.5 + 0.15) {
-            s.y = C.LAUNCH_Y;
-            s.vy = C.LAUNCH_VY + Math.max(0, s.vz - 22) * 0.05;
-            s.vz += 1.35;
-            s.sinceRamp = 0;
-            break;
-          }
-        }
-      }
+      rideRamps(s, prevX, prevZ);
       if (s.y <= 0.001 && s.iframe <= 0) {
         const near = scan(s.seed, s.z - 1.4, s.z + 1.4);
         for (let i = 0; i < near.obstacles.length; i++) {
@@ -380,6 +426,7 @@
         s.trick.t += dt;
         s.yaw += spinStep(s.trick);
       }
+      rideRamps(s, prevX, prevZ);
       if (s.y <= 0) land(s);
     }
 
@@ -466,7 +513,7 @@
   }
   const api = {
     C, RULES_VERSION, RULESET, ALPHA, TRICKS, LANES,
-    issuedSeed, resolveRunSeed, chunk, scan, create, step, unpack, result, botInput, botRun, gateAt, railAt,
+    issuedSeed, resolveRunSeed, chunk, scan, create, step, unpack, result, botInput, botRun, gateAt, railAt, kickerBox, kickerSurface,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.PLSim = api;
