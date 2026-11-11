@@ -37,7 +37,9 @@ const params = new URLSearchParams(location.search);
 const embedded = !!(TA && TA.embedded);
 const preview = !embedded && params.get('preview') === '1';
 const shot = preview ? params.get('shot') : null;
-const low = params.get('q') === '0' || (params.get('q') !== '1' && (matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 820));
+const phone = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 820;
+const tier = params.get('q') === '0' ? 'low' : params.get('q') === '1' ? 'high' : phone ? 'mid' : 'high';
+const low = tier === 'low';
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const gestures = globalThis.PLInput.create();
@@ -216,7 +218,8 @@ function frame(now) {
   }
   if (view && state) {
     const near = view.sync(state, phase === 'run' ? dt : 0, now / 1000);
-    veil.style.opacity = String(near * near * 0.22);
+    const pressure = phase === 'run' || phase === 'shot' ? Math.max(0, Math.min(1, (25 - state.gap) / 20)) : 0;
+    veil.style.opacity = String(pressure * 0.5);
     audio.feel(state);
     hud(now);
     if (shot && phase !== 'run') document.documentElement.dataset.shot = 'ready';
@@ -298,7 +301,7 @@ function seekShot() {
   while (state && !state.over && guard < SIM.C.MAX_TICKS) {
     guard += 1;
     SIM.step(state, SIM.botInput(state));
-    if (shot === 'carve' && state.y < 0.08 && state.z > 160 && Math.abs(state.vx) > 2.5 && state.gap > 8) break;
+    if (shot === 'carve' && !state.trick && state.y < 0.08 && state.z > 160 && Math.abs(state.vx) > 2.5 && state.gap > 8) break;
     if (shot === 'trick' && state.trick && state.trick.id === 'method' && state.y > 2.6 && state.trick.t > 0.24 && state.trick.t < 0.4) break;
     if (shot === 'slide' && state.gap < 7.2 && state.z > 200 && state.y < 0.35) break;
   }
@@ -309,7 +312,7 @@ function seekShot() {
 
 function startShell() {
   try {
-    view = createView(canvas, { low, reduced });
+    view = createView(canvas, { tier, low, reduced });
   } catch (error) {
     const note = document.createElement('p');
     note.className = 'fail';

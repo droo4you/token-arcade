@@ -76,8 +76,8 @@
         if (!windGain) return;
         const carve = Math.min(1, Math.abs(state.vx) / 12);
         windGain.gain.value = 0.03 + Math.min(0.07, state.vz / 420) + carve * 0.03;
-        const near = Math.max(0, Math.min(1, (15 - state.gap) / 15));
-        rumbleGain.gain.value = near * near * 0.2;
+        const near = Math.max(0, Math.min(1, (25 - state.gap) / 18));
+        rumbleGain.gain.value = near * near * 0.42;
       },
       land(kind) {
         if (kind === 'clean') burst(180, 0.16, 0.18, 'triangle');
