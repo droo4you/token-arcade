@@ -17,6 +17,7 @@ export function progressKeys(gameId: string): string[] {
     case "skip-to-10k": return [`ta.${gameId}.skip10k.v1`];
     case "coindle": return [`ta.${gameId}.coindle-stats`, `ta.${gameId}.coindle-daily`];
     case "skrumpey-slide": return [`ta.${gameId}.progress.v1`];
+    case "powderline": return [`ta.${gameId}.progress.v1`];
     default: return [];
   }
 }

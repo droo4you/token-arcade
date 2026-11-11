@@ -50,7 +50,7 @@ export function createCartridgeServer() {
         const requested = match[3] || (match[1] === 'coindle' ? 'index.html' : 'arcade.html');
         // Legacy entry points and executable files stay frozen. Art assets are shared
         // unchanged between these two releases; never fall back for executable files.
-        const frozen = (match[1] === 'skrumpey-slide' && !requested.startsWith('assets/')) || (match[1] === 'emonad-cabinet' && match[2] === '2.0.0') || (['skip-to-10k', 'two-places'].includes(match[1]) && match[2] === '1.1.0');
+        const frozen = (match[1] === 'skrumpey-slide' && !requested.startsWith('assets/')) || (match[1] === 'emonad-cabinet' && match[2] === '2.0.0') || (['skip-to-10k', 'two-places'].includes(match[1]) && match[2] === '1.1.0') || match[1] === 'powderline';
         const gameRoot = resolve(root, match[1], frozen ? `releases/${match[2]}` : match[1] === 'coindle' ? `arcade-dist/${match[2]}` : '.');
         if (requested.includes('\\') || requested.split('/').some(p => p.startsWith('.') || ['tools', 'tests', 'test', 'api', 'node_modules'].includes(p.toLowerCase()))) { res.writeHead(404); res.end(); return; }
         file = resolve(gameRoot, requested);

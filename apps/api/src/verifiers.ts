@@ -6,6 +6,7 @@ import { createMoodVerifier } from "./moodVerification.ts";
 import { createTwoPlacesBoardsVerifier, twoLevelRules } from "./twoPlacesBoards.ts";
 import { createSkipVerifier, SKIP_LOADOUT } from "./skipVerification.ts";
 import { createSkipBoardsVerifier, skipBoardRules } from "./skipBoards.ts";
+import { createPowderlineVerifier, POWDERLINE_RULESET } from "./powderlineVerification.ts";
 
 /** Reviewed simulation verifiers are keyed by reusable adapter; sessions own Cabinet identity. */
 export interface AdapterReadiness {
@@ -48,6 +49,7 @@ export class AdapterRegistry {
     this.register({ adapterId: "skrumpey-slide", gameId: "skrumpey-slide", freePlaySmokeTest: true, verifier: createSkrumpeyVerifier(), runTimeoutMs: 900_000 });
     this.register({ adapterId: "skip-to-10k", gameId: "skip-to-10k", freePlaySmokeTest: true, verifier: createSkipVerifier(), rankedRules: { loadout: SKIP_LOADOUT }, runTimeoutMs: 1_200_000 });
     this.register({ adapterId: "skip-to-10k-v2", gameId: "skip-to-10k", freePlaySmokeTest: true, verifier: createSkipBoardsVerifier(), rankedRules: skipBoardRules(), runTimeoutMs: 1_200_000 });
+    this.register({ adapterId: "powderline", gameId: "powderline", freePlaySmokeTest: true, verifier: createPowderlineVerifier(), rankedRules: { ruleset: POWDERLINE_RULESET }, runTimeoutMs: 600_000 });
   }
 
   register(readiness: AdapterReadiness): void {

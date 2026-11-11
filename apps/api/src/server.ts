@@ -335,6 +335,12 @@ function leaderboard(store: ArcadeStore, gameId: string, mode: "ranked" | "raid"
   const best = new Map<string, AcceptedResult>();
   const twoPlaces = store.getGame(gameId)?.manifest.adapterId === "two-places";
   const compare = (a: AcceptedResult, b: AcceptedResult) => {
+    if (gameId === "powderline") {
+      return b.result.primaryMetric - a.result.primaryMetric
+        || (b.result.secondaryMetrics?.distance ?? 0) - (a.result.secondaryMetrics?.distance ?? 0)
+        || (a.result.secondaryMetrics?.crashes ?? 0) - (b.result.secondaryMetrics?.crashes ?? 0)
+        || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);
+    }
     if (gameId === "skrumpey-slide" && a.result.gameVersion === "1.4.0" && b.result.gameVersion === "1.4.0") {
       return b.result.primaryMetric - a.result.primaryMetric || (b.result.secondaryMetrics?.rescued ?? 0) - (a.result.secondaryMetrics?.rescued ?? 0)
         || a.acceptedAt.localeCompare(b.acceptedAt) || a.result.runId.localeCompare(b.result.runId);

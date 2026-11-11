@@ -32,6 +32,7 @@ function normalize(gameId: string, key: string, value: unknown): Obj {
       theme: ["weather", "afterglow", "moonrise"].includes(v.theme) && unlocked.includes(v.theme) ? v.theme : "weather" };
   }
   if (gameId === "skrumpey-slide") return { bestScore: n(v.bestScore), earnedNuts: n(v.earnedNuts), runs: n(v.runs), selected: n(v.selected, 10000) };
+  if (gameId === "powderline") return { bestScore: n(v.bestScore), bestDistance: n(v.bestDistance), runs: n(v.runs) };
   if (key.endsWith("coindle-daily")) return { date: /^\d{4}-\d{2}-\d{2}$/.test(v.date) ? v.date : "", guessedTickers: union(v.guessedTickers, []).filter(x => typeof x === "string" && /^[A-Za-z0-9.-]{1,16}$/.test(x)).slice(0, 6), gameOver: !!v.gameOver, won: !!v.won };
   return { played: n(v.played), won: Math.min(n(v.played), n(v.won)), streak: n(v.streak), maxStreak: Math.max(n(v.maxStreak), n(v.streak)),
     distribution: Array.from({ length: 6 }, (_, i) => n(v.distribution?.[i])), lastPlayedDate: /^\d{4}-\d{2}-\d{2}$/.test(v.lastPlayedDate) ? v.lastPlayedDate : "" };
@@ -73,6 +74,8 @@ export function mergeProgress(gameId: string, remote: ProgressSnapshot, local: P
       m = { bestMood: max(r.bestMood, l.bestMood), earned: delta(r.earned, l.earned, b.earned, initial), unlocked: union(r.unlocked, l.unlocked), avatar: pick("avatar"), theme: pick("theme") };
     } else if (gameId === "skrumpey-slide") {
       m = { bestScore: max(r.bestScore, l.bestScore), earnedNuts: delta(r.earnedNuts, l.earnedNuts, b.earnedNuts, initial), runs: delta(r.runs, l.runs, b.runs, initial), selected: pick("selected") };
+    } else if (gameId === "powderline") {
+      m = { bestScore: max(r.bestScore, l.bestScore), bestDistance: max(r.bestDistance, l.bestDistance), runs: delta(r.runs, l.runs, b.runs, initial) };
     } else if (key.endsWith("coindle-daily")) {
       // Never join guesses from two different puzzles or invent a combined guess sequence.
       m = l.date > r.date || (l.date === r.date && (l.won && !r.won || (!r.gameOver && (l.gameOver || l.guessedTickers.length > r.guessedTickers.length)))) ? l : r;
