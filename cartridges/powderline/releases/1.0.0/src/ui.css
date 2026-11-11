@@ -24,7 +24,7 @@
 html, body {
   margin: 0;
   height: 100%;
-  background: #c5d0da;
+  background: #1a2744;
   overflow: hidden;
   touch-action: none;
   -webkit-user-select: none;
@@ -38,7 +38,7 @@ html, body {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(#eef3f7, transparent 46%);
+  background: linear-gradient(to top, rgba(214, 224, 236, 0.92), rgba(255, 236, 214, 0.28) 38%, transparent 68%);
   opacity: 0;
 }
 #hud, #preview, #gate, #end, #boost, .fail {
@@ -51,18 +51,18 @@ html, body {
   left: max(12px, env(safe-area-inset-left));
   right: max(12px, env(safe-area-inset-right));
   pointer-events: none;
-  color: #1c2428;
+  color: #241c16;
 }
 .ticket, #slide, #call, #combo, #preview {
   display: inline-flex;
   gap: 10px;
   margin: 0 8px 8px 0;
   padding: 4px 8px;
-  background: #f4f1ea;
-  border: 1px solid #1c2428;
+  background: #fff3df;
+  border: 1px solid #241c16;
 }
 .ticket { font-variant-numeric: tabular-nums; }
-#slide { color: #6e342c; }
+#slide { color: #2f5f9e; }
 #call { letter-spacing: 0.02em; }
 #combo { font-weight: 700; }
 #preview {
@@ -76,9 +76,9 @@ html, body {
   bottom: max(14px, env(safe-area-inset-bottom));
   width: 92px;
   height: 92px;
-  border: 2px solid #1c2428;
-  background: #f4f1ea;
-  color: #1c2428;
+  border: 2px solid #241c16;
+  background: #fff3df;
+  color: #241c16;
   font: 700 13px/1 "Atkinson Hyperlegible", Palatino, Georgia, serif;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -92,11 +92,11 @@ html, body {
   right: 0;
   bottom: 0;
   height: 40%;
-  background: #1f4d3a;
+  background: #d4532c;
   pointer-events: none;
 }
 #boost .word { position: relative; }
-#boost.on { color: #f4f1ea; }
+#boost.on { background: #241c16; color: #fff6ea; }
 #boost.low #fill { background: #8d8478; }
 #gate, #end {
   position: fixed;
@@ -105,8 +105,8 @@ html, body {
   bottom: 0;
   margin: 0;
   padding: 28px 24px max(22px, env(safe-area-inset-bottom));
-  color: #f4f1ea;
-  background: linear-gradient(to top, rgba(28, 36, 40, 0.78), rgba(28, 36, 40, 0));
+  color: #fff6ea;
+  background: linear-gradient(to top, rgba(16, 18, 32, 0.9), rgba(28, 22, 32, 0.55) 52%, rgba(28, 22, 32, 0));
 }
 #gate h1, #end h2 {
   margin: 0 0 10px;
@@ -126,9 +126,9 @@ html, body {
 #gate li { margin: 0 0 4px; }
 .keys { margin: 0 0 14px; font-size: 13px; max-width: 36rem; }
 #drop, #again {
-  border: 2px solid #f4f1ea;
-  background: #f4f1ea;
-  color: #1c2428;
+  border: 2px solid #fff6ea;
+  background: #fff6ea;
+  color: #241c16;
   font: 700 16px/1 "Atkinson Hyperlegible", Palatino, Georgia, serif;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -143,8 +143,8 @@ html, body {
   display: grid;
   place-items: center;
   margin: 0;
-  background: #c5d0da;
-  color: #1c2428;
+  background: #1a2744;
+  color: #fff6ea;
 }
 @media (pointer: coarse) {
   .keys { display: none; }

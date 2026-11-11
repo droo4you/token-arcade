@@ -15,7 +15,7 @@ Implementation note. The game is an original downhill sim. It does not theme its
 - Proof: `{ v: 1, rules: "1.0.0", ruleset: "powderline-v1", seed, input }`
 - Secondary metrics, all integers: `distance`, `trickPoints`, `bestCombo`, `crashes`, `boosts`, `ticks`
 - Touch: pointer events, `touch-action: none`, non-passive `touchmove` preventDefault
-- Quality: pixel ratio capped at 1.25 on coarse/narrow viewports and 1.5 otherwise, with a pixel budget. Shadows and long draw distance are desktop-only. No bloom.
+- Quality: pixel ratio capped at 1.5 on coarse or narrow viewports and 2 otherwise, with a pixel budget. No shadow maps (painted and blob shadows only). No bloom.
 - Account save key: `ta.powderline.progress.v1` (`bestScore`, `bestDistance`, `runs`). Casual only.
 - Economy: none. No wallet, Privy, or chain code in the cartridge.
 

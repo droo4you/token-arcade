@@ -37,7 +37,7 @@ const params = new URLSearchParams(location.search);
 const embedded = !!(TA && TA.embedded);
 const preview = !embedded && params.get('preview') === '1';
 const shot = preview ? params.get('shot') : null;
-const low = params.get('q') === '0' || (params.get('q') !== '1' && (matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 820));
+const low = params.get('q') === '0' || (params.get('q') !== '1' && (matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 700));
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const gestures = globalThis.PLInput.create();
@@ -219,6 +219,7 @@ function frame(now) {
     veil.style.opacity = String(near * near * 0.75);
     audio.feel(state);
     hud(now);
+    document.documentElement.dataset.view = 'ready';
     if (shot && phase !== 'run') document.documentElement.dataset.shot = 'ready';
   }
 }
@@ -297,7 +298,9 @@ function seekShot() {
   while (state && !state.over && guard < SIM.C.MAX_TICKS) {
     guard += 1;
     SIM.step(state, SIM.botInput(state));
+    view?.sample(state);
     if (shot === 'trick' && state.trick && state.y > 4 && state.trick.t > 0.12 && state.trick.t < 0.34) break;
+    if (shot === 'carve' && state.y < 0.22 && Math.abs(state.vx) > 8.5 && state.z > 80 && state.gap > 8) break;
     if (shot === 'slide' && state.gap < 6.2 && state.z > 200 && state.y < 0.4) break;
   }
   phase = 'shot';
