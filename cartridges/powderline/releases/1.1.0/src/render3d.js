@@ -593,7 +593,7 @@ export function createView(canvas, options) {
         new THREE.MeshBasicMaterial({ color: 0x6d8bb5, transparent: true, opacity: 0.32, depthWrite: false }),
       );
       blob.rotation.x = -Math.PI / 2;
-      blob.position.set(0, 0.03, -2.2);
+      blob.position.set(0, 0.03, -box.length * 0.42);
       g.add(body, lip, blob);
       group.add(g);
     }

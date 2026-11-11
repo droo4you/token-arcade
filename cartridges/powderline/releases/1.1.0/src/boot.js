@@ -7,10 +7,10 @@ const SIM = globalThis.PLSim;
 const TA = globalThis.TokenArcade;
 const DT = SIM.C.DT;
 const ALPHA = SIM.ALPHA;
-const TRICK = { up: 1, tap: 1, down: 2, left: 3, right: 4 };
+const TRICK = { up: 1, tap: 5, down: 2, left: 3, right: 4 };
 const KEY_TRICK = {
   ArrowUp: 1, KeyW: 1, KeyI: 1,
-  ArrowDown: 2, KeyS: 2, KeyK: 2,
+  ArrowDown: 2, KeyK: 2,
   KeyJ: 3, KeyQ: 3,
   KeyL: 4, KeyE: 4,
 };
@@ -107,7 +107,7 @@ function readCode() {
   const boost = (heldBoost || keys.has('Space') || keys.has('ShiftLeft') || keys.has('ShiftRight')) ? 1 : 0;
   const trick = queuedTrick;
   queuedTrick = 0;
-  return steer + boost * 3 + trick * 6;
+  return SIM.pack(steer, boost, trick);
 }
 
 function queueTrick(nameOrCode) {
@@ -223,9 +223,10 @@ function frame(now) {
     acc += dt;
     let steps = 0;
     while (acc >= DT && steps < 5 && !state.over) {
+      const trick = queuedTrick;
       const code = readCode();
       log += ALPHA[code];
-      if (code >= 6 && !state.trick) audio.trick();
+      if (trick && !state.trick) audio.trick();
       SIM.step(state, code);
       acc -= DT;
       steps += 1;
@@ -319,7 +320,7 @@ function seekShot() {
     guard += 1;
     SIM.step(state, SIM.botInput(state));
     if (shot === 'carve' && !state.trick && state.y < 0.08 && state.z > 160 && Math.abs(state.vx) > 2.5 && state.gap > 8) break;
-    if (shot === 'trick' && state.trick && state.trick.id === 'method' && state.y > 2.6 && state.trick.t > 0.24 && state.trick.t < 0.4) break;
+    if (shot === 'trick' && state.trick && state.trick.id === 'method' && state.y > 1.8 && state.trick.t > 0.08 && state.trick.t < 0.28) break;
     if (shot === 'slide' && state.gap < 7.2 && state.z > 200 && state.y < 0.35) break;
   }
   phase = 'shot';

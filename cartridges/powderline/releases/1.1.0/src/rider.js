@@ -217,7 +217,37 @@ export function buildRider(low, shadows) {
     armL.elbow.rotation.set(0.55, 0, 0);
     armR.elbow.rotation.set(0.7, 0, 0);
 
-    if (id === 'method') {
+    if (trick && trick.kind === 'spin') {
+      const turns = [1, 1.5, 2, 3][Math.min(3, (trick.spins || 1) - 1)];
+      spin.rotation.y = (trick.dir || 1) * prog * turns * TAU;
+      armL.shoulder.rotation.set(0.9, 0, 1.35);
+      armR.shoulder.rotation.set(0.9, 0, -1.35);
+      armL.elbow.rotation.x = 1.2;
+      armR.elbow.rotation.x = 1.2;
+      torso.rotation.x = -0.45;
+      legL.knee.rotation.x = -1.45;
+      legR.knee.rotation.x = -1.45;
+    } else if (id === 'backflip' || id === 'rodeo') {
+      spin.rotation.x = prog * TAU;
+      if (id === 'rodeo') spin.rotation.y = (trick.dir || 1) * prog * TAU;
+      armL.shoulder.rotation.set(0.35, 0, 1.45);
+      armR.shoulder.rotation.set(0.35, 0, -1.45);
+      armL.elbow.rotation.x = 1.15;
+      armR.elbow.rotation.x = 1.15;
+      legL.knee.rotation.x = -1.65;
+      legR.knee.rotation.x = -1.65;
+      torso.rotation.x = -0.15;
+    } else if (id === 'indy' || id === 'double') {
+      board.rotation.set(0.25 * arc, 0, -0.55 * arc);
+      armR.shoulder.rotation.set(2.35 * arc, 0.15, 0.35);
+      armR.elbow.rotation.x = 0.2;
+      if (id === 'double') {
+        armL.shoulder.rotation.set(2.15 * arc, -0.2, -0.25);
+        armL.elbow.rotation.x = 0.15;
+      }
+      legR.knee.rotation.x = -1.75;
+      torso.rotation.x = -0.4 * arc;
+    } else if (id === 'method') {
       board.rotation.set(0.85 * arc, 0.15 * arc, 1.45 * arc);
       legL.hip.rotation.x = 1.15;
       legR.hip.rotation.x = 1.35;
