@@ -1,0 +1,14 @@
+{
+  "name": "phantom-phase",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "test": "node --test tests/sim.test.mjs",
+    "verify": "node tools/verify.js --self-test",
+    "test:browser": "node tests/browser.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.57.0"
+  }
+}
