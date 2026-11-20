@@ -1,0 +1,84 @@
+{
+  "id": "phantom-phase",
+  "name": "Phantom Phase",
+  "description": "Phase a ghost through a five-slot haunted vault. Stick an edge, tap the center, and ride the beat.",
+  "version": "1.0.0",
+  "artwork": {
+    "card": "artwork/card.svg",
+    "icon": "artwork/icon.svg"
+  },
+  "developer": {
+    "name": "droober",
+    "contact": "https://github.com/droo4you/token-arcade"
+  },
+  "supportedModes": ["free_play"],
+  "supportedObjectives": ["TOTAL_SCORE"],
+  "communityOptional": true,
+  "minicoinOptional": true,
+  "integrationLevel": "L1",
+  "skeleton": "forced_forward_dodger",
+  "entry": {
+    "kind": "iframe",
+    "url": "http://127.0.0.1:8788/phantom-phase/v/1.0.0/",
+    "origin": "http://127.0.0.1:8788"
+  },
+  "hostOrigins": [
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:8787",
+    "http://localhost:8787"
+  ],
+  "inputs": ["touch_drag", "touch_tap", "keyboard", "gamepad"],
+  "orientation": "any",
+  "mobile": "full",
+  "runLength": { "typicalSec": [30, 180], "maxSec": 1200 },
+  "scoring": {
+    "TOTAL_SCORE": {
+      "primary": "score",
+      "unit": "points",
+      "order": "desc",
+      "secondary": ["clears", "streak", "distance"],
+      "tieBreak": ["secondary:clears:desc", "secondary:streak:desc", "ticks:asc", "verifiedAt:asc"]
+    }
+  },
+  "determinism": "replayable-portable",
+  "simVersion": "pp-sim-1",
+  "tickHz": 60,
+  "seedPolicy": "per_attempt",
+  "rulesSchema": {
+    "type": "object",
+    "properties": {
+      "rulesVersion": { "type": "string" }
+    }
+  },
+  "plausibility": {
+    "maxPrimary": 5000000,
+    "maxPrimaryPerSec": 4000,
+    "minTicks": 30,
+    "maxTicks": 72000,
+    "maxInputEventsPerSec": 16
+  },
+  "attemptsDefault": 3,
+  "simHash": "sha256:a4b5a59b554f0b1087a590271c1e7d263b3e416fcca31fffc9b7afc3554f0a7f",
+  "minicoin": {
+    "eligible": false,
+    "reason": "Free Play prototype. Replay verifier is local until a ranked session is installed."
+  },
+  "verifier": {
+    "kind": "replay",
+    "entry": "tools/verify.js",
+    "runtime": "node22"
+  },
+  "adapterId": "phantom-phase",
+  "skeletonId": "phantom-phase",
+  "presentation": {
+    "genre": "Tunnel runner",
+    "palette": "ink",
+    "glyph": "P"
+  },
+  "controls": {
+    "touch": true,
+    "orientation": "any"
+  },
+  "removedInArcade": []
+}
